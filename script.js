@@ -363,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         runEl.textContent = runtime !== null ? runtime : '-';
 
                         if (faulted !== null && runtime !== null) {
-                            const isOk = runtime > faulted;
+                            const isOk = faulted === 0 || runtime > faulted;
                             setIndicatorColor(`ind-${id}`, isOk);
                             if (!isOk) anyError = true;
                             valEl.style.color = isOk ? 'var(--text-main)' : 'var(--danger-color)';
