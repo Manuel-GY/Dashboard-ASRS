@@ -3,7 +3,7 @@
     --bg-card: rgba(30, 41, 59, 0.7);
     --border-color: rgba(255, 255, 255, 0.1);
     --text-main: #f8fafc;
-    --text-muted: #94a3b8;
+    --text-muted: #cbd5e1;
     --accent-color: #38bdf8;
     --success-color: #10b981;
     --warning-color: #f59e0b;
@@ -148,7 +148,7 @@ body {
 /* Grid Layout */
 .grid-layout {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 20px;
 }
 
@@ -354,20 +354,22 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 
 
 .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .stat-box {
     background: rgba(0, 0, 0, 0.2);
-    padding: 15px;
+    padding: 12px 8px;
     border-radius: 8px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     gap: 5px;
+    flex: 1 1 90px;
+    min-width: 85px;
 }
 
 .stat-box .label {
@@ -387,41 +389,47 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
     color: var(--text-muted);
 }
 
+.press-delivery-card {
+    padding: 20px !important;
+}
+
 .press-delivery-grid {
     display: flex;
-    flex-wrap: nowrap;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 12px;
     width: 100%;
-    overflow-x: auto;
-    padding-bottom: 5px;
+    padding-bottom: 0;
 }
 
 .press-item {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
+    background: var(--table-cell-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    flex: 1 1 0;
-    min-width: 80px;
+    flex: 1 1 80px;
+    min-width: 75px;
+    max-width: 120px;
 }
 
 .press-id {
-    background: rgba(16, 185, 129, 0.25);
+    background: var(--table-header-bg);
     padding: 6px 4px;
     font-weight: 700;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     text-align: center;
     border-bottom: 1px solid var(--border-color);
     color: var(--accent-color);
 }
 
 .press-stats {
-    padding: 5px 4px;
+    padding: 8px 4px;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    font-size: 0.7rem;
+    gap: 4px;
+    font-size: 0.75rem;
+    text-align: center;
 }
 
 .press-stats .despachados {
@@ -439,10 +447,6 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 @media (max-width: 1024px) {
     .grid-layout {
         grid-template-columns: 1fr;
-    }
-    
-    .grid-table-no-tire, .grid-table-12 {
-        grid-template-columns: repeat(6, 1fr);
     }
 }
 

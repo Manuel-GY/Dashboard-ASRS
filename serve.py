@@ -12,7 +12,9 @@ import sqlite3
 import threading
 import time
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pylogix import PLC as LogixPLC
+
 
 # ── Historiador SQLite ──────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conveyor_history.db")
@@ -43,7 +45,8 @@ PLC_CONFIG = [
 
 def db_init():
     """Crea la tabla de snapshots si no existe."""
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=10.0)
+    con.execute("PRAGMA journal_mode=WAL;")
     con.execute("""
         CREATE TABLE IF NOT EXISTS plc_snapshots (
             ts           TEXT PRIMARY KEY,
@@ -61,7 +64,8 @@ def db_init():
 def db_insert_snapshot(values: dict):
     ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=10.0)
+    con.execute("PRAGMA journal_mode=WAL;")
     con.execute("""
         INSERT OR REPLACE INTO plc_snapshots
             (ts, cc01_faulted, cc01_runtime, cc02_faulted, cc02_runtime, cc03_faulted, cc03_runtime)
@@ -77,26 +81,31 @@ def db_insert_snapshot(values: dict):
     con.commit()
     con.close()
 
+def poll_single_plc(cfg):
+    label = cfg["label"]
+    try:
+        with LogixPLC() as comm:
+            comm.IPAddress = cfg["ip"]
+            comm.ProcessorSlot = cfg["slot"]
+            r_f = comm.Read(cfg["tag_faulted"])
+            r_r = comm.Read(cfg["tag_runtime"])
+        return label, {
+            "faulted": int(r_f.Value) if r_f.Status == "Success" and r_f.Value is not None else None,
+            "runtime": int(r_r.Value) if r_r.Status == "Success" and r_r.Value is not None else None,
+        }
+    except Exception as e:
+        print(f"[Historiador] Error leyendo {label}: {e}", file=sys.stderr)
+        return label, {"faulted": None, "runtime": None}
+
 def plc_poll_loop():
-    """Hilo daemon: lee los PLCs cada 60 s y guarda un snapshot en SQLite."""
+    """Hilo daemon: lee los PLCs en paralelo cada 60 s y guarda un snapshot en SQLite."""
     print("[Historiador] Iniciado. Guardando snapshots cada 60 s.", file=sys.stderr)
     while True:
         snapshot = {}
-        for cfg in PLC_CONFIG:
-            label = cfg["label"]
-            try:
-                with LogixPLC() as comm:
-                    comm.IPAddress = cfg["ip"]
-                    comm.ProcessorSlot = cfg["slot"]
-                    r_f = comm.Read(cfg["tag_faulted"])
-                    r_r = comm.Read(cfg["tag_runtime"])
-                snapshot[label] = {
-                    "faulted": int(r_f.Value) if r_f.Status == "Success" and r_f.Value is not None else None,
-                    "runtime": int(r_r.Value) if r_r.Status == "Success" and r_r.Value is not None else None,
-                }
-            except Exception as e:
-                print(f"[Historiador] Error leyendo {label}: {e}", file=sys.stderr)
-                snapshot[label] = {"faulted": None, "runtime": None}
+        with ThreadPoolExecutor(max_workers=len(PLC_CONFIG)) as executor:
+            results = executor.map(poll_single_plc, PLC_CONFIG)
+            for label, data in results:
+                snapshot[label] = data
         try:
             db_insert_snapshot(snapshot)
         except Exception as e:
@@ -144,6 +153,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 reason = "40000"
             elif 'api_preventiva' in path:
                 reason = "210002"
+                
+            # Sanitizar parametro reason
+            if not reason.isdigit():
+                self.send_error_response(400, "Parámetro de razón inválido. Debe ser un valor numérico.")
+                return
                 
             # Resolver fechas
             start_str = query_params.get('start', [''])[0]
@@ -246,7 +260,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         end_str   = end_dt.strftime('%Y-%m-%d %H:%M:%S')
 
         try:
-            con = sqlite3.connect(DB_PATH)
+            con = sqlite3.connect(DB_PATH, timeout=10.0)
+            con.execute("PRAGMA journal_mode=WAL;")
             con.row_factory = sqlite3.Row
 
             def nearest(ts_target, direction):
@@ -284,12 +299,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 r_end   = row_end.get(f"{key}_runtime")
 
                 if f_start is not None and f_end is not None:
-                    faulted_delta = max(0, f_end - f_start)  # delta, nunca negativo
+                    if f_end < f_start:
+                        # Se detecta un reinicio del contador del PLC
+                        faulted_delta = f_end
+                    else:
+                        faulted_delta = f_end - f_start
                 else:
                     faulted_delta = None
 
                 if r_start is not None and r_end is not None:
-                    runtime_delta = max(0, r_end - r_start)
+                    if r_end < r_start:
+                        # Se detecta un reinicio del contador del PLC
+                        runtime_delta = r_end
+                    else:
+                        runtime_delta = r_end - r_start
                 else:
                     runtime_delta = None
 
@@ -550,7 +573,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({"error": message}).encode('utf-8'))
 
-with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
+with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), Handler) as httpd:
     print(f"Server ASRS running locally at http://127.0.0.1:{PORT}")
     try:
         httpd.serve_forever()

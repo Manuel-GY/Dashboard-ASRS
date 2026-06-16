@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let hasData = false;
                         
                         groups.forEach(g => {
-                            const val = data.downtime_by_group[g] !== undefined ? data.downtime_by_group[g] : 0;
+                            const val = (data && data.downtime_by_group && data.downtime_by_group[g] !== undefined) ? data.downtime_by_group[g] : 0;
                             // Threshold: > 1 min for PM/PMG. For No Tire (cellPrefix === 'nt'), show > 0 min as well? 
                             // User said: "las de 0 no mostrar... si estan todos en cero mostrar un texto" 
                             // I will use val > 1 for all just to be consistent, or val > 0 for No tire?
@@ -260,11 +260,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // 6. Press Delivery Performance
         document.getElementById('press-delivery-uptime').textContent = '-';
         document.getElementById('press-delivery-container').innerHTML = `
-            <div class="press-item"><div class="press-id highlight">400B</div><div class="press-stats"><div class="despachados">Despachados: -</div><div class="vulcanizados">Vulcanizados: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">500A</div><div class="press-stats"><div class="despachados">Despachados: -</div><div class="vulcanizados">Vulcanizados: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">500B</div><div class="press-stats"><div class="despachados">Despachados: -</div><div class="vulcanizados">Vulcanizados: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">600A</div><div class="press-stats"><div class="despachados">Despachados: -</div><div class="vulcanizados">Vulcanizados: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">600B</div><div class="press-stats"><div class="despachados">Despachados: -</div><div class="vulcanizados">Vulcanizados: -</div></div></div>
+            <div class="press-item"><div class="press-id highlight">400B</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
+            <div class="press-item"><div class="press-id highlight">500A</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
+            <div class="press-item"><div class="press-id highlight">500B</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
+            <div class="press-item"><div class="press-id highlight">600A</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
+            <div class="press-item"><div class="press-id highlight">600B</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
         `;
         setIndicatorColor('ind-press-delivery', null);
     }
@@ -543,4 +543,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial triggers
     initStaticWidgets();
     fetchAllData();
+
+    // Auto-refresh inteligente cada 30 segundos si la pestaña está activa
+    let refreshInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            fetchAllData();
+        }
+    }, 30000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            fetchAllData(); // recarga inmediatamente al volver
+            if (!refreshInterval) {
+                refreshInterval = setInterval(fetchAllData, 30000);
+            }
+        } else {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+    });
 });
