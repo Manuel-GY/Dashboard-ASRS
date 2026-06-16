@@ -6,7 +6,6 @@ Dashboard interactivo para el monitoreo de paradas de prensas y grúas ASRS, des
 
 ## 🚀 Características Principales
 
-*   **Monitoreo En Vivo 🟢**: Consulta de manera automática cada 30 segundos una ventana deslizante de las últimas horas.
 *   **Filtro Histórico por Turno o Rango 📅**: Permite seleccionar rangos de fecha y hora libres para consultar el histórico de producción y paradas, evitando datos puramente acumulados.
 *   **Módulos de Monitoreo**:
     1.  **NO TIRE** (Razón de parada: `160000`): Filtra paradas mayores a 0 minutos. Muestra un mensaje amigable en caso de que todas estén en cero.
