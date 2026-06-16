@@ -198,11 +198,37 @@ body {
     border-radius: 50%;
     display: inline-block;
     box-shadow: 0 0 8px currentColor;
+    transition: all 0.3s ease;
 }
 
 .indicator.green {
     background-color: var(--success-color);
     color: var(--success-color);
+    animation: indicator-pulse-green 2s infinite alternate;
+}
+
+.indicator.red {
+    background-color: var(--danger-color);
+    color: var(--danger-color);
+    animation: indicator-pulse-red 2s infinite alternate;
+}
+
+@keyframes indicator-pulse-green {
+    0% {
+        box-shadow: 0 0 4px var(--success-color);
+    }
+    100% {
+        box-shadow: 0 0 12px var(--success-color);
+    }
+}
+
+@keyframes indicator-pulse-red {
+    0% {
+        box-shadow: 0 0 4px var(--danger-color);
+    }
+    100% {
+        box-shadow: 0 0 12px var(--danger-color);
+    }
 }
 
 .kpi-bracket {
@@ -265,40 +291,67 @@ body {
 }
 
 /* Specific Grids */
-.grid-table-no-tire, .grid-table-12 {
-    display: grid;
-    grid-template-columns: repeat(12, 1fr);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    overflow: hidden;
-    background: transparent;
+.downtime-dynamic-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    width: 100%;
 }
 
-.grid-table-no-tire .grid-header, .grid-table-12 .grid-header {
+.downtime-group-box {
+    display: flex;
+    flex-direction: column;
+    background: var(--table-cell-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    min-width: 70px;
+    flex: 1 1 auto;
+    max-width: 100px;
+}
+
+.downtime-group-box .group-name {
     background: var(--table-header-bg);
-    padding: 8px 4px;
+    padding: 6px 4px;
     text-align: center;
     font-size: 0.75rem;
     font-weight: 600;
     border-bottom: 1px solid var(--border-color);
-    border-right: 1px solid var(--border-color);
 }
 
-.grid-table-no-tire .grid-header:last-child, .grid-table-12 .grid-header:last-child {
-    border-right: none;
-}
-
-.grid-table-no-tire .grid-cell, .grid-table-12 .grid-cell {
-    background: var(--table-cell-bg);
+.downtime-group-box .group-val {
     padding: 8px 4px;
     text-align: center;
-    font-size: 0.8rem;
-    border-right: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
-.grid-table-no-tire .grid-cell:last-child, .grid-table-12 .grid-cell:last-child {
-    border-right: none;
+.downtime-empty-msg {
+    width: 100%;
+    text-align: center;
+    padding: 15px;
+    color: var(--text-muted);
+    font-style: italic;
+    background: rgba(0,0,0,0.1);
+    border-radius: 6px;
 }
+
+/* Scrollbar styles for modern scroll bars inside tables/grids */
+.press-delivery-grid::-webkit-scrollbar {
+    height: 6px;
+}
+.press-delivery-grid::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+.press-delivery-grid::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 
 .stats-grid {
     display: grid;
@@ -339,6 +392,8 @@ body {
     flex-wrap: nowrap;
     gap: 8px;
     width: 100%;
+    overflow-x: auto;
+    padding-bottom: 5px;
 }
 
 .press-item {
@@ -348,7 +403,7 @@ body {
     display: flex;
     flex-direction: column;
     flex: 1 1 0;
-    min-width: 0;
+    min-width: 80px;
 }
 
 .press-id {
@@ -406,9 +461,10 @@ body {
 /* Controls Bar */
 .controls-bar {
     display: flex;
-    justify-content: flex-start;
+    justify-content: space-between;
     align-items: center;
-    gap: 30px;
+    flex-wrap: wrap;
+    gap: 20px;
     padding: 15px 20px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -417,58 +473,11 @@ body {
     margin-bottom: 5px;
 }
 
-.filter-group {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.filter-label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-main);
-}
-
-.toggle-buttons {
-    display: flex;
-    background: var(--highlight-bg);
-    border-radius: 20px;
-    padding: 3px;
-    border: 1px solid var(--border-color);
-}
-
-.toggle-buttons .btn {
-    background: transparent;
-    border: none;
-    padding: 6px 16px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: 17px;
-    transition: all 0.2s ease;
-}
-
-.toggle-buttons .btn:hover {
-    color: var(--text-main);
-}
-
-.toggle-buttons .btn.active {
-    background: var(--accent-color);
-    color: #ffffff;
-    box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
-}
-
 .range-inputs {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 15px;
-    opacity: 1;
-    transition: all 0.3s ease;
-}
-
-.range-inputs.hidden {
-    display: none;
 }
 
 .input-field {
@@ -483,20 +492,65 @@ body {
     color: var(--text-muted);
 }
 
-.input-field input[type="datetime-local"] {
+.input-field input[type="date"],
+.input-field input[type="time"] {
     background: var(--bg-base);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 6px 10px;
     color: var(--text-main);
     font-family: inherit;
     font-size: 0.85rem;
     outline: none;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.input-field input[type="datetime-local"]:focus {
+.input-field input[type="date"]:focus,
+.input-field input[type="time"]:focus {
     border-color: var(--accent-color);
+    box-shadow: 0 0 5px rgba(56, 189, 248, 0.3);
+}
+
+.preset-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.preset-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.preset-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-preset {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-preset:hover {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+    transform: translateY(-1px);
+}
+
+.btn-preset:active {
+    transform: translateY(0);
 }
 
 .btn-primary {

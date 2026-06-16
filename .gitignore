@@ -1,0 +1,16 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Local SQLite databases
+conveyor_history.db
+conveyor_history.db-journal
+
+# Temporary test files
+test_output.html
+parsed.json
+aisle.html
+tables.html
+test_aisle.py
+test_html.py
+browse_plc.py

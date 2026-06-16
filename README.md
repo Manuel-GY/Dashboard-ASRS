@@ -1,55 +1,62 @@
 # Dashboard ASRS
 
-Dashboard interactivo para el monitoreo de paradas de prensas ASRS, desarrollado para ejecutarse en entornos locales con servidores web como **XAMPP (Apache)** y conectarse en tiempo real al servidor de reportes interno.
+Dashboard interactivo para el monitoreo de paradas de prensas y grúas ASRS, desarrollado en Python y Javascript para ejecutarse en entornos locales con conexión en tiempo real a los servidores de reportes y PLCs internos.
 
 ---
 
 ## 🚀 Características Principales
 
-*   **Monitoreo En Vivo 🟢**: Modo que consulta de manera automática cada 30 segundos una ventana deslizante de las últimas 24 horas.
-*   **Filtro Histórico 📅**: Permite deshabilitar el tiempo real y seleccionar rangos de fecha y hora libres para consultar el histórico.
-*   **Secciones de Monitoreo**:
-    1.  **NO TIRE** (Razón de parada: `160000`)
-    2.  **MANTENCIÓN PREVENTIVA ROBOT** (Razón de parada: `210002`)
-    3.  **MANTENCIÓN PREVENTIVA GENERAL** (Razón de parada: `40000`)
-*   **Diseño Premium y Oscuro**: Interfaz moderna, limpia, responsiva y con colores armónicos adaptados para pantallas de salas de control.
-*   **Precisión Exacta**: Tiempos de parada reportados en minutos y centésimas de minuto directo del servidor sin redondeos aproximados.
-*   **Visualización de 0**: Muestra explícitamente un `0` cuando no se registran paradas durante el periodo consultado.
+*   **Monitoreo En Vivo 🟢**: Consulta de manera automática cada 30 segundos una ventana deslizante de las últimas horas.
+*   **Filtro Histórico por Turno o Rango 📅**: Permite seleccionar rangos de fecha y hora libres para consultar el histórico de producción y paradas, evitando datos puramente acumulados.
+*   **Módulos de Monitoreo**:
+    1.  **NO TIRE** (Razón de parada: `160000`): Filtra paradas mayores a 0 minutos. Muestra un mensaje amigable en caso de que todas estén en cero.
+    2.  **MANTENCIÓN PREVENTIVA ROBOT** (Razón de parada: `210002`): Muestra solo grupos con paradas mayores a 1 minuto.
+    3.  **MANTENCIÓN PREVENTIVA GENERAL** (Razón de parada: `40000`): Muestra solo grupos con paradas mayores a 1 minuto.
+    4.  **CONVEYORS (Downtime CV)**: Lee en tiempo real el tiempo de STOP (`faulted` y `runtime`) de los conveyors CC01, CC02 y CC03 conectándose directo a los PLCs de control.
+    5.  **CRANE PERFORMANCE**: Extrae de forma dinámica el rendimiento y paradas por pasillo (Aisle 1 al 11) a partir de los reportes del sistema.
+*   **Historiador Incorporado 💾**: Base de datos SQLite local integrada en el backend que guarda capturas de datos cada 60 segundos con una política de auto-sobreescritura para retener exactamente 7 días de información.
+*   **Diseño Premium**: Interfaz moderna en modo oscuro, responsiva, con micro-animaciones, gráficos mejorados y paleta de colores HSL.
 
 ---
 
 ## 🛠️ Requisitos de Instalación y Uso
 
-### 1. Servidor Local (XAMPP)
-El proyecto requiere un servidor web con soporte de PHP.
-1. Instala [XAMPP](https://www.apachefriends.org/).
-2. Clona o copia esta carpeta dentro del directorio raíz de XAMPP (`C:\xampp\htdocs\Dashboard ASRS`).
-3. Asegúrate de iniciar **Apache** desde el Panel de Control de XAMPP.
-   * *Nota: Si el puerto default de Apache (80) está en conflicto (por ejemplo con IIS), puedes cambiarlo a otro puerto como el `8082` en el archivo de configuración `httpd.conf` de Apache.*
+### 1. Requisitos Previos
+*   **Python 3.x** instalado en el sistema.
+*   Librerías de python necesarias (instalables mediante pip):
+    ```bash
+    pip install pylogix
+    ```
 
-### 2. URL de Acceso
-Una vez levantado el servidor de Apache, accede desde tu navegador:
-```
-http://localhost:8082/Dashboard ASRS/
-```
-*(Cambia `8082` por el puerto correspondiente si usas el puerto por defecto u otro puerto).*
+### 2. Ejecutar el Proyecto
+Para iniciar el backend que actúa como servidor web y API proxy:
+1. Abre una consola en el directorio del proyecto.
+2. Ejecuta:
+   ```bash
+   python serve.py
+   ```
+3. El servidor iniciará en el puerto local `8080`.
+4. Accede desde tu navegador a:
+   ```
+   http://127.0.0.1:8080/index.html
+   ```
 
 ---
 
 ## 📂 Estructura del Proyecto
 
-*   **`index.php`**: El punto de entrada principal del Dashboard, estructurado semánticamente con las tarjetas y layouts.
-*   **`style.css`**: Hoja de estilos moderna con variables de CSS, scrollbars personalizados y tablas alineadas con bordes estilizados.
-*   **`script.js`**: Controlador de lógica frontend encargado de alternar modos (Live/Histórico), auto-refrescar y realizar peticiones HTTP.
-*   **`api_no_tire.php`**: Proxy para consultar y agrupar datos de paradas por falta de neumáticos (`160000`).
-*   **`api_preventiva.php`**: Proxy para consultar y agrupar datos de mantenimiento preventivo del robot (`210002`).
-*   **`api_preventiva_general.php`**: Proxy para consultar y agrupar datos de mantenimiento preventivo general (`40000`).
+*   **`index.html`**: Estructura base del Dashboard, optimizada con semántica HTML5 y contenedores dinámicos.
+*   **`style.css`**: Hoja de estilos con variables CSS para el tema visual premium y layouts flexibles.
+*   **`script.js`**: Controlador de lógica frontend (peticiones asíncronas a la API, renderizado y cálculos).
+*   **`serve.py`**: Backend en Python que expone las API REST de datos, realiza polling a los PLCs, escribe en SQLite y actúa como proxy robusto hacia los servidores locales.
+*   **`conveyor_history.db`**: Base de datos SQLite (generada automáticamente) para almacenar el historial de conveyors por 7 días.
 
 ---
 
-## 🌐 Proxies PHP y Red Interna
-Debido a políticas de CORS, el frontend realiza solicitudes asíncronas (`fetch`) a los archivos `.php` locales, y estos actúan como intermediarios (proxies) consultando al servidor de reportes interno:
-```
-http://10.107.194.85:8080/ProductionWebEditServerRS/
-```
-Para que el Dashboard muestre datos correctos, tu equipo debe estar conectado a la red local que tenga acceso a la IP anterior.
+## 🌐 Conexión de Red Interna
+El backend realiza solicitudes a los servidores locales internos:
+*   Prensas / Reportes: `http://10.107.194.85:8080/`
+*   Pasillos (Crane Performance): `http://10.107.194.62/`
+*   PLCs Conveyors: `10.107.210.111`, `10.107.210.121`, `10.107.210.131`
+
+Asegúrate de ejecutar la aplicación en un equipo que cuente con acceso físico o VPN a este segmento de red.
