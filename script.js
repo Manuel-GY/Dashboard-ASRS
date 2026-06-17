@@ -512,35 +512,38 @@ document.addEventListener('DOMContentLoaded', () => {
         return baseVal;
     }
 
+    function getPresetShiftDates(startHour) {
+        const now = new Date();
+        const baseDate = getSelectedBaseDate();
+        const parts = baseDate.split('-');
+        
+        let startDt = new Date(parts[0], parts[1] - 1, parts[2], startHour, 0, 0);
+        
+        // Si la hora de inicio del turno es en el futuro, retrocedemos 24 horas (al día anterior)
+        if (startDt > now) {
+            startDt = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
+        }
+        
+        const endDt = new Date(startDt.getTime() + 8 * 60 * 60 * 1000);
+        return { startDt, endDt };
+    }
+
     // Program presets
     document.getElementById('preset-turn-day').addEventListener('click', () => {
-        const baseDate = getSelectedBaseDate();
-        startDateInput.value = baseDate;
-        startTimeInput.value = "07:00";
-        endDateInput.value = baseDate;
-        endTimeInput.value = "15:00";
+        const { startDt, endDt } = getPresetShiftDates(7);
+        setInputs(startDt, endDt);
         fetchAllData();
     });
 
     document.getElementById('preset-turn-afternoon').addEventListener('click', () => {
-        const baseDate = getSelectedBaseDate();
-        startDateInput.value = baseDate;
-        startTimeInput.value = "15:00";
-        endDateInput.value = baseDate;
-        endTimeInput.value = "23:00";
+        const { startDt, endDt } = getPresetShiftDates(15);
+        setInputs(startDt, endDt);
         fetchAllData();
     });
 
     document.getElementById('preset-turn-night').addEventListener('click', () => {
-        const baseDate = getSelectedBaseDate();
-        const parts = baseDate.split('-');
-        const d = new Date(parts[0], parts[1] - 1, parts[2]);
-        const dBefore = new Date(d.getTime() - 24 * 60 * 60 * 1000);
-        
-        startDateInput.value = formatDate(dBefore);
-        startTimeInput.value = "23:00";
-        endDateInput.value = baseDate;
-        endTimeInput.value = "07:00";
+        const { startDt, endDt } = getPresetShiftDates(23);
+        setInputs(startDt, endDt);
         fetchAllData();
     });
 
