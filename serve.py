@@ -244,9 +244,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 current_date = now_dt.date()
                 candidates = []
                 for d in [current_date - datetime.timedelta(days=1), current_date, current_date + datetime.timedelta(days=1)]:
-                    candidates.append(datetime.datetime.combine(d, datetime.time(6, 0)))
-                    candidates.append(datetime.datetime.combine(d, datetime.time(14, 0)))
-                    candidates.append(datetime.datetime.combine(d, datetime.time(22, 0)))
+                    candidates.append(datetime.datetime.combine(d, datetime.time(7, 0)))
+                    candidates.append(datetime.datetime.combine(d, datetime.time(15, 0)))
+                    candidates.append(datetime.datetime.combine(d, datetime.time(23, 0)))
                 candidates.sort()
                 
                 s1_start = None
@@ -262,7 +262,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     s3_end = s2_start
                     s4_start = s3_start - datetime.timedelta(hours=8)
                     s4_end = s3_start
-                    s5_start = datetime.datetime.combine(s1_start.date() - datetime.timedelta(days=1), datetime.time(6, 0))
+                    s5_start = datetime.datetime.combine(s1_start.date() - datetime.timedelta(days=1), datetime.time(7, 0))
                     s5_end = s5_start + datetime.timedelta(days=1)
                     
                     shifts = {

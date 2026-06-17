@@ -90,6 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         setIndicatorColor('ind-io', null);
                     }
                 }
+                const msgEl = document.getElementById('io-message');
+                if (msgEl) {
+                    if (data.message) {
+                        msgEl.textContent = data.message;
+                        msgEl.style.display = 'block';
+                    } else {
+                        msgEl.style.display = 'none';
+                    }
+                }
             })
             .catch(error => {
                 console.error('Error fetching IO data:', error);
@@ -507,18 +516,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('preset-turn-day').addEventListener('click', () => {
         const baseDate = getSelectedBaseDate();
         startDateInput.value = baseDate;
-        startTimeInput.value = "06:00";
+        startTimeInput.value = "07:00";
         endDateInput.value = baseDate;
-        endTimeInput.value = "14:00";
+        endTimeInput.value = "15:00";
         fetchAllData();
     });
 
     document.getElementById('preset-turn-afternoon').addEventListener('click', () => {
         const baseDate = getSelectedBaseDate();
         startDateInput.value = baseDate;
-        startTimeInput.value = "14:00";
+        startTimeInput.value = "15:00";
         endDateInput.value = baseDate;
-        endTimeInput.value = "22:00";
+        endTimeInput.value = "23:00";
         fetchAllData();
     });
 
@@ -529,9 +538,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const dBefore = new Date(d.getTime() - 24 * 60 * 60 * 1000);
         
         startDateInput.value = formatDate(dBefore);
-        startTimeInput.value = "22:00";
+        startTimeInput.value = "23:00";
         endDateInput.value = baseDate;
-        endTimeInput.value = "06:00";
+        endTimeInput.value = "07:00";
         fetchAllData();
     });
 
