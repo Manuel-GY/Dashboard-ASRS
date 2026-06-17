@@ -5,11 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateClock() {
         const now = new Date();
         
-        const date = now.toLocaleDateString('es-CL', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-        });
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const date = `${day}/${month}/${year}`;
         
         const time = now.toLocaleTimeString('es-CL', {
             hour: '2-digit',
@@ -141,10 +140,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${endDateInput.value}T${endTimeInput.value}`;
     }
 
-    // Default to last 24 hours
-    const now = new Date();
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    setInputs(yesterday, now);
+    // Helper to get current shift interval up to now
+    function getCurrentShiftInterval() {
+        const now = new Date();
+        const hour = now.getHours();
+        let startDt;
+
+        if (hour >= 6 && hour < 14) {
+            startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6, 0, 0, 0);
+        } else if (hour >= 14 && hour < 22) {
+            startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 0, 0, 0);
+        } else if (hour >= 22) {
+            startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 22, 0, 0, 0);
+        } else {
+            const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            startDt = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 22, 0, 0, 0);
+        }
+        return { startDt, endDt: now };
+    }
+
+    // Default to current shift up to now
+    const initialInterval = getCurrentShiftInterval();
+    setInputs(initialInterval.startDt, initialInterval.endDt);
 
     // Helper: color status indicator based on objective
     function setIndicatorColor(indicatorId, isHealthy) {
@@ -173,8 +190,10 @@ document.addEventListener('DOMContentLoaded', () => {
             url += `&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         }
         
-        document.getElementById(percentId).textContent = '...';
-        document.getElementById(minId).textContent = '...';
+        const percentEl = document.getElementById(percentId);
+        const minEl = document.getElementById(minId);
+        if (percentEl) percentEl.textContent = '...';
+        if (minEl) minEl.textContent = '...';
         
         fetch(url)
             .then(response => {
@@ -183,8 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 if (data.success) {
-                    document.getElementById(percentId).textContent = data.downtime_percent.toFixed(2);
-                    document.getElementById(minId).textContent = data.total_downtime.toFixed(2);
+                    const pEl = document.getElementById(percentId);
+                    const mEl = document.getElementById(minId);
+                    if (pEl) pEl.textContent = data.downtime_percent.toFixed(2);
+                    if (mEl) mEl.textContent = data.total_downtime.toFixed(2);
                     
                     // Actualizar indicadores visuales
                     setIndicatorColor(indicatorId, data.downtime_percent <= targetLimit);
@@ -224,8 +245,10 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => {
                 console.error(`Error fetching downtime code ${reason}:`, error);
-                document.getElementById(percentId).textContent = 'Error';
-                document.getElementById(minId).textContent = 'Error';
+                const pEl = document.getElementById(percentId);
+                const mEl = document.getElementById(minId);
+                if (pEl) pEl.textContent = 'Error';
+                if (mEl) mEl.textContent = 'Error';
                 setIndicatorColor(indicatorId, false);
             });
     }
@@ -240,9 +263,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. Plummers
         document.getElementById('plummers-tbody').innerHTML = `
-            <tr><td><strong>Lubricadora 1</strong></td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
-            <tr><td><strong>Lubricadora 2</strong></td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
-            <tr><td><strong>Lubricadora 3</strong></td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+            <tr><td><strong>Lubricadora 1</strong></td><td>-</td><td>-</td><td>-</td></tr>
+            <tr><td><strong>Lubricadora 2</strong></td><td>-</td><td>-</td><td>-</td></tr>
+            <tr><td><strong>Lubricadora 3</strong></td><td>-</td><td>-</td><td>-</td></tr>
         `;
         document.getElementById('plummers-total-tires').textContent = '-';
         setIndicatorColor('ind-plummers', null);
@@ -271,18 +294,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 5. Crane Performance
         document.getElementById('crane-uptime').textContent = '-';
-        document.getElementById('crane-top-downtime').textContent = 'No disponible';
-        document.getElementById('crane-top-minor').textContent = 'No disponible';
+        const craneEmptyRow = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted);">-</td></tr>`;
+        const tbodyDt = document.querySelector('#crane-top-downtime tbody');
+        const tbodyMn = document.querySelector('#crane-top-minor tbody');
+        if (tbodyDt) tbodyDt.innerHTML = craneEmptyRow;
+        if (tbodyMn) tbodyMn.innerHTML = craneEmptyRow;
         setIndicatorColor('ind-crane', null);
 
         // 6. Press Delivery Performance
         document.getElementById('press-delivery-uptime').textContent = '-';
         document.getElementById('press-delivery-container').innerHTML = `
-            <div class="press-item"><div class="press-id highlight">400B</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">500A</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">500B</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">600A</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
-            <div class="press-item"><div class="press-id highlight">600B</div><div class="press-stats"><div class="despachados">Desp: -</div><div class="vulcanizados">Vulc: -</div></div></div>
+            <div class="press-delivery-left">
+                <div class="press-overall-gauge">
+                    <div class="press-overall-val">- %</div>
+                    <div class="press-overall-label">Eficiencia de Despacho</div>
+                </div>
+            </div>
+            <div class="press-delivery-right">
+                ${["400B", "500A", "500B", "600A", "600B"].map(p => `
+                    <div class="press-row-item">
+                        <div class="press-row-header">
+                            <span class="press-row-id">${p}</span>
+                            <span class="press-row-pct">-</span>
+                        </div>
+                        <div class="press-progress-bar-bg">
+                            <div class="press-progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="press-row-stats">
+                            <span>Desp: <strong>-</strong></span>
+                            <span>Vulc: <strong>-</strong></span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
         `;
         setIndicatorColor('ind-press-delivery', null);
     }
@@ -327,81 +371,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchPLCConveyorData() {
-        const start = getStartDateTime();
-        const end   = getEndDateTime();
-
-        // Reset visual state
-        ['cc01', 'cc02', 'cc03'].forEach(id => {
-            document.getElementById(`${id}-val`).textContent = '...';
-            document.getElementById(`${id}-runtime`).textContent = '...';
-            setIndicatorColor(`ind-${id}`, null);
-        });
-        setIndicatorColor('ind-downtime-conveyor', null);
-
-        let url = '/api/plc-conveyor';
-        if (start && end) {
-            url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        const cardContent = document.getElementById('ind-downtime-conveyor')?.closest('.card')?.querySelector('.card-content');
+        if (cardContent) {
+            cardContent.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
         }
-
-        fetch(url)
-            .then(response => {
-                if (!response.ok) throw new Error('API Response not OK');
-                return response.json();
-            })
-            .then(data => {
-                if (!data.success) throw new Error('API returned failure');
-
-                // Sin datos históricos aún
-                if (data.message && Object.keys(data.data).length === 0) {
-                    ['cc01', 'cc02', 'cc03'].forEach(id => {
-                        document.getElementById(`${id}-val`).textContent = 'Sin datos';
-                        document.getElementById(`${id}-runtime`).textContent = 'Sin datos';
-                        setIndicatorColor(`ind-${id}`, null);
-                    });
-                    setIndicatorColor('ind-downtime-conveyor', null);
-                    return;
-                }
-
-                let anyError = false;
-                ['CC01', 'CC02', 'CC03'].forEach(label => {
-                    const id = label.toLowerCase();
-                    const plc = data.data[label];
-                    if (!plc || plc.status === 'error') {
-                        document.getElementById(`${id}-val`).textContent = 'Error';
-                        document.getElementById(`${id}-runtime`).textContent = 'Error';
-                        setIndicatorColor(`ind-${id}`, false);
-                        anyError = true;
-                    } else {
-                        const faulted = plc.faulted_minutes;
-                        const runtime = plc.runtime_minutes;
-                        const valEl = document.getElementById(`${id}-val`);
-                        const runEl = document.getElementById(`${id}-runtime`);
-
-                        valEl.textContent = faulted !== null ? faulted : '-';
-                        runEl.textContent = runtime !== null ? runtime : '-';
-
-                        if (faulted !== null && runtime !== null) {
-                            const isOk = faulted === 0 || runtime > faulted;
-                            setIndicatorColor(`ind-${id}`, isOk);
-                            if (!isOk) anyError = true;
-                            valEl.style.color = isOk ? 'var(--text-main)' : 'var(--danger-color)';
-                            valEl.style.fontWeight = isOk ? 'normal' : '600';
-                        } else {
-                            setIndicatorColor(`ind-${id}`, null);
-                        }
-                    }
-                });
-                setIndicatorColor('ind-downtime-conveyor', !anyError);
-            })
-            .catch(error => {
-                console.error('Error fetching PLC Conveyor data:', error);
-                ['cc01', 'cc02', 'cc03'].forEach(id => {
-                    document.getElementById(`${id}-val`).textContent = 'Error';
-                    document.getElementById(`${id}-runtime`).textContent = 'Error';
-                    setIndicatorColor(`ind-${id}`, false);
-                });
-                setIndicatorColor('ind-downtime-conveyor', false);
-            });
+        setIndicatorColor('ind-downtime-conveyor', null);
     }
 
 
@@ -410,8 +384,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const end   = getEndDateTime();
 
         document.getElementById('crane-uptime').textContent = '...';
-        document.getElementById('crane-top-downtime').textContent = '...';
-        document.getElementById('crane-top-minor').textContent = '...';
+        const craneLoadingRow = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted);">...</td></tr>`;
+        const tbodyDtLoad = document.querySelector('#crane-top-downtime tbody');
+        const tbodyMnLoad = document.querySelector('#crane-top-minor tbody');
+        if (tbodyDtLoad) tbodyDtLoad.innerHTML = craneLoadingRow;
+        if (tbodyMnLoad) tbodyMnLoad.innerHTML = craneLoadingRow;
         setIndicatorColor('ind-crane', null);
 
         let url = '/api/crane-performance';
@@ -449,34 +426,155 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const sorted = [...aisles].sort((a, b) => b.downtime_minutes - a.downtime_minutes);
 
-                const topDowntime = sorted.filter(a => a.downtime_minutes > 10).slice(0, 5);
-                const topMinor = sorted.filter(a => a.downtime_minutes > 0 && a.downtime_minutes <= 10).slice(0, 5);
+                const topDowntime = sorted.filter(a => a.downtime_minutes > 10).slice(0, 3);
+                const topMinor = sorted.filter(a => a.downtime_minutes > 0 && a.downtime_minutes <= 10).slice(0, 3);
 
-                const formatAisles = (list) => {
-                    if (list.length === 0) return 'N/A';
-                    return list.map(a => `Aisle ${a.aisle} (${a.downtime_minutes}m)`).join(', ');
+                // Función para generar filas de tabla HTML
+                const formatAislesTable = (list, tbodyId) => {
+                    const tbody = document.querySelector(`#${tbodyId} tbody`);
+                    if (!tbody) return;
+                    if (list.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted); font-style:italic;">Sin datos</td></tr>`;
+                        return;
+                    }
+                    tbody.innerHTML = list.map(a => `
+                        <tr>
+                            <td style="font-weight:600;">Pasillo ${a.aisle}</td>
+                            <td style="color:var(--danger-color); font-weight:700; text-align:right;">${a.downtime_minutes} min</td>
+                        </tr>
+                    `).join('');
                 };
 
                 // Si no hay > 10, mostramos los mayores en general que sean > 0
-                const finalTopDowntime = topDowntime.length > 0 ? topDowntime : sorted.filter(a => a.downtime_minutes > 0).slice(0, 5);
+                const finalTopDowntime = topDowntime.length > 0 ? topDowntime : sorted.filter(a => a.downtime_minutes > 0).slice(0, 3);
 
-                document.getElementById('crane-top-downtime').textContent = formatAisles(finalTopDowntime);
-                document.getElementById('crane-top-minor').textContent = formatAisles(topMinor);
+                formatAislesTable(finalTopDowntime, 'crane-top-downtime');
+                formatAislesTable(topMinor, 'crane-top-minor');
             })
             .catch(error => {
                 console.error('Error fetching Crane Performance data:', error);
                 document.getElementById('crane-uptime').textContent = 'Error';
-                document.getElementById('crane-top-downtime').textContent = 'Error';
-                document.getElementById('crane-top-minor').textContent = 'Error';
+                const errRow = `<tr><td colspan="2" style="text-align:center; color:var(--danger-color);">Error</td></tr>`;
+                const tbodyDt = document.querySelector('#crane-top-downtime tbody');
+                const tbodyMn = document.querySelector('#crane-top-minor tbody');
+                if (tbodyDt) tbodyDt.innerHTML = errRow;
+                if (tbodyMn) tbodyMn.innerHTML = errRow;
                 setIndicatorColor('ind-crane', false);
             });
     }
 
+    function fetchPressDeliveryData() {
+        const start = getStartDateTime();
+        const end   = getEndDateTime();
+
+        document.getElementById('press-delivery-uptime').textContent = '...';
+        setIndicatorColor('ind-press-delivery', null);
+
+        let url = '/api/press-delivery';
+        if (start && end) {
+            url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        }
+
+        fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error('API Response not OK');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('press-delivery-uptime').textContent = data.uptime.toFixed(2);
+                    setIndicatorColor('ind-press-delivery', data.uptime >= 98.00);
+
+                    const container = document.getElementById('press-delivery-container');
+                    let pressesHtml = '';
+                    const order = ["400B", "500A", "500B", "600A", "600B"];
+                    order.forEach(p => {
+                        const stats = data.presses[p] || { delivered: 0, cancelled: 0, total: 0, vulcanized: 0 };
+                        const valid = stats.delivered + stats.cancelled;
+                        const compliance = valid > 0 ? (stats.delivered / valid * 100) : 100.0;
+                        const complianceColor = compliance >= 98.0 ? 'var(--success-color)' : (compliance >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
+                        pressesHtml += `
+                            <div class="press-row-item">
+                                <div class="press-row-header">
+                                    <span class="press-row-id">${p}</span>
+                                    <span class="press-row-pct" style="color: ${complianceColor};">${compliance.toFixed(1)}%</span>
+                                </div>
+                                <div class="press-progress-bar-bg">
+                                    <div class="press-progress-bar-fill" style="width: ${compliance}%; background-color: ${complianceColor};"></div>
+                                </div>
+                                <div class="press-row-stats">
+                                    <span>Desp: <strong>${stats.delivered}</strong></span>
+                                    <span>Vulc: <strong>${stats.vulcanized || 0}</strong></span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    container.innerHTML = `
+                        <div class="press-delivery-left">
+                            <div class="press-overall-gauge">
+                                <div class="press-overall-val">${data.uptime.toFixed(2)}%</div>
+                                <div class="press-overall-label">Eficiencia de Despacho</div>
+                            </div>
+                        </div>
+                        <div class="press-delivery-right">
+                            ${pressesHtml}
+                        </div>
+                    `;
+                } else {
+                    throw new Error('API returned failure');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching Press Delivery data:', error);
+                document.getElementById('press-delivery-uptime').textContent = 'Error';
+                setIndicatorColor('ind-press-delivery', false);
+            });
+    }
+
+    function fetchAsrsEngineeringData() {
+        const robotsCard = document.getElementById('robots-tbody')?.closest('.card-content');
+        const plummersCard = document.getElementById('plummers-tbody')?.closest('.card-content');
+
+        if (robotsCard) {
+            robotsCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
+        }
+        if (plummersCard) {
+            plummersCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
+        }
+        document.getElementById('plummers-total-tires').textContent = "-";
+        setIndicatorColor('ind-plummers', null);
+        setIndicatorColor('ind-robots', null);
+    }
+
+    function fetchDailyTicket() {
+        const ticketEl = document.getElementById('daily-ticket-val');
+        if (!ticketEl) return;
+        ticketEl.textContent = '...';
+        
+        fetch('/api/daily-ticket')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    ticketEl.textContent = `${data.formatted} tires`;
+                } else {
+                    ticketEl.textContent = 'N/D';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching daily ticket:', error);
+                ticketEl.textContent = 'Error';
+            });
+    }
+
     function fetchAllData() {
+        fetchDailyTicket();
         fetchInputOutputData(getStartDateTime(), getEndDateTime());
         fetchConveyorFullData(getStartDateTime(), getEndDateTime());
         fetchPLCConveyorData();
         fetchCranePerformanceData();
+        fetchAsrsEngineeringData();
+        fetchPressDeliveryData();
 
         
         const startVal = getStartDateTime();
@@ -487,9 +585,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 210002 = PM Robot (Objective: 1.00%)
         fetchDowntimeData('210002', startVal, endVal, 'pm-total-percent', 'pm-total-min', 'pm', 'ind-pm', 1.00);
-        
-        // 40000 = PM General (Objective: 1.00%)
-        fetchDowntimeData('40000', startVal, endVal, 'pmg-total-percent', 'pmg-total-min', 'pmg', 'ind-pmg', 1.00);
     }
 
 
@@ -514,35 +609,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getPresetShiftDates(startHour) {
         const now = new Date();
-        const baseDate = getSelectedBaseDate();
-        const parts = baseDate.split('-');
-        
-        let startDt = new Date(parts[0], parts[1] - 1, parts[2], startHour, 0, 0);
+        // Siempre usar el día de hoy como base para los presets rápidos de turno
+        let startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startHour, 0, 0);
         
         // Si la hora de inicio del turno es en el futuro, retrocedemos 24 horas (al día anterior)
         if (startDt > now) {
             startDt = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
         }
         
-        const endDt = new Date(startDt.getTime() + 8 * 60 * 60 * 1000);
+        let endDt = new Date(startDt.getTime() + 8 * 60 * 60 * 1000);
+        // Si la hora de término del turno es en el futuro, la limitamos al momento actual (para no consultar el futuro)
+        if (endDt > now) {
+            endDt = now;
+        }
         return { startDt, endDt };
     }
 
     // Program presets
     document.getElementById('preset-turn-day').addEventListener('click', () => {
-        const { startDt, endDt } = getPresetShiftDates(7);
+        const { startDt, endDt } = getPresetShiftDates(6);
         setInputs(startDt, endDt);
         fetchAllData();
     });
 
     document.getElementById('preset-turn-afternoon').addEventListener('click', () => {
-        const { startDt, endDt } = getPresetShiftDates(15);
+        const { startDt, endDt } = getPresetShiftDates(14);
         setInputs(startDt, endDt);
         fetchAllData();
     });
 
     document.getElementById('preset-turn-night').addEventListener('click', () => {
-        const { startDt, endDt } = getPresetShiftDates(23);
+        const { startDt, endDt } = getPresetShiftDates(22);
         setInputs(startDt, endDt);
         fetchAllData();
     });
@@ -561,6 +658,18 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchAllData();
     });
 
+    // Function to auto-advance end time if we are in "live" mode, then fetch all data
+    function refreshLiveTimeAndFetch() {
+        const currentNow = new Date();
+        const currentEnd = new Date(getEndDateTime());
+        // If the end date/time is within 2 minutes of now, auto-advance it to keep it live
+        if (Math.abs(currentNow - currentEnd) < 120000) {
+            endDateInput.value = formatDate(currentNow);
+            endTimeInput.value = formatTime(currentNow);
+        }
+        fetchAllData();
+    }
+
     // Initial triggers
     initStaticWidgets();
     fetchAllData();
@@ -568,15 +677,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-refresh inteligente cada 30 segundos si la pestaña está activa
     let refreshInterval = setInterval(() => {
         if (document.visibilityState === 'visible') {
-            fetchAllData();
+            refreshLiveTimeAndFetch();
         }
     }, 30000);
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            fetchAllData(); // recarga inmediatamente al volver
+            refreshLiveTimeAndFetch(); // recarga inmediatamente al volver
             if (!refreshInterval) {
-                refreshInterval = setInterval(fetchAllData, 30000);
+                refreshInterval = setInterval(refreshLiveTimeAndFetch, 30000);
             }
         } else {
             clearInterval(refreshInterval);

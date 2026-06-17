@@ -9,10 +9,11 @@ Dashboard interactivo para el monitoreo de paradas de prensas y grúas ASRS, des
 *   **Filtro Histórico por Turno o Rango 📅**: Permite seleccionar rangos de fecha y hora libres para consultar el histórico de producción y paradas, evitando datos puramente acumulados.
 *   **Módulos de Monitoreo**:
     1.  **NO TIRE** (Razón de parada: `160000`): Filtra paradas mayores a 0 minutos. Muestra un mensaje amigable en caso de que todas estén en cero.
-    2.  **MANTENCIÓN PREVENTIVA ROBOT** (Razón de parada: `210002`): Muestra solo grupos con paradas mayores a 1 minuto.
-    3.  **MANTENCIÓN PREVENTIVA GENERAL** (Razón de parada: `40000`): Muestra solo grupos con paradas mayores a 1 minuto.
-    4.  **CONVEYORS (Downtime CV)**: Lee en tiempo real el tiempo de STOP (`faulted` y `runtime`) de los conveyors CC01, CC02 y CC03 conectándose directo a los PLCs de control.
-    5.  **CRANE PERFORMANCE**: Extrae de forma dinámica el rendimiento y paradas por pasillo (Aisle 1 al 11) a partir de los reportes del sistema.
+    2.  **MANTENCIONES PREVENTIVAS ROBOT ASRS** (Razón de parada: `210002`): Muestra solo grupos con paradas mayores a 1 minuto.
+    3.  **CONVEYORS (Downtime CV)**: Lee en tiempo real el tiempo de STOP (`faulted` y `runtime`) de los conveyors CC01, CC02 y CC03 conectándose directo a los PLCs de control.
+    4.  **CRANE PERFORMANCE**: Extrae de forma dinámica el rendimiento y paradas por pasillo (Aisle 1 al 11) mostrando el Top 3 de Downtime y Paradas Menores en tablas organizadas.
+    5.  **PRESS DELIVERY PERFORMANCE**: Monitorea el rendimiento de despachos a prensas (grupos 400B, 500A/B, 600A/B), comparando despachados vs vulcanizados en barras de progreso individuales e incorporando una visualización de eficiencia de despacho general en dos columnas.
+    6.  **TICKET DIARIO (AOP)**: Extracción automática del requerimiento de producción de neumáticos diario desde los servidores corporativos AOP, desplegado directamente en el encabezado.
 *   **Historiador Incorporado 💾**: Base de datos SQLite local integrada en el backend que guarda capturas de datos cada 60 segundos con una política de auto-sobreescritura para retener exactamente 7 días de información.
 *   **Diseño Premium**: Interfaz moderna en modo oscuro, responsiva, con micro-animaciones, gráficos mejorados y paleta de colores HSL.
 

@@ -14,6 +14,7 @@ import time
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pylogix import PLC as LogixPLC
+from bs4 import BeautifulSoup
 
 
 # ── Historiador SQLite ──────────────────────────────────────────────────────
@@ -116,6 +117,24 @@ def plc_poll_loop():
 db_init()
 _poll_thread = threading.Thread(target=plc_poll_loop, daemon=True)
 _poll_thread.start()
+
+# Helper para determinar el turno actual
+def get_shift_info(dt):
+    hour = dt.hour
+    if 6 <= hour < 14:
+        shift_name = "Day"
+        shift_date = dt.date()
+    elif 14 <= hour < 22:
+        shift_name = "Afternoon"
+        shift_date = dt.date()
+    elif hour >= 22:
+        shift_name = "Night"
+        shift_date = dt.date()
+    else:
+        shift_name = "Night"
+        shift_date = (dt - datetime.timedelta(days=1)).date()
+    return shift_date.isoformat(), shift_name
+
 
 PORT = 8080
 
@@ -231,12 +250,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             start_str = query_params.get('start', [''])[0]
             end_str   = query_params.get('end',   [''])[0]
             self.handle_crane_performance(start_str, end_str)
+
+
+
+        elif path == '/api/asrs-engineering-data':
+            start_str = query_params.get('start', [''])[0]
+            end_str   = query_params.get('end',   [''])[0]
+            self.handle_asrs_engineering_data(start_str, end_str)
+        elif path == '/api/press-delivery':
+            start_str = query_params.get('start', [''])[0]
+            end_str   = query_params.get('end',   [''])[0]
+            self.handle_press_delivery(start_str, end_str)
+        elif path == '/api/daily-ticket':
+            self.handle_daily_ticket()
         else:
             # Servir como servidor de archivos estáticos
             super().do_GET()
 
     def handle_io_data(self, start_dt=None, end_dt=None):
         try:
+            # Los turnos del sistema de código de barras ASRS van desfasados +1 hora
+            # respecto a los turnos de entrega. Sumamos 1 hora para el mapeo.
+            if start_dt:
+                start_dt = start_dt + datetime.timedelta(hours=1)
+            if end_dt:
+                end_dt = end_dt + datetime.timedelta(hours=1)
+
             # Determinar el prefijo del turno (s1, s2, s3, s4, s5) según la hora de consulta
             prefix = "s1"
             if start_dt and end_dt:
@@ -636,6 +675,370 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             print(f"[Error] Servidor de reportes no disponible para razón {reason}: {str(e)}", file=sys.stderr)
             self.send_json_response(503, {"success": False, "error": "Servidor de reportes no disponible."})
+
+
+
+    def handle_asrs_engineering_data(self, start_str=None, end_str=None):
+        url = "http://10.107.194.72/ingenieria/static/phpscripts/mysql/asrs_robot.php"
+        try:
+            req = urllib.request.Request(url, data=b"", headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=8) as response:
+                raw_data = response.read().decode('utf-8', errors='ignore')
+            
+            obj_json = json.loads(raw_data)
+            
+            # Resolver rango de consulta
+            try:
+                if start_str:
+                    start_dt = datetime.datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+                else:
+                    start_dt = datetime.datetime.now() - datetime.timedelta(hours=8)
+                if end_str:
+                    end_dt = datetime.datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+                else:
+                    end_dt = datetime.datetime.now()
+            except Exception:
+                start_dt = datetime.datetime.now() - datetime.timedelta(hours=8)
+                end_dt = datetime.datetime.now()
+
+            # Filtrar indices en la serie de minutos que correspondan al rango consultado
+            valid_indices = []
+            for i in range(len(obj_json[14])):
+                try:
+                    minute_dt = datetime.datetime.strptime(obj_json[14][i], "%Y-%m-%d %H:%M:%S")
+                    if start_dt <= minute_dt <= end_dt:
+                        valid_indices.append(i)
+                except Exception:
+                    pass
+
+            if not valid_indices:
+                # Si no hay índices válidos y no se especificó un rango personalizado,
+                # usar el rango de datos por defecto (últimas 8 horas)
+                if not start_str and not end_str:
+                    valid_indices = list(range(len(obj_json[0])))
+
+            # Calcular promedio por hora para el rango filtrado de forma segura
+            def calc_avg_minutes_per_hour(minute_list, indices):
+                vals = [float(minute_list[i]) / 1000.0 for i in indices if i < len(minute_list)]
+                return sum(vals) / len(vals) if vals else 0.0
+
+            # RL1 (j=0,1,2,3)
+            rl1_idle = calc_avg_minutes_per_hour(obj_json[0], valid_indices)
+            rl1_fail = calc_avg_minutes_per_hour(obj_json[1], valid_indices)
+            rl1_wait = calc_avg_minutes_per_hour(obj_json[2], valid_indices)
+            rl1_other = calc_avg_minutes_per_hour(obj_json[3], valid_indices)
+            rl1_work = max(0.0, 60.0 - (rl1_idle + rl1_fail + rl1_wait + rl1_other))
+
+            # RL2 (j=4,5,6,7)
+            rl2_idle = calc_avg_minutes_per_hour(obj_json[4], valid_indices)
+            rl2_fail = calc_avg_minutes_per_hour(obj_json[5], valid_indices)
+            rl2_wait = calc_avg_minutes_per_hour(obj_json[6], valid_indices)
+            rl2_other = calc_avg_minutes_per_hour(obj_json[7], valid_indices)
+            rl2_work = max(0.0, 60.0 - (rl2_idle + rl2_fail + rl2_wait + rl2_other))
+
+            # Lubricadoras Idle (j=8,9,10)
+            lub1_idle = calc_avg_minutes_per_hour(obj_json[8], valid_indices)
+            lub2_idle = calc_avg_minutes_per_hour(obj_json[9], valid_indices)
+            lub3_idle = calc_avg_minutes_per_hour(obj_json[10], valid_indices)
+
+            lub1_work = max(0.0, 60.0 - lub1_idle)
+            lub2_work = max(0.0, 60.0 - lub2_idle)
+            lub3_work = max(0.0, 60.0 - lub3_idle)
+
+            # Tiempos de ciclo filtrados por rango de tiempo exacto
+            def avg_cycle_filtered(c_list, ts_list):
+                c_float = []
+                for val, ts_str in zip(c_list, ts_list):
+                    try:
+                        ts_dt = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                        if start_dt <= ts_dt <= end_dt:
+                            val_f = float(val) / 1000.0
+                            if val_f > 0:
+                                c_float.append(val_f)
+                    except Exception:
+                        pass
+                return sum(c_float) / len(c_float) if c_float else 0.0
+
+            lub1_cycle = avg_cycle_filtered(obj_json[11], obj_json[14])
+            lub2_cycle = avg_cycle_filtered(obj_json[12], obj_json[14])
+            lub3_cycle = avg_cycle_filtered(obj_json[13], obj_json[14])
+
+            # Obtener cantidad en vivo de neumaticos del rango consultado (inbound total)
+            tires_count = "-"
+            try:
+                # Determinar prefijo (s1, s2, s3, s4) segun traslape de fechas
+                # Los turnos del sistema de código de barras ASRS van desfasados +1 hora
+                start_adjusted = start_dt + datetime.timedelta(hours=1)
+                end_adjusted = end_dt + datetime.timedelta(hours=1)
+                
+                # Definir limites de turnos
+                now_dt = datetime.datetime.now()
+                current_date = now_dt.date()
+                candidates = []
+                for d in [current_date - datetime.timedelta(days=1), current_date, current_date + datetime.timedelta(days=1)]:
+                    candidates.append(datetime.datetime.combine(d, datetime.time(7, 0)))
+                    candidates.append(datetime.datetime.combine(d, datetime.time(15, 0)))
+                    candidates.append(datetime.datetime.combine(d, datetime.time(23, 0)))
+                candidates.sort()
+                
+                s1_start = None
+                for c in candidates:
+                    if c <= now_dt:
+                        s1_start = c
+                
+                prefix = "s1"
+                if s1_start:
+                    shifts = {
+                        "s1": (s1_start, s1_start + datetime.timedelta(hours=8)),
+                        "s2": (s1_start - datetime.timedelta(hours=8), s1_start),
+                        "s3": (s1_start - datetime.timedelta(hours=16), s1_start - datetime.timedelta(hours=8)),
+                        "s4": (s1_start - datetime.timedelta(hours=24), s1_start - datetime.timedelta(hours=16))
+                    }
+                    max_overlap = -1
+                    for p, (s_start, s_end) in shifts.items():
+                        overlap_start = max(start_adjusted, s_start)
+                        overlap_end = min(end_adjusted, s_end)
+                        if overlap_end > overlap_start:
+                            overlap_sec = (overlap_end - overlap_start).total_seconds()
+                            if overlap_sec > max_overlap:
+                                max_overlap = overlap_sec
+                                prefix = p
+
+                ctrl_url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
+                ctrl_req = urllib.request.Request(ctrl_url)
+                proxy_handler = urllib.request.ProxyHandler({})
+                opener = urllib.request.build_opener(proxy_handler)
+                with opener.open(ctrl_req, timeout=4) as response:
+                    ctrl_html = response.read().decode('utf-8', errors='ignore')
+                match = re.search(rf"getElementById\('{prefix}_inbound_total'\)\.innerHTML\s*=\s*'([^']+)'", ctrl_html)
+                if match:
+                    tires_count = int(match.group(1))
+            except Exception as ex:
+                print(f"[Plummer Tires] Error fetching from ASRS: {ex}", file=sys.stderr)
+
+            response_data = {
+                "success": True,
+                "robots": {
+                    "RL1": {"idle": round(rl1_idle, 1), "working": round(rl1_work, 1), "waiting": round(rl1_wait, 1), "failure": round(rl1_fail, 1)},
+                    "RL2": {"idle": round(rl2_idle, 1), "working": round(rl2_work, 1), "waiting": round(rl2_wait, 1), "failure": round(rl2_fail, 1)}
+                },
+                "plummers": {
+                    "L1": {"idle": round(lub1_idle, 1), "working": round(lub1_work, 1), "cycle": round(lub1_cycle, 1), "tires": tires_count},
+                    "L2": {"idle": round(lub2_idle, 1), "working": round(lub2_work, 1), "cycle": round(lub2_cycle, 1), "tires": "-"},
+                    "L3": {"idle": round(lub3_idle, 1), "working": round(lub3_work, 1), "cycle": round(lub3_cycle, 1), "tires": "-"}
+                }
+            }
+            self.send_json_response(200, response_data)
+        except Exception as e:
+            print(f"[Error] handle_asrs_engineering_data: {e}", file=sys.stderr)
+            self.send_json_response(503, {"success": False, "error": str(e)})
+            self.send_json_response(503, {"success": False, "error": str(e)})
+
+    def handle_press_delivery(self, start_str, end_str):
+        try:
+            if start_str:
+                start_dt = datetime.datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+            else:
+                start_dt = datetime.datetime.now() - datetime.timedelta(hours=8)
+            if end_str:
+                end_dt = datetime.datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+            else:
+                end_dt = datetime.datetime.now()
+        except Exception as e:
+            self.send_error_response(400, f"Fechas inválidas: {e}")
+            return
+
+        start_formatted = start_dt.strftime('%Y/%m/%d %H:%M:%S')
+        end_formatted = end_dt.strftime('%Y/%m/%d %H:%M:%S')
+
+        # ── 1. Obtener datos de cumplimiento (órdenes despachadas / canceladas) ──
+        url_compliance = f"http://10.107.194.62/sbs/reports/auto_order_compliance.php?byheader=0&sortby=order_num&sortorder=ASC&str_ts={urllib.parse.quote(start_formatted)}&end_ts={urllib.parse.quote(end_formatted)}&prszone=&prsrow=all_rows&prscav=all_cavs"
+        
+        groups = {
+            "400B": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0},
+            "500A": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0},
+            "500B": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0},
+            "600A": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0},
+            "600B": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0}
+        }
+
+        ignored_cavities = {"440", "520", "540", "620", "640"}
+
+        try:
+            req = urllib.request.Request(url_compliance, headers={"User-Agent": "Mozilla/5.0"})
+            proxy_handler = urllib.request.ProxyHandler({})
+            opener = urllib.request.build_opener(proxy_handler)
+            with opener.open(req, timeout=10) as response:
+                html = response.read().decode('utf-8', errors='ignore')
+
+            soup = BeautifulSoup(html, "html.parser")
+            tables = soup.find_all("table")
+            
+            target_table = None
+            for t in tables:
+                rows = t.find_all("tr")
+                if len(rows) > 10:
+                    target_table = t
+                    break
+            
+            if target_table:
+                rows = target_table.find_all("tr")
+                for r in rows[1:]:
+                    cells = [td.get_text(strip=True) for td in r.find_all("td")]
+                    if len(cells) > 7:
+                        status = cells[1]
+                        dest = cells[7]
+                        
+                        if dest in ignored_cavities:
+                            continue
+
+                        group = None
+                        if dest.startswith("4"):
+                            group = "400B"
+                        elif dest.startswith("5"):
+                            try:
+                                num = int(dest)
+                                group = "500A" if num % 2 != 0 else "500B"
+                            except ValueError:
+                                pass
+                        elif dest.startswith("6"):
+                            try:
+                                num = int(dest)
+                                group = "600A" if num % 2 != 0 else "600B"
+                            except ValueError:
+                                pass
+                        
+                        if group in groups:
+                            groups[group]["total"] += 1
+                            if status == "Fulfilled":
+                                groups[group]["delivered"] += 1
+                            elif status == "Cancelled":
+                                groups[group]["cancelled"] += 1
+        except Exception as e:
+            print(f"[Error] fetch compliance: {e}", file=sys.stderr)
+
+        # ── 2. Obtener datos de vulcanización (crosstab de producción) ──
+        crosstab_baseUrl = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/Production_Counts_Crosstab/Production_Counts_Crosstab.CrossTab/CrossTab/DataSource/DS1"
+        crosstab_params = {
+            "ARG_TRANS_START_DATE": start_formatted,
+            "ARG_TRANS_END_DATE": end_formatted,
+            "ARG_MACHINE_GROUP_GUID": "9A98FF823A234EEDE05356C26B0A13F5",
+            "ARG_TIME_SUMMARY": "DD",
+            "ARG_MACH_TYPE": "",
+            "ARG_COLUMN": "MACH_PART_NAME;",
+            "ARG_ROW": "PRODUCTION_HOUR;",
+            "ARG_DATA": "PRODUCT_CNT;",
+            "ARG_LANG": "ENG",
+            "ARG_LANGUAGE_CD": "en",
+            "ARG_USER": ""
+        }
+        crosstab_url = crosstab_baseUrl + "?" + urllib.parse.urlencode(crosstab_params)
+
+        try:
+            req_crosstab = urllib.request.Request(crosstab_url, headers={"Accept-language": "en"})
+            proxy_handler = urllib.request.ProxyHandler({})
+            opener = urllib.request.build_opener(proxy_handler)
+            with opener.open(req_crosstab, timeout=10) as response:
+                xml_data = response.read()
+
+            root = ET.fromstring(xml_data)
+            for row in root.findall('.//Row'):
+                mach_el = row.find('MACH_PART_NAME')
+                cnt_el = row.find('PRODUCT_CNT')
+                if mach_el is not None and cnt_el is not None:
+                    dest = (mach_el.text or "").strip()
+                    try:
+                        product_cnt = int(float(cnt_el.text or "0"))
+                    except ValueError:
+                        product_cnt = 0
+
+                    if dest in ignored_cavities:
+                        continue
+
+                    group = None
+                    if dest.startswith("4"):
+                        group = "400B"
+                    elif dest.startswith("5"):
+                        try:
+                            num = int(dest)
+                            group = "500A" if num % 2 != 0 else "500B"
+                        except ValueError:
+                            pass
+                    elif dest.startswith("6"):
+                        try:
+                            num = int(dest)
+                            group = "600A" if num % 2 != 0 else "600B"
+                        except ValueError:
+                            pass
+
+                    if group in groups:
+                        groups[group]["vulcanized"] += product_cnt
+        except Exception as e:
+            print(f"[Error] fetch crosstab vulcanized: {e}", file=sys.stderr)
+
+        total_delivered = sum(g["delivered"] for g in groups.values())
+        total_cancelled = sum(g["cancelled"] for g in groups.values())
+        total_valid = total_delivered + total_cancelled
+        uptime = (total_delivered / total_valid * 100.0) if total_valid > 0 else 100.0
+
+        self.send_json_response(200, {
+            "success": True,
+            "uptime": round(uptime, 2),
+            "presses": groups
+        })
+
+    def handle_daily_ticket(self):
+        url = "http://akrmfgcorp.akr.goodyear.com/mfgcorp/aop/pzkmtsc.jsp?RptView=LA"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            proxy_handler = urllib.request.ProxyHandler({})
+            opener = urllib.request.build_opener(proxy_handler)
+            with opener.open(req, timeout=8) as response:
+                html = response.read().decode('utf-8', errors='ignore')
+
+            soup = BeautifulSoup(html, "html.parser")
+            table = soup.find("table")
+            if not table:
+                self.send_json_response(200, {"success": False, "error": "No table found"})
+                return
+
+            # Obtener fecha de hoy en formato MM/DD
+            today_str = datetime.datetime.now().strftime('%m/%d')
+            rows = table.find_all("tr")
+            
+            ticket_val = None
+            for r in rows:
+                cells = [c.get_text(strip=True) for c in r.find_all(['td', 'th'])]
+                if cells and cells[0] == today_str:
+                    if len(cells) > 3:
+                        ticket_val = cells[3]
+                        break
+
+            if ticket_val is not None:
+                try:
+                    ticket_float = float(ticket_val)
+                    ticket_units = int(ticket_float * 1000)
+                    ticket_formatted = f"{ticket_units:,}".replace(',', '.')
+                except ValueError:
+                    ticket_float = 0.0
+                    ticket_units = 0
+                    ticket_formatted = ticket_val
+
+                self.send_json_response(200, {
+                    "success": True,
+                    "date": today_str,
+                    "ticket": ticket_float,
+                    "units": ticket_units,
+                    "formatted": ticket_formatted
+                })
+            else:
+                self.send_json_response(200, {
+                    "success": False,
+                    "error": f"Date {today_str} not found in AOP table"
+                })
+        except Exception as e:
+            print(f"[Error] handle_daily_ticket: {e}", file=sys.stderr)
+            self.send_json_response(503, {"success": False, "error": str(e)})
 
     def send_json_response(self, code, data):
         self.send_response(code)

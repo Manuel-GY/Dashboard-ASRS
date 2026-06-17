@@ -268,17 +268,24 @@ body {
     font-size: 1.1rem;
 }
 
+.card-content {
+    width: 100%;
+    overflow: hidden; /* Ensure NO horizontal scrollbars inside cards */
+}
+
 /* Tables */
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.9rem;
+    font-size: clamp(0.72rem, 0.9vw, 0.8rem);
+    letter-spacing: -0.01em;
 }
 
 .data-table th, .data-table td {
-    padding: 8px;
+    padding: 6px 3px;
     text-align: left;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    white-space: nowrap;
 }
 
 .data-table th {
@@ -381,7 +388,6 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 .stat-box .value {
     font-size: 1.2rem;
     font-weight: 700;
-    color: var(--accent-color);
 }
 
 .stat-box .sub-value {
@@ -390,7 +396,148 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 }
 
 .press-delivery-card {
+    grid-column: span 2;
     padding: 20px !important;
+}
+
+@media (max-width: 1024px) {
+    .press-delivery-card {
+        grid-column: span 1;
+    }
+}
+
+/* Layout para Press Delivery en 2 Columnas internas */
+.press-delivery-layout {
+    display: grid;
+    grid-template-columns: 1.2fr 2fr;
+    gap: 20px;
+    align-items: center;
+    width: 100%;
+}
+
+.press-delivery-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid var(--border-color);
+    padding-right: 20px;
+}
+
+.press-overall-gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.press-overall-val {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--accent-color);
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+
+.press-overall-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 8px;
+    font-weight: 500;
+}
+
+.press-delivery-right {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.press-row-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.press-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.press-row-id {
+    color: var(--highlight-text);
+}
+
+.press-progress-bar-bg {
+    background: rgba(255, 255, 255, 0.05);
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    width: 100%;
+}
+
+.press-progress-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+.press-row-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+    .press-delivery-layout {
+        grid-template-columns: 1fr;
+    }
+    .press-delivery-left {
+        border-right: none;
+        padding-right: 0;
+        padding-bottom: 15px;
+        border-bottom: 1px solid var(--border-color);
+    }
+}
+
+/* Crane Performance — tablas compactas */
+.crane-table-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.crane-table-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.crane-mini-table {
+    width: 100%;
+}
+
+.crane-mini-table th {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    padding: 4px 6px;
+}
+
+.crane-mini-table td {
+    font-size: 0.82rem;
+    padding: 5px 6px;
+}
+
+.crane-mini-table tbody tr:last-child td {
+    border-bottom: none;
 }
 
 .press-delivery-grid {
@@ -433,7 +580,7 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 }
 
 .press-stats .despachados {
-    color: var(--accent-color);
+    color: var(--text-main);
     font-weight: 600;
 }
 
@@ -444,6 +591,22 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 
 
 /* Responsive */
+@media (max-width: 1280px) {
+    body {
+        padding: 12px;
+    }
+    .card {
+        padding: 14px;
+    }
+    .grid-layout {
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .data-table th, .data-table td {
+        padding: 5px 2px;
+    }
+}
+
 @media (max-width: 1024px) {
     .grid-layout {
         grid-template-columns: 1fr;
