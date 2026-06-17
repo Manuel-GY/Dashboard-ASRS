@@ -139,7 +139,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             
         # API INPUT / OUTPUT
         elif path == '/api/io-data' or path == '/api_io_data.php':
-            self.handle_io_data()
+            start_str = query_params.get('start', [''])[0]
+            end_str = query_params.get('end', [''])[0]
+            start_dt = None
+            end_dt = None
+            try:
+                if start_str:
+                    start_dt = datetime.datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+                if end_str:
+                    end_dt = datetime.datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+            except Exception:
+                pass
+            self.handle_io_data(start_dt, end_dt)
             
         # API DOWNTIME (NO TIRE / PREVENTIVAS)
         elif path == '/api/downtime' or path in ['/api_no_tire.php', '/api_preventiva.php', '/api_preventiva_general.php']:
@@ -224,8 +235,57 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # Servir como servidor de archivos estáticos
             super().do_GET()
 
-    def handle_io_data(self):
+    def handle_io_data(self, start_dt=None, end_dt=None):
         try:
+            # Determinar el prefijo del turno (s1, s2, s3, s4, s5) según la hora de consulta
+            prefix = "s1"
+            if start_dt and end_dt:
+                now_dt = datetime.datetime.now()
+                current_date = now_dt.date()
+                candidates = []
+                for d in [current_date - datetime.timedelta(days=1), current_date, current_date + datetime.timedelta(days=1)]:
+                    candidates.append(datetime.datetime.combine(d, datetime.time(6, 0)))
+                    candidates.append(datetime.datetime.combine(d, datetime.time(14, 0)))
+                    candidates.append(datetime.datetime.combine(d, datetime.time(22, 0)))
+                candidates.sort()
+                
+                s1_start = None
+                for c in candidates:
+                    if c <= now_dt:
+                        s1_start = c
+                
+                if s1_start:
+                    s1_end = s1_start + datetime.timedelta(hours=8)
+                    s2_start = s1_start - datetime.timedelta(hours=8)
+                    s2_end = s1_start
+                    s3_start = s2_start - datetime.timedelta(hours=8)
+                    s3_end = s2_start
+                    s4_start = s3_start - datetime.timedelta(hours=8)
+                    s4_end = s3_start
+                    s5_start = datetime.datetime.combine(s1_start.date() - datetime.timedelta(days=1), datetime.time(6, 0))
+                    s5_end = s5_start + datetime.timedelta(days=1)
+                    
+                    shifts = {
+                        "s1": (s1_start, s1_end),
+                        "s2": (s2_start, s2_end),
+                        "s3": (s3_start, s3_end),
+                        "s4": (s4_start, s4_end),
+                        "s5": (s5_start, s5_end)
+                    }
+                    
+                    # Encontrar el que tenga el mayor traslape en segundos
+                    max_overlap = -1
+                    best_prefix = "s1"
+                    for p, (s_start, s_end) in shifts.items():
+                        overlap_start = max(start_dt, s_start)
+                        overlap_end = min(end_dt, s_end)
+                        if overlap_end > overlap_start:
+                            overlap_sec = (overlap_end - overlap_start).total_seconds()
+                            if overlap_sec > max_overlap:
+                                max_overlap = overlap_sec
+                                best_prefix = p
+                    prefix = best_prefix
+
             url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
             req = urllib.request.Request(url)
             proxy_handler = urllib.request.ProxyHandler({})
@@ -239,12 +299,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return match.group(1) if match else "0"
 
             data = {
-                "entrada": extract("s1_inbound_total"),
-                "manual": extract("s1_outbound_cv31_actual"),
-                "auto": extract("s1_press_total"),
-                "rate_entrada": extract("s1_inbound_avg"),
-                "rate_manual": extract("s1_manual_rate"),
-                "rate_auto": extract("s1_press_rate"),
+                "entrada": extract(f"{prefix}_inbound_total"),
+                "manual": extract(f"{prefix}_outbound_cv31_actual"),
+                "auto": extract(f"{prefix}_press_total"),
+                "rate_entrada": extract(f"{prefix}_inbound_avg"),
+                "rate_manual": extract(f"{prefix}_manual_rate"),
+                "rate_auto": extract(f"{prefix}_press_rate"),
                 "mock": False
             }
             self.send_json_response(200, data)

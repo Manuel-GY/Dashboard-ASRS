@@ -56,8 +56,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Input/Output Data
-    function fetchInputOutputData() {
-        fetch('/api/io-data')
+    function fetchInputOutputData(start = '', end = '') {
+        let url = '/api/io-data';
+        if (start && end) {
+            url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        }
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 document.getElementById('io-entrada-val').innerHTML = `${data.entrada} <small>tires</small>`;
@@ -455,7 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchAllData() {
-        fetchInputOutputData();
+        fetchInputOutputData(getStartDateTime(), getEndDateTime());
         fetchConveyorFullData(getStartDateTime(), getEndDateTime());
         fetchPLCConveyorData();
         fetchCranePerformanceData();
