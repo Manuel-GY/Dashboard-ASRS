@@ -273,10 +273,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         "s5": (s5_start, s5_end)
                     }
                     
+                    # Excluir consultas de más de 1 día atrás (anteriores a s4_start)
+                    if start_dt < s4_start:
+                        self.send_json_response(200, {
+                            "entrada": "-",
+                            "manual": "-",
+                            "auto": "-",
+                            "rate_entrada": "-",
+                            "rate_manual": "-",
+                            "rate_auto": "-",
+                            "mock": False,
+                            "message": "Sin información para fechas anteriores a 1 día"
+                        })
+                        return
+                        
                     # Encontrar el que tenga el mayor traslape en segundos
                     max_overlap = -1
                     best_prefix = "s1"
                     for p, (s_start, s_end) in shifts.items():
+                        if p == "s5": 
+                            continue # s5 es para todo el día anterior, nos enfocamos en s1-s4 para los turnos individuales
                         overlap_start = max(start_dt, s_start)
                         overlap_end = min(end_dt, s_end)
                         if overlap_end > overlap_start:
@@ -285,6 +301,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 max_overlap = overlap_sec
                                 best_prefix = p
                     prefix = best_prefix
+
 
             url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
             req = urllib.request.Request(url)

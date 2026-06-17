@@ -76,14 +76,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Calculamos eficiencia aproximada
                 const totalOut = parseFloat(data.manual) + parseFloat(data.auto);
                 const totalIn = parseFloat(data.entrada);
-                let efficiency = 95.0;
-                if (totalIn > 0) {
+                let efficiency = null;
+                if (!isNaN(totalIn) && !isNaN(totalOut) && totalIn > 0) {
                     efficiency = (totalOut / totalIn) * 100;
                 }
                 const effEl = document.getElementById('io-efficiency');
                 if (effEl) {
-                    effEl.textContent = efficiency.toFixed(2);
-                    setIndicatorColor('ind-io', efficiency >= 95.0);
+                    if (efficiency !== null) {
+                        effEl.textContent = efficiency.toFixed(2);
+                        setIndicatorColor('ind-io', efficiency >= 95.0);
+                    } else {
+                        effEl.textContent = '-';
+                        setIndicatorColor('ind-io', null);
+                    }
                 }
             })
             .catch(error => {
