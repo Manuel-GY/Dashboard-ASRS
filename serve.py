@@ -13,6 +13,92 @@ import time
 import os
 import sqlite3
 from bs4 import BeautifulSoup
+from pylogix import PLC
+
+PLC_TAGS_CONFIG = {
+    'conveyors': {
+        'CC01': {'ip': '10.107.210.231', 'slot': 0, 'tags': {'RUN': 'CC01_RUN_MINS', 'STOP': 'CC01_STOP_MINS', 'IDLE': 'CC01_IDLE_MINS'}},
+        'CC02': {'ip': '10.107.210.232', 'slot': 0, 'tags': {'RUN': 'CC02_RUN_MINS', 'STOP': 'CC02_STOP_MINS', 'IDLE': 'CC02_IDLE_MINS'}},
+        'CC03': {'ip': '10.107.210.233', 'slot': 0, 'tags': {'RUN': 'CC03_RUN_MINS', 'STOP': 'CC03_STOP_MINS', 'IDLE': 'CC03_IDLE_MINS'}},
+    },
+    'robots': {
+        'LR1': {'ip': '10.107.210.141', 'slot': 0, 'tags': {'RUN': 'LR1_RUN_MINS', 'STOP': 'LR1_STOP_MINS'}},
+        'LR2': {'ip': '10.107.210.140', 'slot': 0, 'tags': {'RUN': 'LR2_RUN_MINS', 'STOP': 'LR2_STOP_MINS'}},
+        'ULR1': {'ip': '10.107.210.142', 'slot': 0, 'tags': {'RUN': 'ULR1_RUN_MINS', 'STOP': 'ULR1_STOP_MINS'}},
+        'ULR2': {'ip': '10.107.210.143', 'slot': 0, 'tags': {'RUN': 'ULR2_RUN_MINS', 'STOP': 'ULR2_STOP_MINS'}},
+        'RL1': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'working': 'RL1_WORK_MINS', 'idle': 'RL1_IDLE_MINS', 'waiting': 'RL1_WAIT_MINS', 'failure': 'RL1_FAIL_MINS'}},
+        'RL2': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'working': 'RL2_WORK_MINS', 'idle': 'RL2_IDLE_MINS', 'waiting': 'RL2_WAIT_MINS', 'failure': 'RL2_FAIL_MINS'}},
+    },
+    'plummers': {
+        'L1': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L1_RUN_MINS', 'idle': 'L1_IDLE_MINS', 'stop': 'L1_STOP_MINS'}},
+        'L2': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L2_RUN_MINS', 'idle': 'L2_IDLE_MINS', 'stop': 'L2_STOP_MINS'}},
+    }
+}
+
+def init_shift_db():
+    db_path = 'shift_history.db'
+    con = sqlite3.connect(db_path)
+    con.execute("""CREATE TABLE IF NOT EXISTS shift_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT,
+        turno TEXT,
+        maquina TEXT,
+        estado TEXT,
+        minutos REAL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""")
+    cutoff_dt = datetime.datetime.now() - datetime.timedelta(days=3)
+    con.execute('DELETE FROM shift_summaries WHERE timestamp < ?', (cutoff_dt.strftime('%Y-%m-%d %H:%M:%S'),))
+    con.commit()
+    con.close()
+
+init_shift_db()
+
+def log_shift_data():
+    now = datetime.datetime.now()
+    _, shift_name = get_shift_info(now)
+    fecha_str = now.strftime('%d/%m/%Y')
+    
+    if shift_name == 'Day': shift_text = '06:00 a 14:00'
+    elif shift_name == 'Afternoon': shift_text = '14:00 a 22:00'
+    else: shift_text = '22:00 a 06:00'
+    
+    db_path = 'shift_history.db'
+    con = sqlite3.connect(db_path)
+    
+    for category, machines in PLC_TAGS_CONFIG.items():
+        for maq, conf in machines.items():
+            ip = conf['ip']
+            tags_dict = conf['tags']
+            comm = PLC()
+            comm.IPAddress = ip
+            comm.ProcessorSlot = conf['slot']
+            try:
+                ret = comm.Read(list(tags_dict.values()))
+                for r in ret:
+                    if r.Status == 'Success':
+                        val = float(r.Value)
+                        estado = [k for k,v in tags_dict.items() if v == r.TagName][0]
+                        con.execute("""INSERT INTO shift_summaries (fecha, turno, maquina, estado, minutos) 
+                                       VALUES (?, ?, ?, ?, ?)""", 
+                                    (fecha_str, shift_text, maq, estado, val))
+            except Exception as e:
+                print(f'[ShiftLogger] Error PLC {maq}: {e}')
+            comm.Close()
+            
+    con.commit()
+    con.close()
+    print(f'[{now.strftime("%H:%M:%S")}] Shift History Saved!')
+
+def shift_logger_thread():
+    while True:
+        now = datetime.datetime.now()
+        if now.minute == 59 and now.second == 50 and now.hour in [5, 13, 21]:
+            log_shift_data()
+            time.sleep(2)
+        time.sleep(1)
+
+threading.Thread(target=shift_logger_thread, daemon=True).start()
 
 # Helper para determinar el turno actual
 def get_shift_info(dt):

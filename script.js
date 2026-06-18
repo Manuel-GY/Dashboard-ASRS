@@ -546,18 +546,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchAsrsEngineeringData() {
-        const robotsCard = document.getElementById('robots-tbody')?.closest('.card-content');
-        const plummersCard = document.getElementById('plummers-tbody')?.closest('.card-content');
-
-        // if (robotsCard) {
-        //     robotsCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
-        // }
-        if (plummersCard) {
-            plummersCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
-        }
-        document.getElementById('plummers-total-tires').textContent = "-";
-        setIndicatorColor('ind-plummers', null);
-        setIndicatorColor('ind-robots', null);
+        fetch('/api/asrs-engineering-data')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.robots && data.plummers) {
+                    ['RL1', 'RL2'].forEach(maq => {
+                        const mData = data.robots[maq];
+                        if (mData) {
+                            const eRun = document.getElementById(`${maq.toLowerCase()}-run`);
+                            const eIdle = document.getElementById(`${maq.toLowerCase()}-idle`);
+                            const eStop = document.getElementById(`${maq.toLowerCase()}-stop`);
+                            if (eRun) eRun.textContent = mData.working !== undefined ? mData.working.toFixed(2) : '-';
+                            if (eIdle) eIdle.textContent = mData.idle !== undefined ? mData.idle.toFixed(2) : '-';
+                            if (eStop) eStop.textContent = mData.failure !== undefined ? mData.failure.toFixed(2) : '-';
+                        }
+                    });
+                    ['L1', 'L2'].forEach(maq => {
+                        const mData = data.plummers[maq];
+                        if (mData) {
+                            const eRun = document.getElementById(`${maq.toLowerCase()}-run`);
+                            const eIdle = document.getElementById(`${maq.toLowerCase()}-idle`);
+                            const eStop = document.getElementById(`${maq.toLowerCase()}-stop`);
+                            if (eRun) eRun.textContent = mData.run !== undefined ? mData.run.toFixed(2) : '-';
+                            if (eIdle) eIdle.textContent = mData.idle !== undefined ? mData.idle.toFixed(2) : '-';
+                            if (eStop) eStop.textContent = mData.stop !== undefined ? mData.stop.toFixed(2) : '-';
+                        }
+                    });
+                    setIndicatorColor('ind-plummers', true);
+                } else {
+                    setIndicatorColor('ind-plummers', false);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching ASRS Engineering Data:', error);
+                setIndicatorColor('ind-plummers', false);
+            });
     }
 
     function fetchDailyTicket() {
