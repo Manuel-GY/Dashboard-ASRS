@@ -456,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tbody.innerHTML = list.map(a => `
                         <tr>
                             <td style="font-weight:600;">Pasillo ${a.aisle}</td>
-                            <td style="color:var(--danger-color); font-weight:700; text-align:right;">${a.downtime_minutes} min</td>
+                            <td style="color:var(--danger-color); font-weight:700;">${a.downtime_minutes} min</td>
                         </tr>
                     `).join('');
                 };
