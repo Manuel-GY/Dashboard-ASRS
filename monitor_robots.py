@@ -6,28 +6,35 @@ import sys
 import threading
 from pylogix import PLC
 
-# Configuración de los PLCs a monitorear
+# Configuración de los PLCs a monitorear (Robots)
 PLC_CONFIG = [
     {
-        "label": "CC01",
-        "ip": "10.107.210.111",
+        "label": "LR1",
+        "ip": "10.107.210.141",
         "slot": 0,
-        "tag_estop": "CC01_EStop_Active",
-        "tag_run": ["P0100_OK"]
+        "tag_estop": "ESTOP_OK",
+        "tag_manual": "Auto_Manual"
     },
     {
-        "label": "CC02",
-        "ip": "10.107.210.121",
+        "label": "LR2",
+        "ip": "10.107.210.140",
         "slot": 0,
-        "tag_estop": "CC02_Stop",
-        "tag_run": ["P1300_OK"]
+        "tag_estop": "ESTOP_OK",
+        "tag_manual": "Auto_Manual"
     },
     {
-        "label": "CC03",
-        "ip": "10.107.210.131",
+        "label": "ULR1",
+        "ip": "10.107.210.143", # Placeholder
         "slot": 0,
-        "tag_estop": "CC03_Stop",
-        "tag_run": ["CC03_P2900_OK", "CC03_P2975_OK"]
+        "tag_estop": "ESTOP_OK",
+        "tag_manual": "Auto_Manual"
+    },
+    {
+        "label": "ULR2",
+        "ip": "10.107.210.144", # Placeholder
+        "slot": 0,
+        "tag_estop": "ESTOP_OK",
+        "tag_manual": "Auto_Manual"
     }
 ]
 
@@ -103,7 +110,7 @@ def monitor_single_plc(config):
     ip = config["ip"]
     slot = config["slot"]
     tag_estop = config["tag_estop"]
-    tag_run = config["tag_run"]
+    tag_manual = config["tag_manual"]
     
     current_state = None
     start_time = None
@@ -120,7 +127,7 @@ def monitor_single_plc(config):
     except Exception:
         pass
         
-    print(f"[{label}] Iniciando monitoreo en {ip}...")
+    print(f"[{label}] Iniciando monitoreo de Robot en {ip}...")
     
     while True:
         try:
@@ -128,23 +135,18 @@ def monitor_single_plc(config):
                 comm.IPAddress = ip
                 comm.ProcessorSlot = slot
                 
-                # Leer múltiples tags de una sola vez
-                tags_to_read = [tag_estop] + tag_run
-                ret = comm.Read(tags_to_read)
+                ret = comm.Read([tag_estop, tag_manual])
                 
-                if len(ret) == len(tags_to_read) and all(r.Status == "Success" for r in ret):
-                    is_estop = bool(ret[0].Value)
-                    # Para que esté en RUN, exigimos que todos los tags definidos en tag_run sean True
-                    is_run = all(bool(r.Value) for r in ret[1:])
+                if len(ret) == 2 and ret[0].Status == "Success" and ret[1].Status == "Success":
+                    estop_ok = bool(ret[0].Value)
+                    is_auto = bool(ret[1].Value)
                     
-                    # Lógica de la máquina de estados
-                    new_state = "IDLE"
-                    if is_estop:
+                    # Lógica de la máquina de estados para Robots (STOP y RUN)
+                    # Está en STOP si hay E-STOP o si está en MANUAL (is_auto == False)
+                    if not estop_ok or not is_auto:
                         new_state = "STOP"
-                    elif is_run:
-                        new_state = "RUN"
                     else:
-                        new_state = "IDLE"
+                        new_state = "RUN"
                     
                     # Si acabamos de iniciar o cambió de estado
                     if current_state != new_state:
@@ -181,7 +183,7 @@ def monitor_single_plc(config):
         time.sleep(1)
 
 def main():
-    print("Iniciando monitor de Estados (RUN, IDLE, STOP) para Conveyors...")
+    print("Iniciando monitor de Estados (RUN, IDLE, STOP) para Robots...")
     init_db()
     
     threads = []

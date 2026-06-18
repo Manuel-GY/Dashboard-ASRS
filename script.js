@@ -256,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize static widgets that do not have active API endpoints
     function initStaticWidgets() {
         // 1. Conveyor Full — ahora con datos reales vía API
-        document.getElementById('conv-total').textContent = '...';
         document.getElementById('conv-total-display').textContent = '- min';
         setIndicatorColor('ind-conveyor-full', null);
 
@@ -270,12 +269,15 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-plummers', null);
 
         // 3. Robots Performance
-        document.getElementById('robots-tbody').innerHTML = `
-            <tr><td><strong>RL1</strong></td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
-            <tr><td><strong>RL2</strong></td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
-            <tr><td><strong>RU1</strong></td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
-            <tr><td><strong>RU2</strong></td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
-        `;
+        // 3. Robots Performance
+        ['lr1', 'lr2', 'ulr1', 'ulr2'].forEach(m => {
+            const eRun = document.getElementById(`${m}-run`);
+            const eIdle = document.getElementById(`${m}-idle`);
+            const eStop = document.getElementById(`${m}-stop`);
+            if (eRun) eRun.textContent = '-';
+            if (eIdle) eIdle.textContent = '-';
+            if (eStop) eStop.textContent = '-';
+        });
         setIndicatorColor('ind-robots', null);
 
         // 4. Downtime Conveyor
@@ -300,7 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-crane', null);
 
         // 6. Press Delivery Performance
-        document.getElementById('press-delivery-uptime').textContent = '-';
         document.getElementById('press-delivery-container').innerHTML = `
             <div class="press-delivery-left">
                 <div class="press-overall-gauge">
@@ -334,7 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (start && end) {
             url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         }
-        document.getElementById('conv-total').textContent = '...';
         document.getElementById('conv-total-display').textContent = '... min';
         setIndicatorColor('ind-conveyor-full', null);
 
@@ -346,18 +346,15 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 if (data.success) {
                     const total = data.total_downtime;
-                    document.getElementById('conv-total').textContent = total.toFixed(2);
                     document.getElementById('conv-total-display').textContent = `${total.toFixed(2)} min`;
                     setIndicatorColor('ind-conveyor-full', data.is_ok);
                 } else {
-                    document.getElementById('conv-total').textContent = 'Error';
                     document.getElementById('conv-total-display').textContent = 'Error';
                     setIndicatorColor('ind-conveyor-full', false);
                 }
             })
             .catch(error => {
                 console.error('Error fetching Conveyor Full data:', error);
-                document.getElementById('conv-total').textContent = 'Error';
                 document.getElementById('conv-total-display').textContent = 'Error';
                 setIndicatorColor('ind-conveyor-full', false);
             });
@@ -373,20 +370,22 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.data) {
-                    ['CC01', 'CC02', 'CC03'].forEach(maq => {
+                    ['CC01', 'CC02', 'CC03', 'LR1', 'LR2', 'ULR1', 'ULR2'].forEach(maq => {
                         const mData = data.data[maq];
                         if (mData) {
                             const eRun = document.getElementById(`${maq.toLowerCase()}-run`);
                             const eIdle = document.getElementById(`${maq.toLowerCase()}-idle`);
                             const eStop = document.getElementById(`${maq.toLowerCase()}-stop`);
-                            if (eRun) eRun.textContent = mData.RUN !== undefined ? mData.RUN : '-';
-                            if (eIdle) eIdle.textContent = mData.IDLE !== undefined ? mData.IDLE : '-';
-                            if (eStop) eStop.textContent = mData.STOP !== undefined ? mData.STOP : '-';
+                            if (eRun) eRun.textContent = mData.RUN !== undefined ? mData.RUN.toFixed(2) : '-';
+                            if (eIdle) eIdle.textContent = mData.IDLE !== undefined ? mData.IDLE.toFixed(2) : '-';
+                            if (eStop) eStop.textContent = mData.STOP !== undefined ? mData.STOP.toFixed(2) : '-';
                         }
                     });
                     setIndicatorColor('ind-downtime-conveyor', true);
+                    setIndicatorColor('ind-robots', true);
                 } else {
                     setIndicatorColor('ind-downtime-conveyor', false);
+                    setIndicatorColor('ind-robots', false);
                 }
             })
             .catch(error => {
@@ -484,7 +483,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const start = getStartDateTime();
         const end   = getEndDateTime();
 
-        document.getElementById('press-delivery-uptime').textContent = '...';
         setIndicatorColor('ind-press-delivery', null);
 
         let url = '/api/press-delivery';
@@ -499,7 +497,6 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 if (data.success) {
-                    document.getElementById('press-delivery-uptime').textContent = data.uptime.toFixed(2);
                     setIndicatorColor('ind-press-delivery', data.uptime >= 98.00);
 
                     const container = document.getElementById('press-delivery-container');
@@ -544,7 +541,6 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => {
                 console.error('Error fetching Press Delivery data:', error);
-                document.getElementById('press-delivery-uptime').textContent = 'Error';
                 setIndicatorColor('ind-press-delivery', false);
             });
     }
@@ -553,9 +549,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const robotsCard = document.getElementById('robots-tbody')?.closest('.card-content');
         const plummersCard = document.getElementById('plummers-tbody')?.closest('.card-content');
 
-        if (robotsCard) {
-            robotsCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
-        }
+        // if (robotsCard) {
+        //     robotsCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
+        // }
         if (plummersCard) {
             plummersCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
         }

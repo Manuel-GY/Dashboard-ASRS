@@ -296,7 +296,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             results = {
                 "CC01": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
                 "CC02": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
-                "CC03": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0}
+                "CC03": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
+                "LR1":  {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
+                "LR2":  {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
+                "ULR1": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
+                "ULR2": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0}
             }
             
             for row in rows:
