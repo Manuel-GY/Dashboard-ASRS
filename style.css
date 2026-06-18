@@ -288,6 +288,10 @@ body {
     white-space: nowrap;
 }
 
+.data-table th:not(:first-child), .data-table td:not(:first-child) {
+    text-align: center;
+}
+
 .data-table th {
     color: var(--text-muted);
     font-weight: 500;
