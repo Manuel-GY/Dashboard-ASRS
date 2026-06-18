@@ -91,14 +91,10 @@
                         <span class="kpi-bracket">[Total = <span class="highlight" id="conv-total">-</span> min &mdash; Objetivo: <span class="highlight" id="conv-target">15</span> min]</span>
                     </div>
                 </div>
-                <div class="card-content flex-row">
-                    <div class="data-group">
-                        <span class="label">Tiempo Total</span>
-                        <span class="value" id="conv-total-display">- min</span>
-                    </div>
-                    <div class="data-group">
-                        <span class="label">Total de Eventos</span>
-                        <span class="value" id="conv-freq">-</span>
+                <div class="card-content" style="display: flex; justify-content: center; align-items: center; min-height: 120px;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 1px;">Tiempo Total</div>
+                        <div id="conv-total-display" style="font-size: 2rem; font-weight: 600; color: var(--accent-color);">- min</div>
                     </div>
                 </div>
             </section>
@@ -187,37 +183,37 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-downtime-conveyor"></span>
                         <h2>DOWNTIME CONVEYOR</h2>
-                        <span class="kpi-bracket">[Minutos en STOP por rango/turno]</span>
+                        <span class="kpi-bracket" style="margin-left: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">[Valores en min]</span>
                     </div>
                 </div>
-                <div class="card-content">
-                    <table class="data-table">
+                <div class="card-content" style="display: flex; flex-direction: column; justify-content: center; min-height: 200px;">
+                    <table class="data-table" style="width: 100%; text-align: center; height: 100%;">
                         <thead>
                             <tr>
                                 <th></th>
-                                <th>STOP (min)</th>
-                                <th>Runtime (min)</th>
-                                <th>Estado</th>
+                                <th style="text-align: center;">RUN</th>
+                                <th style="text-align: center;">IDLE</th>
+                                <th style="text-align: center;">STOP</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody style="line-height: 2.5;">
                             <tr>
                                 <td><strong>CC01</strong></td>
-                                <td id="cc01-val">-</td>
-                                <td id="cc01-runtime">-</td>
-                                <td><span class="indicator grey" id="ind-cc01"></span></td>
+                                <td id="cc01-run" style="font-weight: 700; color: var(--success-color);">-</td>
+                                <td id="cc01-idle" style="font-weight: 700; color: var(--warning-color);">-</td>
+                                <td id="cc01-stop" style="font-weight: 700; color: var(--danger-color);">-</td>
                             </tr>
                             <tr>
                                 <td><strong>CC02</strong></td>
-                                <td id="cc02-val">-</td>
-                                <td id="cc02-runtime">-</td>
-                                <td><span class="indicator grey" id="ind-cc02"></span></td>
+                                <td id="cc02-run" style="font-weight: 700; color: var(--success-color);">-</td>
+                                <td id="cc02-idle" style="font-weight: 700; color: var(--warning-color);">-</td>
+                                <td id="cc02-stop" style="font-weight: 700; color: var(--danger-color);">-</td>
                             </tr>
                             <tr>
                                 <td><strong>CC03</strong></td>
-                                <td id="cc03-val">-</td>
-                                <td id="cc03-runtime">-</td>
-                                <td><span class="indicator grey" id="ind-cc03"></span></td>
+                                <td id="cc03-run" style="font-weight: 700; color: var(--success-color);">-</td>
+                                <td id="cc03-idle" style="font-weight: 700; color: var(--warning-color);">-</td>
+                                <td id="cc03-stop" style="font-weight: 700; color: var(--danger-color);">-</td>
                             </tr>
                         </tbody>
                     </table>
@@ -402,6 +398,6 @@
         </main>
     </div>
 
-    <script src="script.js?v=4"></script>
+    <script src="script.js?v=7"></script>
 </body>
 </html>

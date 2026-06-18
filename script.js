@@ -258,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Conveyor Full — ahora con datos reales vía API
         document.getElementById('conv-total').textContent = '...';
         document.getElementById('conv-total-display').textContent = '- min';
-        document.getElementById('conv-freq').textContent = '-';
         setIndicatorColor('ind-conveyor-full', null);
 
         // 2. Plummers
@@ -280,15 +279,14 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-robots', null);
 
         // 4. Downtime Conveyor
-        document.getElementById('cc01-val').textContent = '-';
-        document.getElementById('cc02-val').textContent = '-';
-        document.getElementById('cc03-val').textContent = '-';
-        document.getElementById('cc01-runtime').textContent = '-';
-        document.getElementById('cc02-runtime').textContent = '-';
-        document.getElementById('cc03-runtime').textContent = '-';
-        setIndicatorColor('ind-cc01', null);
-        setIndicatorColor('ind-cc02', null);
-        setIndicatorColor('ind-cc03', null);
+        ['cc01', 'cc02', 'cc03'].forEach(m => {
+            const eRun = document.getElementById(`${m}-run`);
+            const eIdle = document.getElementById(`${m}-idle`);
+            const eStop = document.getElementById(`${m}-stop`);
+            if (eRun) eRun.textContent = '-';
+            if (eIdle) eIdle.textContent = '-';
+            if (eStop) eStop.textContent = '-';
+        });
         setIndicatorColor('ind-downtime-conveyor', null);
 
 
@@ -338,7 +336,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         document.getElementById('conv-total').textContent = '...';
         document.getElementById('conv-total-display').textContent = '... min';
-        document.getElementById('conv-freq').textContent = '...';
         setIndicatorColor('ind-conveyor-full', null);
 
         fetch(url)
@@ -349,15 +346,12 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 if (data.success) {
                     const total = data.total_downtime;
-                    const freq = data.frequency || 0;
                     document.getElementById('conv-total').textContent = total.toFixed(2);
                     document.getElementById('conv-total-display').textContent = `${total.toFixed(2)} min`;
-                    document.getElementById('conv-freq').textContent = freq;
                     setIndicatorColor('ind-conveyor-full', data.is_ok);
                 } else {
                     document.getElementById('conv-total').textContent = 'Error';
                     document.getElementById('conv-total-display').textContent = 'Error';
-                    document.getElementById('conv-freq').textContent = '-';
                     setIndicatorColor('ind-conveyor-full', false);
                 }
             })
@@ -365,17 +359,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Error fetching Conveyor Full data:', error);
                 document.getElementById('conv-total').textContent = 'Error';
                 document.getElementById('conv-total-display').textContent = 'Error';
-                document.getElementById('conv-freq').textContent = '-';
                 setIndicatorColor('ind-conveyor-full', false);
             });
     }
 
-    function fetchPLCConveyorData() {
-        const cardContent = document.getElementById('ind-downtime-conveyor')?.closest('.card')?.querySelector('.card-content');
-        if (cardContent) {
-            cardContent.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">Información no disponible por el momento</div>`;
+    function fetchPLCConveyorData(start = '', end = '') {
+        let url = '/api/plc-conveyor';
+        if (start && end) {
+            url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         }
-        setIndicatorColor('ind-downtime-conveyor', null);
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    ['CC01', 'CC02', 'CC03'].forEach(maq => {
+                        const mData = data.data[maq];
+                        if (mData) {
+                            const eRun = document.getElementById(`${maq.toLowerCase()}-run`);
+                            const eIdle = document.getElementById(`${maq.toLowerCase()}-idle`);
+                            const eStop = document.getElementById(`${maq.toLowerCase()}-stop`);
+                            if (eRun) eRun.textContent = mData.RUN !== undefined ? mData.RUN : '-';
+                            if (eIdle) eIdle.textContent = mData.IDLE !== undefined ? mData.IDLE : '-';
+                            if (eStop) eStop.textContent = mData.STOP !== undefined ? mData.STOP : '-';
+                        }
+                    });
+                    setIndicatorColor('ind-downtime-conveyor', true);
+                } else {
+                    setIndicatorColor('ind-downtime-conveyor', false);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching PLC Conveyor data:', error);
+                setIndicatorColor('ind-downtime-conveyor', false);
+            });
     }
 
 
@@ -571,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchDailyTicket();
         fetchInputOutputData(getStartDateTime(), getEndDateTime());
         fetchConveyorFullData(getStartDateTime(), getEndDateTime());
-        fetchPLCConveyorData();
+        fetchPLCConveyorData(getStartDateTime(), getEndDateTime());
         fetchCranePerformanceData();
         fetchAsrsEngineeringData();
         fetchPressDeliveryData();

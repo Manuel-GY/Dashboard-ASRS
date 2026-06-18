@@ -8,115 +8,11 @@ import datetime
 import xml.etree.ElementTree as ET
 import random
 import sys
-import sqlite3
 import threading
 import time
 import os
-from concurrent.futures import ThreadPoolExecutor
-from pylogix import PLC as LogixPLC
+import sqlite3
 from bs4 import BeautifulSoup
-
-
-# ── Historiador SQLite ──────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conveyor_history.db")
-
-PLC_CONFIG = [
-    {
-        "label": "CC01",
-        "ip": "10.107.210.111",
-        "slot": 0,
-        "tag_faulted": "Program:Main.cc01_faulted_minutes",
-        "tag_runtime": "Program:Main.cc01_runtime_minutes",
-    },
-    {
-        "label": "CC02",
-        "ip": "10.107.210.121",
-        "slot": 0,
-        "tag_faulted": "Program:MainProgram.cc02_faulted_minutes",
-        "tag_runtime": "Program:MainProgram.sortercc02runtime_minutes",
-    },
-    {
-        "label": "CC03",
-        "ip": "10.107.210.131",
-        "slot": 0,
-        "tag_faulted": "Program:MainProgram.cc03_faulted_minutes",
-        "tag_runtime": "Program:MainProgram.cc03_runtime_minutes",
-    },
-]
-
-def db_init():
-    """Crea la tabla de snapshots si no existe."""
-    con = sqlite3.connect(DB_PATH, timeout=10.0)
-    con.execute("PRAGMA journal_mode=WAL;")
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS plc_snapshots (
-            ts           TEXT PRIMARY KEY,
-            cc01_faulted INTEGER,
-            cc01_runtime INTEGER,
-            cc02_faulted INTEGER,
-            cc02_runtime INTEGER,
-            cc03_faulted INTEGER,
-            cc03_runtime INTEGER
-        )
-    """)
-    con.commit()
-    con.close()
-
-def db_insert_snapshot(values: dict):
-    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    cutoff = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
-    con = sqlite3.connect(DB_PATH, timeout=10.0)
-    con.execute("PRAGMA journal_mode=WAL;")
-    con.execute("""
-        INSERT OR REPLACE INTO plc_snapshots
-            (ts, cc01_faulted, cc01_runtime, cc02_faulted, cc02_runtime, cc03_faulted, cc03_runtime)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        ts,
-        values.get('CC01', {}).get('faulted'), values.get('CC01', {}).get('runtime'),
-        values.get('CC02', {}).get('faulted'), values.get('CC02', {}).get('runtime'),
-        values.get('CC03', {}).get('faulted'), values.get('CC03', {}).get('runtime'),
-    ))
-    # Eliminar registros de más de 7 días
-    con.execute("DELETE FROM plc_snapshots WHERE ts < ?", (cutoff,))
-    con.commit()
-    con.close()
-
-def poll_single_plc(cfg):
-    label = cfg["label"]
-    try:
-        with LogixPLC() as comm:
-            comm.IPAddress = cfg["ip"]
-            comm.ProcessorSlot = cfg["slot"]
-            r_f = comm.Read(cfg["tag_faulted"])
-            r_r = comm.Read(cfg["tag_runtime"])
-        return label, {
-            "faulted": int(r_f.Value) if r_f.Status == "Success" and r_f.Value is not None else None,
-            "runtime": int(r_r.Value) if r_r.Status == "Success" and r_r.Value is not None else None,
-        }
-    except Exception as e:
-        print(f"[Historiador] Error leyendo {label}: {e}", file=sys.stderr)
-        return label, {"faulted": None, "runtime": None}
-
-def plc_poll_loop():
-    """Hilo daemon: lee los PLCs en paralelo cada 60 s y guarda un snapshot en SQLite."""
-    print("[Historiador] Iniciado. Guardando snapshots cada 60 s.", file=sys.stderr)
-    while True:
-        snapshot = {}
-        with ThreadPoolExecutor(max_workers=len(PLC_CONFIG)) as executor:
-            results = executor.map(poll_single_plc, PLC_CONFIG)
-            for label, data in results:
-                snapshot[label] = data
-        try:
-            db_insert_snapshot(snapshot)
-        except Exception as e:
-            print(f"[Historiador] Error guardando en DB: {e}", file=sys.stderr)
-        time.sleep(60)
-
-# Inicializar DB y arrancar hilo
-db_init()
-_poll_thread = threading.Thread(target=plc_poll_loop, daemon=True)
-_poll_thread.start()
 
 # Helper para determinar el turno actual
 def get_shift_info(dt):
@@ -369,82 +265,90 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(503, {"success": False, "error": "Servidor remoto no disponible."})
 
     def handle_plc_conveyor(self, start_dt, end_dt):
-        """Calcula el tiempo en STOP de CC01/CC02/CC03 en el rango start_dt..end_dt
-        usando la DB histórica (deltas entre snapshots más cercanos al inicio y fin).
-        """
+        """Calcula el tiempo en RUN, IDLE y STOP usando la base de datos estop_history.db."""
         start_str = start_dt.strftime('%Y-%m-%d %H:%M:%S')
         end_str   = end_dt.strftime('%Y-%m-%d %H:%M:%S')
-
+        
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "estop_history.db")
+        
         try:
-            con = sqlite3.connect(DB_PATH, timeout=10.0)
-            con.execute("PRAGMA journal_mode=WAL;")
-            con.row_factory = sqlite3.Row
-
-            def nearest(ts_target, direction):
-                """Devuelve la fila más cercana al timestamp, antes (<=) o después (>=)."""
-                if direction == 'before':
-                    row = con.execute(
-                        "SELECT * FROM plc_snapshots WHERE ts <= ? ORDER BY ts DESC LIMIT 1",
-                        (ts_target,)
-                    ).fetchone()
-                else:
-                    row = con.execute(
-                        "SELECT * FROM plc_snapshots WHERE ts >= ? ORDER BY ts ASC LIMIT 1",
-                        (ts_target,)
-                    ).fetchone()
-                return dict(row) if row else None
-
-            row_start = nearest(start_str, 'after')   # snapshot más cercano al inicio
-            row_end   = nearest(end_str,   'before')  # snapshot más cercano al fin
-            con.close()
-
-            if not row_start or not row_end:
+            if not os.path.exists(db_path):
+                # Si el monitor aún no crea la DB
                 self.send_json_response(200, {
                     "success": True,
                     "data": {},
-                    "message": "Sin datos históricos para ese período. El historiador lleva activo desde que se inició el servidor."
+                    "message": "Base de datos no encontrada. Verifique que monitor_cc01.py esté corriendo."
                 })
                 return
 
-            results = {}
-            for label in ['CC01', 'CC02', 'CC03']:
-                key = label.lower()
-                f_start = row_start.get(f"{key}_faulted")
-                f_end   = row_end.get(f"{key}_faulted")
-                r_start = row_start.get(f"{key}_runtime")
-                r_end   = row_end.get(f"{key}_runtime")
-
-                if f_start is not None and f_end is not None:
-                    if f_end < f_start:
-                        # Se detecta un reinicio del contador del PLC
-                        faulted_delta = f_end
-                    else:
-                        faulted_delta = f_end - f_start
-                else:
-                    faulted_delta = None
-
-                if r_start is not None and r_end is not None:
-                    if r_end < r_start:
-                        # Se detecta un reinicio del contador del PLC
-                        runtime_delta = r_end
-                    else:
-                        runtime_delta = r_end - r_start
-                else:
-                    runtime_delta = None
-
-                results[label] = {
-                    "faulted_minutes": faulted_delta,
-                    "runtime_minutes": runtime_delta,
-                    "status": "ok"
-                }
-
+            con = sqlite3.connect(db_path, timeout=5.0)
+            con.row_factory = sqlite3.Row
+            
+            # Consultamos los eventos que se solapan con nuestro rango de tiempo
+            query = """
+                SELECT maquina, estado, hora_inicio, hora_fin 
+                FROM conveyor_events
+                WHERE hora_inicio <= ? AND hora_fin >= ?
+            """
+            rows = con.execute(query, (end_str, start_str)).fetchall()
+            
+            # Inicializamos resultados (por defecto todo en 0)
+            results = {
+                "CC01": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
+                "CC02": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
+                "CC03": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0}
+            }
+            
+            for row in rows:
+                maq = row["maquina"]
+                est = row["estado"]
+                
+                # Intersectar el rango del evento con el rango solicitado
+                ev_start = datetime.datetime.strptime(row["hora_inicio"], '%Y-%m-%d %H:%M:%S')
+                ev_end = datetime.datetime.strptime(row["hora_fin"], '%Y-%m-%d %H:%M:%S')
+                
+                real_start = max(ev_start, start_dt)
+                real_end = min(ev_end, end_dt)
+                
+                if real_end > real_start:
+                    dur_seconds = (real_end - real_start).total_seconds()
+                    if est in results.get(maq, {}):
+                        results[maq][est] += dur_seconds
+                        
+            # Sumar los estados activos (ongoing) desde la tabla current_states
+            try:
+                rows_ongoing = con.execute("SELECT maquina, estado, hora_inicio FROM current_states").fetchall()
+                for row in rows_ongoing:
+                    maq = row["maquina"]
+                    est = row["estado"]
+                    
+                    ev_start = datetime.datetime.strptime(row["hora_inicio"], '%Y-%m-%d %H:%M:%S')
+                    ev_end = datetime.datetime.now()
+                    
+                    real_start = max(ev_start, start_dt)
+                    real_end = min(ev_end, end_dt)
+                    
+                    if real_end > real_start:
+                        dur_seconds = (real_end - real_start).total_seconds()
+                        if est in results.get(maq, {}):
+                            results[maq][est] += dur_seconds
+            except sqlite3.OperationalError:
+                pass # La tabla current_states tal vez aún no existe (recién iniciaron el script)
+                        
+            con.close()
+            
+            # Convertir a minutos
+            for maq in results:
+                for est in results[maq]:
+                    results[maq][est] = round(results[maq][est] / 60.0, 2)
+                    
             self.send_json_response(200, {
                 "success": True,
-                "query_start": row_start['ts'],
-                "query_end": row_end['ts'],
+                "query_start": start_str,
+                "query_end": end_str,
                 "data": results
             })
-
+            
         except Exception as e:
             print(f"[Error] handle_plc_conveyor: {e}", file=sys.stderr)
             self.send_json_response(503, {"success": False, "error": str(e)})
