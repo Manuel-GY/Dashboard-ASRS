@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const topDowntime = sorted.filter(a => a.downtime_minutes > 10).slice(0, 3);
                 const topMinor = sorted.filter(a => a.downtime_minutes > 0 && a.downtime_minutes <= 10).slice(0, 3);
 
-                // Función para generar filas de tabla HTML
+                // Función para generar filas de tabla HTML con barras visuales
                 const formatAislesTable = (list, tbodyId) => {
                     const tbody = document.querySelector(`#${tbodyId} tbody`);
                     if (!tbody) return;
@@ -450,12 +450,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted); font-style:italic;">Sin datos</td></tr>`;
                         return;
                     }
-                    tbody.innerHTML = list.map(a => `
+                    
+                    const maxMins = Math.max(...list.map(a => a.downtime_minutes), 1);
+                    
+                    tbody.innerHTML = list.map(a => {
+                        const pct = (a.downtime_minutes / maxMins) * 100;
+                        return `
                         <tr>
-                            <td style="font-weight:600;">Pasillo ${a.aisle}</td>
-                            <td style="color:var(--danger-color); font-weight:700;">${a.downtime_minutes} min</td>
+                            <td style="font-weight:600; width:30%; padding:8px 6px;">Pasillo ${a.aisle}</td>
+                            <td style="width:70%; padding:8px 6px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <div style="flex:1; background:var(--border-color); height:6px; border-radius:3px; overflow:hidden;">
+                                        <div style="width:${pct}%; background:var(--danger-color); height:100%; border-radius:3px; transition:width 0.5s ease-out;"></div>
+                                    </div>
+                                    <span style="color:var(--danger-color); font-weight:700; font-size:0.85rem; width:45px; text-align:right;">${a.downtime_minutes}m</span>
+                                </div>
+                            </td>
                         </tr>
-                    `).join('');
+                        `;
+                    }).join('');
                 };
 
                 // Si no hay > 10, mostramos los mayores en general que sean > 0

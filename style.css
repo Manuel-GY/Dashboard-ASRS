@@ -620,6 +620,8 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
     flex-direction: row;
     gap: 30px;
     justify-content: space-between;
+    align-items: center;
+    flex: 1;
 }
 
 .crane-split-layout .crane-table-section {
