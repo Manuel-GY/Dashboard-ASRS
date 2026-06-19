@@ -584,11 +584,13 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 }
 
 .crane-table-label {
-    font-size: 0.78rem;
+    font-size: 0.9rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
+    margin-bottom: 8px;
+    display: block;
 }
 
 .crane-mini-table {
@@ -596,15 +598,15 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 }
 
 .crane-mini-table th {
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     color: var(--text-muted);
     font-weight: 500;
-    padding: 4px 6px;
+    padding: 6px 8px;
 }
 
 .crane-mini-table td {
-    font-size: 0.82rem;
-    padding: 5px 6px;
+    font-size: 0.95rem;
+    padding: 10px 8px;
 }
 
 .crane-mini-table tbody tr:last-child td {

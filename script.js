@@ -457,13 +457,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         const pct = (a.downtime_minutes / maxMins) * 100;
                         return `
                         <tr>
-                            <td style="font-weight:600; width:30%; padding:8px 6px;">Pasillo ${a.aisle}</td>
-                            <td style="width:70%; padding:8px 6px;">
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <div style="flex:1; background:var(--border-color); height:6px; border-radius:3px; overflow:hidden;">
-                                        <div style="width:${pct}%; background:var(--danger-color); height:100%; border-radius:3px; transition:width 0.5s ease-out;"></div>
+                            <td style="font-weight:600; width:25%; padding:12px 8px; font-size:1.05rem;">Pasillo ${a.aisle}</td>
+                            <td style="width:75%; padding:12px 8px;">
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <div style="flex:1; background:var(--border-color); height:10px; border-radius:5px; overflow:hidden;">
+                                        <div style="width:${pct}%; background:var(--danger-color); height:100%; border-radius:5px; transition:width 0.5s ease-out;"></div>
                                     </div>
-                                    <span style="color:var(--danger-color); font-weight:700; font-size:0.85rem; width:45px; text-align:right;">${a.downtime_minutes}m</span>
+                                    <span style="color:var(--danger-color); font-weight:700; font-size:1.1rem; width:55px; text-align:right;">${a.downtime_minutes}m</span>
                                 </div>
                             </td>
                         </tr>
