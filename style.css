@@ -611,6 +611,31 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
     border-bottom: none;
 }
 
+.crane-performance-card {
+    grid-column: span 2;
+}
+
+.crane-split-layout {
+    display: flex;
+    flex-direction: row;
+    gap: 30px;
+    justify-content: space-between;
+}
+
+.crane-split-layout .crane-table-section {
+    flex: 1;
+}
+
+@media (max-width: 1024px) {
+    .crane-performance-card {
+        grid-column: span 1;
+    }
+    .crane-split-layout {
+        flex-direction: column;
+        gap: 15px;
+    }
+}
+
 .press-delivery-grid {
     display: flex;
     flex-wrap: wrap;
