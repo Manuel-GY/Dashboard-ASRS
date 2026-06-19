@@ -12,10 +12,10 @@
 </head>
 <body>
     <!-- JavaScript Error Debug Console -->
-    <div id="debug-error-console" style="display:none; position:fixed; bottom:20px; left:20px; right:20px; background:rgba(220,53,69,0.95); color:white; padding:20px; border-radius:12px; z-index:99999; font-family:monospace; font-size:13px; max-height:250px; overflow-y:auto; border:2px solid #ff6b6b; box-shadow:0 10px 30px rgba(0,0,0,0.5); backdrop-filter:blur(10px);">
-        <strong style="font-size:15px; display:block; margin-bottom:8px;">⚠️ Error de JavaScript Detectado:</strong>
-        <button onclick="this.parentElement.style.display='none'" style="float:right; background:white; color:#dc3545; border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px; transition:all 0.2s;">Cerrar</button>
-        <div id="debug-error-list" style="white-space:pre-wrap; margin-top:10px; line-height:1.5;"></div>
+    <div id="debug-error-console" class="debug-console">
+        <strong class="debug-console-title">⚠️ Error de JavaScript Detectado:</strong>
+        <button onclick="this.parentElement.style.display='none'" class="debug-console-close">Cerrar</button>
+        <div id="debug-error-list" class="debug-console-list"></div>
     </div>
     <script>
     window.addEventListener('error', function(e) {

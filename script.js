@@ -1,3 +1,17 @@
+
+async function fetchWithRetry(url, options = {}, retries = 2, backoff = 1000) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const response = await fetchWithRetry(url, options);
+            if (!response.ok) throw new Error(\HTTP \);
+            return response;
+        } catch (error) {
+            if (i === retries) throw error;
+            console.warn(\Fetch error for \. Retrying in \ms (\/\)...\);
+            await new Promise(resolve => setTimeout(resolve, backoff));
+        }
+    }
+}
 document.addEventListener('DOMContentLoaded', () => {
     // Clock functionality
     const clockElement = document.getElementById('clock');
@@ -60,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (start && end) {
             url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         }
-        fetch(url)
+        fetchWithRetry(url)
             .then(response => response.json())
             .then(data => {
                 document.getElementById('io-entrada-val').innerHTML = `${data.entrada} <small>tires</small>`;
@@ -202,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (percentEl) percentEl.textContent = '...';
         if (minEl) minEl.textContent = '...';
         
-        fetch(url)
+        fetchWithRetry(url)
             .then(response => {
                 if (!response.ok) throw new Error('API Response not OK');
                 return response.json();
@@ -345,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('conv-total-display').textContent = '... min';
         setIndicatorColor('ind-conveyor-full', null);
 
-        fetch(url)
+        fetchWithRetry(url)
             .then(response => {
                 if (!response.ok) throw new Error('API Response not OK');
                 return response.json();
@@ -370,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function fetchPLCConveyorData(start = '', end = '') {
         const convCard = document.getElementById('conv-tbody')?.closest('.card-content');
         const robotsCard = document.getElementById('robots-tbody')?.closest('.card-content');
-        const msgHtml = `<div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 120px; text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        const msgHtml = `<div class="empty-state-msg">La información no está disponible por el momento</div>`;
         if (convCard) convCard.innerHTML = msgHtml;
         if (robotsCard) robotsCard.innerHTML = msgHtml;
         setIndicatorColor('ind-downtime-conveyor', null);
@@ -395,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
             url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         }
 
-        fetch(url)
+        fetchWithRetry(url)
             .then(response => {
                 if (!response.ok) throw new Error('API Response not OK');
                 return response.json();
@@ -473,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
             url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         }
 
-        fetch(url)
+        fetchWithRetry(url)
             .then(response => {
                 if (!response.ok) throw new Error('API Response not OK');
                 return response.json();
@@ -530,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function fetchAsrsEngineeringData() {
         const plummersCard = document.getElementById('plummers-tbody')?.closest('.card-content');
-        const msgHtml = `<div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 120px; text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        const msgHtml = `<div class="empty-state-msg">La información no está disponible por el momento</div>`;
         if (plummersCard) plummersCard.innerHTML = msgHtml;
         const totalTires = document.getElementById('plummers-total-tires');
         if (totalTires) totalTires.textContent = "-";
@@ -542,7 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!ticketEl) return;
         ticketEl.textContent = '...';
         
-        fetch('/api/daily-ticket')
+        fetchWithRetry('/api/daily-ticket')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
