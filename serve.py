@@ -32,6 +32,7 @@ PLC_TAGS_CONFIG = {
     'plummers': {
         'L1': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L1_RUN_MINS', 'idle': 'L1_IDLE_MINS', 'stop': 'L1_STOP_MINS'}},
         'L2': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L2_RUN_MINS', 'idle': 'L2_IDLE_MINS', 'stop': 'L2_STOP_MINS'}},
+        'L3': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L3_RUN_MINS', 'idle': 'L3_IDLE_MINS', 'stop': 'L3_STOP_MINS'}},
     }
 }
 
@@ -351,98 +352,47 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(503, {"success": False, "error": "Servidor remoto no disponible."})
 
     def handle_plc_conveyor(self, start_dt, end_dt):
-        """Calcula el tiempo en RUN, IDLE y STOP usando la base de datos estop_history.db."""
-        start_str = start_dt.strftime('%Y-%m-%d %H:%M:%S')
-        end_str   = end_dt.strftime('%Y-%m-%d %H:%M:%S')
-        
-        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "estop_history.db")
-        
-        try:
-            if not os.path.exists(db_path):
-                # Si el monitor aún no crea la DB
-                self.send_json_response(200, {
-                    "success": True,
-                    "data": {},
-                    "message": "Base de datos no encontrada. Verifique que monitor_cc01.py esté corriendo."
-                })
-                return
-
-            con = sqlite3.connect(db_path, timeout=5.0)
-            con.row_factory = sqlite3.Row
-            
-            # Consultamos los eventos que se solapan con nuestro rango de tiempo
-            query = """
-                SELECT maquina, estado, hora_inicio, hora_fin 
-                FROM conveyor_events
-                WHERE hora_inicio <= ? AND hora_fin >= ?
-            """
-            rows = con.execute(query, (end_str, start_str)).fetchall()
-            
-            # Inicializamos resultados (por defecto todo en 0)
-            results = {
-                "CC01": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
-                "CC02": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
-                "CC03": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
-                "LR1":  {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
-                "LR2":  {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
-                "ULR1": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0},
-                "ULR2": {"RUN": 0.0, "IDLE": 0.0, "STOP": 0.0}
-            }
-            
-            for row in rows:
-                maq = row["maquina"]
-                est = row["estado"]
-                
-                # Intersectar el rango del evento con el rango solicitado
-                ev_start = datetime.datetime.strptime(row["hora_inicio"], '%Y-%m-%d %H:%M:%S')
-                ev_end = datetime.datetime.strptime(row["hora_fin"], '%Y-%m-%d %H:%M:%S')
-                
-                real_start = max(ev_start, start_dt)
-                real_end = min(ev_end, end_dt)
-                
-                if real_end > real_start:
-                    dur_seconds = (real_end - real_start).total_seconds()
-                    if est in results.get(maq, {}):
-                        results[maq][est] += dur_seconds
-                        
-            # Sumar los estados activos (ongoing) desde la tabla current_states
+        results = {
+            'CC01': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
+            'CC02': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
+            'CC03': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
+            'LR1':  {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
+            'LR2':  {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
+            'ULR1': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
+            'ULR2': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0}
+        }
+        for maq, conf in PLC_TAGS_CONFIG['conveyors'].items():
+            comm = PLC()
+            comm.IPAddress = conf['ip']
+            comm.ProcessorSlot = conf['slot']
             try:
-                rows_ongoing = con.execute("SELECT maquina, estado, hora_inicio FROM current_states").fetchall()
-                for row in rows_ongoing:
-                    maq = row["maquina"]
-                    est = row["estado"]
-                    
-                    ev_start = datetime.datetime.strptime(row["hora_inicio"], '%Y-%m-%d %H:%M:%S')
-                    ev_end = datetime.datetime.now()
-                    
-                    real_start = max(ev_start, start_dt)
-                    real_end = min(ev_end, end_dt)
-                    
-                    if real_end > real_start:
-                        dur_seconds = (real_end - real_start).total_seconds()
-                        if est in results.get(maq, {}):
-                            results[maq][est] += dur_seconds
-            except sqlite3.OperationalError:
-                pass # La tabla current_states tal vez aún no existe (recién iniciaron el script)
-                        
-            con.close()
+                ret = comm.Read(list(conf['tags'].values()))
+                for r in ret:
+                    if r.Status == 'Success':
+                        estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
+                        results[maq][estado] = round(float(r.Value), 2)
+            except: pass
+            comm.Close()
             
-            # Convertir a minutos
-            for maq in results:
-                for est in results[maq]:
-                    results[maq][est] = round(results[maq][est] / 60.0, 2)
-                    
-            self.send_json_response(200, {
-                "success": True,
-                "query_start": start_str,
-                "query_end": end_str,
-                "data": results
-            })
-            
-        except Exception as e:
-            print(f"[Error] handle_plc_conveyor: {e}", file=sys.stderr)
-            self.send_json_response(503, {"success": False, "error": str(e)})
-
+        for maq in ['LR1', 'LR2', 'ULR1', 'ULR2']:
+            if maq in PLC_TAGS_CONFIG['robots']:
+                conf = PLC_TAGS_CONFIG['robots'][maq]
+                comm = PLC()
+                comm.IPAddress = conf['ip']
+                comm.ProcessorSlot = conf['slot']
+                try:
+                    ret = comm.Read(list(conf['tags'].values()))
+                    for r in ret:
+                        if r.Status == 'Success':
+                            estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
+                            results[maq][estado] = round(float(r.Value), 2)
+                except: pass
+                comm.Close()
+                
+        self.send_json_response(200, {
+            'success': True,
+            'data': results
+        })
     def handle_crane_performance(self, start_str, end_str):
         """Consulta el reporte de Aisle Down Time, parsea el HTML y devuelve los datos."""
         # Convertir 'YYYY-MM-DDTHH:MM' a 'YYYY/MM/DD HH:MM:00'
@@ -673,161 +623,50 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
     def handle_asrs_engineering_data(self, start_str=None, end_str=None):
-        url = "http://10.107.194.72/ingenieria/static/phpscripts/mysql/asrs_robot.php"
-        try:
-            req = urllib.request.Request(url, data=b"", headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=8) as response:
-                raw_data = response.read().decode('utf-8', errors='ignore')
-            
-            obj_json = json.loads(raw_data)
-            
-            # Resolver rango de consulta
-            try:
-                if start_str:
-                    start_dt = datetime.datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-                else:
-                    start_dt = datetime.datetime.now() - datetime.timedelta(hours=8)
-                if end_str:
-                    end_dt = datetime.datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-                else:
-                    end_dt = datetime.datetime.now()
-            except Exception:
-                start_dt = datetime.datetime.now() - datetime.timedelta(hours=8)
-                end_dt = datetime.datetime.now()
-
-            # Filtrar indices en la serie de minutos que correspondan al rango consultado
-            valid_indices = []
-            for i in range(len(obj_json[14])):
+        robots = {
+            'RL1': {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0},
+            'RL2': {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0}
+        }
+        plummers = {
+            'L1': {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'},
+            'L2': {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'},
+            'L3': {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'}
+        }
+        for maq in ['RL1', 'RL2']:
+            if maq in PLC_TAGS_CONFIG['robots']:
+                conf = PLC_TAGS_CONFIG['robots'][maq]
+                comm = PLC()
+                comm.IPAddress = conf['ip']
+                comm.ProcessorSlot = conf['slot']
                 try:
-                    minute_dt = datetime.datetime.strptime(obj_json[14][i], "%Y-%m-%d %H:%M:%S")
-                    if start_dt <= minute_dt <= end_dt:
-                        valid_indices.append(i)
-                except Exception:
-                    pass
-
-            if not valid_indices:
-                # Si no hay índices válidos y no se especificó un rango personalizado,
-                # usar el rango de datos por defecto (últimas 8 horas)
-                if not start_str and not end_str:
-                    valid_indices = list(range(len(obj_json[0])))
-
-            # Calcular promedio por hora para el rango filtrado de forma segura
-            def calc_avg_minutes_per_hour(minute_list, indices):
-                vals = [float(minute_list[i]) / 1000.0 for i in indices if i < len(minute_list)]
-                return sum(vals) / len(vals) if vals else 0.0
-
-            # RL1 (j=0,1,2,3)
-            rl1_idle = calc_avg_minutes_per_hour(obj_json[0], valid_indices)
-            rl1_fail = calc_avg_minutes_per_hour(obj_json[1], valid_indices)
-            rl1_wait = calc_avg_minutes_per_hour(obj_json[2], valid_indices)
-            rl1_other = calc_avg_minutes_per_hour(obj_json[3], valid_indices)
-            rl1_work = max(0.0, 60.0 - (rl1_idle + rl1_fail + rl1_wait + rl1_other))
-
-            # RL2 (j=4,5,6,7)
-            rl2_idle = calc_avg_minutes_per_hour(obj_json[4], valid_indices)
-            rl2_fail = calc_avg_minutes_per_hour(obj_json[5], valid_indices)
-            rl2_wait = calc_avg_minutes_per_hour(obj_json[6], valid_indices)
-            rl2_other = calc_avg_minutes_per_hour(obj_json[7], valid_indices)
-            rl2_work = max(0.0, 60.0 - (rl2_idle + rl2_fail + rl2_wait + rl2_other))
-
-            # Lubricadoras Idle (j=8,9,10)
-            lub1_idle = calc_avg_minutes_per_hour(obj_json[8], valid_indices)
-            lub2_idle = calc_avg_minutes_per_hour(obj_json[9], valid_indices)
-            lub3_idle = calc_avg_minutes_per_hour(obj_json[10], valid_indices)
-
-            lub1_work = max(0.0, 60.0 - lub1_idle)
-            lub2_work = max(0.0, 60.0 - lub2_idle)
-            lub3_work = max(0.0, 60.0 - lub3_idle)
-
-            # Tiempos de ciclo filtrados por rango de tiempo exacto
-            def avg_cycle_filtered(c_list, ts_list):
-                c_float = []
-                for val, ts_str in zip(c_list, ts_list):
-                    try:
-                        ts_dt = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-                        if start_dt <= ts_dt <= end_dt:
-                            val_f = float(val) / 1000.0
-                            if val_f > 0:
-                                c_float.append(val_f)
-                    except Exception:
-                        pass
-                return sum(c_float) / len(c_float) if c_float else 0.0
-
-            lub1_cycle = avg_cycle_filtered(obj_json[11], obj_json[14])
-            lub2_cycle = avg_cycle_filtered(obj_json[12], obj_json[14])
-            lub3_cycle = avg_cycle_filtered(obj_json[13], obj_json[14])
-
-            # Obtener cantidad en vivo de neumaticos del rango consultado (inbound total)
-            tires_count = "-"
-            try:
-                # Determinar prefijo (s1, s2, s3, s4) segun traslape de fechas
-                # Los turnos del sistema de código de barras ASRS van desfasados +1 hora
-                start_adjusted = start_dt + datetime.timedelta(hours=1)
-                end_adjusted = end_dt + datetime.timedelta(hours=1)
+                    ret = comm.Read(list(conf['tags'].values()))
+                    for r in ret:
+                        if r.Status == 'Success':
+                            estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
+                            robots[maq][estado] = round(float(r.Value), 2)
+                except: pass
+                comm.Close()
                 
-                # Definir limites de turnos
-                now_dt = datetime.datetime.now()
-                current_date = now_dt.date()
-                candidates = []
-                for d in [current_date - datetime.timedelta(days=1), current_date, current_date + datetime.timedelta(days=1)]:
-                    candidates.append(datetime.datetime.combine(d, datetime.time(7, 0)))
-                    candidates.append(datetime.datetime.combine(d, datetime.time(15, 0)))
-                    candidates.append(datetime.datetime.combine(d, datetime.time(23, 0)))
-                candidates.sort()
+        for maq in ['L1', 'L2', 'L3']:
+            if maq in PLC_TAGS_CONFIG['plummers']:
+                conf = PLC_TAGS_CONFIG['plummers'][maq]
+                comm = PLC()
+                comm.IPAddress = conf['ip']
+                comm.ProcessorSlot = conf['slot']
+                try:
+                    ret = comm.Read(list(conf['tags'].values()))
+                    for r in ret:
+                        if r.Status == 'Success':
+                            estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
+                            plummers[maq][estado] = round(float(r.Value), 2)
+                except: pass
+                comm.Close()
                 
-                s1_start = None
-                for c in candidates:
-                    if c <= now_dt:
-                        s1_start = c
-                
-                prefix = "s1"
-                if s1_start:
-                    shifts = {
-                        "s1": (s1_start, s1_start + datetime.timedelta(hours=8)),
-                        "s2": (s1_start - datetime.timedelta(hours=8), s1_start),
-                        "s3": (s1_start - datetime.timedelta(hours=16), s1_start - datetime.timedelta(hours=8)),
-                        "s4": (s1_start - datetime.timedelta(hours=24), s1_start - datetime.timedelta(hours=16))
-                    }
-                    max_overlap = -1
-                    for p, (s_start, s_end) in shifts.items():
-                        overlap_start = max(start_adjusted, s_start)
-                        overlap_end = min(end_adjusted, s_end)
-                        if overlap_end > overlap_start:
-                            overlap_sec = (overlap_end - overlap_start).total_seconds()
-                            if overlap_sec > max_overlap:
-                                max_overlap = overlap_sec
-                                prefix = p
-
-                ctrl_url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
-                ctrl_req = urllib.request.Request(ctrl_url)
-                proxy_handler = urllib.request.ProxyHandler({})
-                opener = urllib.request.build_opener(proxy_handler)
-                with opener.open(ctrl_req, timeout=4) as response:
-                    ctrl_html = response.read().decode('utf-8', errors='ignore')
-                match = re.search(rf"getElementById\('{prefix}_inbound_total'\)\.innerHTML\s*=\s*'([^']+)'", ctrl_html)
-                if match:
-                    tires_count = int(match.group(1))
-            except Exception as ex:
-                print(f"[Plummer Tires] Error fetching from ASRS: {ex}", file=sys.stderr)
-
-            response_data = {
-                "success": True,
-                "robots": {
-                    "RL1": {"idle": round(rl1_idle, 1), "working": round(rl1_work, 1), "waiting": round(rl1_wait, 1), "failure": round(rl1_fail, 1)},
-                    "RL2": {"idle": round(rl2_idle, 1), "working": round(rl2_work, 1), "waiting": round(rl2_wait, 1), "failure": round(rl2_fail, 1)}
-                },
-                "plummers": {
-                    "L1": {"idle": round(lub1_idle, 1), "working": round(lub1_work, 1), "cycle": round(lub1_cycle, 1), "tires": tires_count},
-                    "L2": {"idle": round(lub2_idle, 1), "working": round(lub2_work, 1), "cycle": round(lub2_cycle, 1), "tires": "-"},
-                    "L3": {"idle": round(lub3_idle, 1), "working": round(lub3_work, 1), "cycle": round(lub3_cycle, 1), "tires": "-"}
-                }
-            }
-            self.send_json_response(200, response_data)
-        except Exception as e:
-            print(f"[Error] handle_asrs_engineering_data: {e}", file=sys.stderr)
-            self.send_json_response(503, {"success": False, "error": str(e)})
-            self.send_json_response(503, {"success": False, "error": str(e)})
-
+        self.send_json_response(200, {
+            'success': True,
+            'robots': robots,
+            'plummers': plummers
+        })
     def handle_press_delivery(self, start_str, end_str):
         try:
             if start_str:
