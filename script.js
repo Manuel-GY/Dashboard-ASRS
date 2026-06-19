@@ -2,12 +2,12 @@
 async function fetchWithRetry(url, options = {}, retries = 2, backoff = 1000) {
     for (let i = 0; i <= retries; i++) {
         try {
-            const response = await fetchWithRetry(url, options);
-            if (!response.ok) throw new Error(\HTTP \);
+            const response = await fetch(url, options);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response;
         } catch (error) {
             if (i === retries) throw error;
-            console.warn(\Fetch error for \. Retrying in \ms (\/\)...\);
+            console.warn(`Fetch error for ${url}. Retrying in ${backoff}ms (${i + 1}/${retries})...`);
             await new Promise(resolve => setTimeout(resolve, backoff));
         }
     }
