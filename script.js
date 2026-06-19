@@ -361,37 +361,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchPLCConveyorData(start = '', end = '') {
-        let url = '/api/plc-conveyor';
-        if (start && end) {
-            url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
-        }
-        
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.data) {
-                    ['CC01', 'CC02', 'CC03', 'LR1', 'LR2', 'ULR1', 'ULR2'].forEach(maq => {
-                        const mData = data.data[maq];
-                        if (mData) {
-                            const eRun = document.getElementById(`${maq.toLowerCase()}-run`);
-                            const eIdle = document.getElementById(`${maq.toLowerCase()}-idle`);
-                            const eStop = document.getElementById(`${maq.toLowerCase()}-stop`);
-                            if (eRun) eRun.textContent = mData.RUN !== undefined ? mData.RUN.toFixed(2) : '-';
-                            if (eIdle) eIdle.textContent = mData.IDLE !== undefined ? mData.IDLE.toFixed(2) : '-';
-                            if (eStop) eStop.textContent = mData.STOP !== undefined ? mData.STOP.toFixed(2) : '-';
-                        }
-                    });
-                    setIndicatorColor('ind-downtime-conveyor', true);
-                    setIndicatorColor('ind-robots', true);
-                } else {
-                    setIndicatorColor('ind-downtime-conveyor', false);
-                    setIndicatorColor('ind-robots', false);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching PLC Conveyor data:', error);
-                setIndicatorColor('ind-downtime-conveyor', false);
-            });
+        const convCard = document.getElementById('conv-tbody')?.closest('.card-content');
+        const robotsCard = document.getElementById('robots-tbody')?.closest('.card-content');
+        if (convCard) convCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        if (robotsCard) robotsCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        setIndicatorColor('ind-downtime-conveyor', null);
+        setIndicatorColor('ind-robots', null);
     }
 
 
@@ -546,41 +521,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchAsrsEngineeringData() {
-        fetch('/api/asrs-engineering-data')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.robots && data.plummers) {
-                    ['RL1', 'RL2'].forEach(maq => {
-                        const mData = data.robots[maq];
-                        if (mData) {
-                            const eRun = document.getElementById(`${maq.toLowerCase()}-run`);
-                            const eIdle = document.getElementById(`${maq.toLowerCase()}-idle`);
-                            const eStop = document.getElementById(`${maq.toLowerCase()}-stop`);
-                            if (eRun) eRun.textContent = mData.working !== undefined ? mData.working.toFixed(2) : '-';
-                            if (eIdle) eIdle.textContent = mData.idle !== undefined ? mData.idle.toFixed(2) : '-';
-                            if (eStop) eStop.textContent = mData.failure !== undefined ? mData.failure.toFixed(2) : '-';
-                        }
-                    });
-                    ['L1', 'L2'].forEach(maq => {
-                        const mData = data.plummers[maq];
-                        if (mData) {
-                            const eRun = document.getElementById(`${maq.toLowerCase()}-run`);
-                            const eIdle = document.getElementById(`${maq.toLowerCase()}-idle`);
-                            const eStop = document.getElementById(`${maq.toLowerCase()}-stop`);
-                            if (eRun) eRun.textContent = mData.run !== undefined ? mData.run.toFixed(2) : '-';
-                            if (eIdle) eIdle.textContent = mData.idle !== undefined ? mData.idle.toFixed(2) : '-';
-                            if (eStop) eStop.textContent = mData.stop !== undefined ? mData.stop.toFixed(2) : '-';
-                        }
-                    });
-                    setIndicatorColor('ind-plummers', true);
-                } else {
-                    setIndicatorColor('ind-plummers', false);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching ASRS Engineering Data:', error);
-                setIndicatorColor('ind-plummers', false);
-            });
+        const plummersCard = document.getElementById('plummers-tbody')?.closest('.card-content');
+        if (plummersCard) plummersCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        const totalTires = document.getElementById('plummers-total-tires');
+        if (totalTires) totalTires.textContent = "-";
+        setIndicatorColor('ind-plummers', null);
     }
 
     function fetchDailyTicket() {
