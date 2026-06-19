@@ -510,6 +510,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     setIndicatorColor('ind-press-delivery', data.uptime >= 98.00);
 
                     const container = document.getElementById('press-delivery-container');
+                    const overallVal = document.getElementById('press-overall-val');
+                    if (overallVal) {
+                        overallVal.textContent = data.uptime.toFixed(2) + '%';
+                    }
+
                     let pressesHtml = '';
                     const order = ["400B", "500A", "500B", "600A", "600B"];
                     order.forEach(p => {
@@ -517,6 +522,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const valid = stats.delivered + stats.cancelled;
                         const compliance = valid > 0 ? (stats.delivered / valid * 100) : 100.0;
                         const complianceColor = compliance >= 98.0 ? 'var(--success-color)' : (compliance >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
+                        
+                        const vulcanized = stats.vulcanized || 0;
+                        const delivered = stats.delivered || 0;
+                        const manual = Math.max(0, vulcanized - delivered); // Prevent negative just in case
+
                         pressesHtml += `
                             <div class="press-row-item">
                                 <div class="press-row-header">
@@ -526,22 +536,17 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <div class="press-progress-bar-bg">
                                     <div class="press-progress-bar-fill" style="width: ${compliance}%; background-color: ${complianceColor};"></div>
                                 </div>
-                                <div class="press-row-stats">
-                                    <span>Desp: <strong>${stats.delivered}</strong></span>
-                                    <span>Vulc: <strong>${stats.vulcanized || 0}</strong></span>
+                                <div class="press-row-stats" style="justify-content: space-between; display: flex;">
+                                    <span>Desp: <strong>${delivered}</strong></span>
+                                    <span>Manual: <strong>${manual}</strong></span>
+                                    <span>Vulc: <strong>${vulcanized}</strong></span>
                                 </div>
                             </div>
                         `;
                     });
                     
                     container.innerHTML = `
-                        <div class="press-delivery-left">
-                            <div class="press-overall-gauge">
-                                <div class="press-overall-val">${data.uptime.toFixed(2)}%</div>
-                                <div class="press-overall-label">Eficiencia de Despacho</div>
-                            </div>
-                        </div>
-                        <div class="press-delivery-right">
+                        <div class="press-delivery-right" style="width: 100%; border-left: none; padding-left: 0;">
                             ${pressesHtml}
                         </div>
                     `;
