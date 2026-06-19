@@ -112,6 +112,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const endTimeInput = document.getElementById('end-time');
     const btnQuery = document.getElementById('btn-query');
 
+    // Restringir el calendario HTML al día de ayer como mínimo
+    const now = new Date();
+    const minDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const minDateString = minDate.toISOString().split('T')[0];
+    if (startDateInput) startDateInput.setAttribute('min', minDateString);
+    if (endDateInput) endDateInput.setAttribute('min', minDateString);
+
     function formatDate(date) {
         const yyyy = date.getFullYear();
         const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -363,8 +370,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function fetchPLCConveyorData(start = '', end = '') {
         const convCard = document.getElementById('conv-tbody')?.closest('.card-content');
         const robotsCard = document.getElementById('robots-tbody')?.closest('.card-content');
-        if (convCard) convCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
-        if (robotsCard) robotsCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        const msgHtml = `<div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 120px; text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        if (convCard) convCard.innerHTML = msgHtml;
+        if (robotsCard) robotsCard.innerHTML = msgHtml;
         setIndicatorColor('ind-downtime-conveyor', null);
         setIndicatorColor('ind-robots', null);
     }
@@ -522,7 +530,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function fetchAsrsEngineeringData() {
         const plummersCard = document.getElementById('plummers-tbody')?.closest('.card-content');
-        if (plummersCard) plummersCard.innerHTML = `<div style="text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        const msgHtml = `<div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 120px; text-align: center; padding: 1.5rem; font-style: italic; color: var(--text-muted, #888);">La información no está disponible por el momento</div>`;
+        if (plummersCard) plummersCard.innerHTML = msgHtml;
         const totalTires = document.getElementById('plummers-total-tires');
         if (totalTires) totalTires.textContent = "-";
         setIndicatorColor('ind-plummers', null);
@@ -561,11 +570,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const startVal = getStartDateTime();
         const endVal = getEndDateTime();
         
-        // 160000 = No Tire (Objective: 0.50%)
-        fetchDowntimeData('160000', startVal, endVal, 'no-tire-total-percent', 'no-tire-total-min', 'nt', 'ind-no-tire', 0.50);
-        
-        // 210002 = PM Robot (Objective: 1.00%)
-        fetchDowntimeData('210002', startVal, endVal, 'pm-total-percent', 'pm-total-min', 'pm', 'ind-pm', 1.00);
+        // 160000 = No Tire, 210002 = PM Robot
+        // Se suman ambos motivos en la misma tarjeta "NO TIRE"
+        fetchDowntimeData('160000,210002', startVal, endVal, 'no-tire-total-percent', 'no-tire-total-min', 'nt', 'ind-no-tire', 0.50);
     }
 
 
@@ -574,6 +581,24 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Por favor seleccione fecha y hora de inicio y fin.');
             return;
         }
+
+        const startDt = new Date(getStartDateTime());
+        const endDt = new Date(getEndDateTime());
+        const now = new Date();
+
+        // Validar que la fecha de inicio no sea mayor a la de fin
+        if (startDt > endDt) {
+            alert('La fecha de inicio no puede ser mayor a la fecha de fin.');
+            return;
+        }
+
+        // Restringir el buscador a las últimas 24 horas (margen de 24.5h)
+        const diffHoursPast = (now - startDt) / (1000 * 60 * 60);
+        if (diffHoursPast > 24.5) {
+            alert('La información disponible está restringida a las últimas 24 horas. Por favor seleccione una fecha y hora de inicio más reciente.');
+            return;
+        }
+
         fetchAllData();
     });
 
@@ -639,38 +664,8 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchAllData();
     });
 
-    // Function to auto-advance end time if we are in "live" mode, then fetch all data
-    function refreshLiveTimeAndFetch() {
-        const currentNow = new Date();
-        const currentEnd = new Date(getEndDateTime());
-        // If the end date/time is within 2 minutes of now, auto-advance it to keep it live
-        if (Math.abs(currentNow - currentEnd) < 120000) {
-            endDateInput.value = formatDate(currentNow);
-            endTimeInput.value = formatTime(currentNow);
-        }
-        fetchAllData();
-    }
-
     // Initial triggers
     initStaticWidgets();
     fetchAllData();
 
-    // Auto-refresh inteligente cada 30 segundos si la pestaña está activa
-    let refreshInterval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-            refreshLiveTimeAndFetch();
-        }
-    }, 30000);
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            refreshLiveTimeAndFetch(); // recarga inmediatamente al volver
-            if (!refreshInterval) {
-                refreshInterval = setInterval(refreshLiveTimeAndFetch, 30000);
-            }
-        } else {
-            clearInterval(refreshInterval);
-            refreshInterval = null;
-        }
-    });
 });

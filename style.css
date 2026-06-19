@@ -177,6 +177,7 @@ body {
     align-items: flex-start;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 10px;
+    min-height: 55px;
 }
 
 .card-title {
@@ -271,6 +272,9 @@ body {
 .card-content {
     width: 100%;
     overflow: hidden; /* Ensure NO horizontal scrollbars inside cards */
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Tables */

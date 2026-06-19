@@ -168,8 +168,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 reason = "210002"
                 
             # Sanitizar parametro reason
-            if not reason.isdigit():
-                self.send_error_response(400, "Parámetro de razón inválido. Debe ser un valor numérico.")
+            if not all(r.strip().isdigit() for r in reason.split(',') if r.strip()):
+                self.send_error_response(400, "Parámetro de razón inválido. Debe ser numérico o numéricos separados por coma.")
                 return
                 
             # Resolver fechas
@@ -541,27 +541,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         end_formatted = end_dt.strftime('%Y/%m/%d %H:%M:%S')
         
         baseUrl = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/SummaryDataByReason/SingleDowntimeReason.EditGrid/EditGrid/DataSource/loadId"
-        params = {
-            "ARG_MACH_TYPE": "PRS",
-            "ARG_MACH_PART_NAME": "",
-            "ARG_DOWNTIME_REASON": reason,
-            "ARG_START_DATE": start_formatted,
-            "ARG_END_DATE": end_formatted,
-            "ARG_LANG": "ENG",
-            "ARG_MACHINE_GROUP_GUID": ""
-        }
-        url = baseUrl + "?" + urllib.parse.urlencode(params)
+        
+        reasons = [r.strip() for r in reason.split(",") if r.strip()]
         
         try:
-            req = urllib.request.Request(url, headers={"Accept-language": "en"})
-            proxy_handler = urllib.request.ProxyHandler({})
-            opener = urllib.request.build_opener(proxy_handler)
-            
-            with opener.open(req, timeout=5) as response:
-                xml_data = response.read()
-            
-            root = ET.fromstring(xml_data)
-            
             downtime_by_group = {
                 "100A": 0.0, "100B": 0.0,
                 "200A": 0.0, "200B": 0.0,
@@ -571,26 +554,47 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "600A": 0.0, "600B": 0.0
             }
             
-            # Buscar elementos Row en XML
-            for row in root.findall('.//Row'):
-                mach_el = row.find('MACH_PART_NAME')
-                down_el = row.find('DOWN_TIME')
+            for r in reasons:
+                params = {
+                    "ARG_MACH_TYPE": "PRS",
+                    "ARG_MACH_PART_NAME": "",
+                    "ARG_DOWNTIME_REASON": r,
+                    "ARG_START_DATE": start_formatted,
+                    "ARG_END_DATE": end_formatted,
+                    "ARG_LANG": "ENG",
+                    "ARG_MACHINE_GROUP_GUID": ""
+                }
+                url = baseUrl + "?" + urllib.parse.urlencode(params)
                 
-                if mach_el is not None and down_el is not None:
-                    mach = (mach_el.text or "").strip()
-                    down_time = float(down_el.text or "0")
+                req = urllib.request.Request(url, headers={"Accept-language": "en"})
+                proxy_handler = urllib.request.ProxyHandler({})
+                opener = urllib.request.build_opener(proxy_handler)
+                
+                with opener.open(req, timeout=5) as response:
+                    xml_data = response.read()
+                
+                root = ET.fromstring(xml_data)
+                
+                # Buscar elementos Row en XML
+                for row in root.findall('.//Row'):
+                    mach_el = row.find('MACH_PART_NAME')
+                    down_el = row.find('DOWN_TIME')
                     
-                    # Mapeo a línea y lado (A: impares, B: pares)
-                    # Ejemplo: '107' -> 100A, '108' -> 100B
-                    match = re.match(r'^([1-6])(\d+)$', mach)
-                    if match:
-                        line = match.group(1) + '00'
-                        num = int(match.group(2))
-                        side = 'A' if num % 2 != 0 else 'B'
-                        group = line + side
+                    if mach_el is not None and down_el is not None:
+                        mach = (mach_el.text or "").strip()
+                        down_time = float(down_el.text or "0")
                         
-                        if group in downtime_by_group:
-                            downtime_by_group[group] += down_time
+                        # Mapeo a línea y lado (A: impares, B: pares)
+                        # Ejemplo: '107' -> 100A, '108' -> 100B
+                        match = re.match(r'^([1-6])(\d+)$', mach)
+                        if match:
+                            line = match.group(1) + '00'
+                            num = int(match.group(2))
+                            side = 'A' if num % 2 != 0 else 'B'
+                            group = line + side
+                            
+                            if group in downtime_by_group:
+                                downtime_by_group[group] += down_time
 
             duration_seconds = (end_dt - start_dt).total_seconds()
             duration_minutes = max(1, round(duration_seconds / 60))

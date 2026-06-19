@@ -1,62 +1,42 @@
-# Dashboard ASRS
+# Dashboard ASRS - Resumen del Proyecto
 
-Dashboard interactivo para el monitoreo de paradas de prensas y grúas ASRS, desarrollado en Python y Javascript para ejecutarse en entornos locales con conexión en tiempo real a los servidores de reportes y PLCs internos.
+Este documento resume la arquitectura, desarrollo y estado actual del proyecto del Dashboard ASRS.
 
----
+## 1. Interfaz de Usuario (Frontend)
+- **Tecnologías:** HTML5, CSS3 (Vanilla), JavaScript.
+- **Diseño:** Interfaz moderna, responsiva y con modo Oscuro/Claro dinámico.
+- **Características:** 
+  - Reloj en vivo con detección automática de turno (Día, Tarde, Noche).
+  - Botones de "Consultas Rápidas" para filtrar la información histórica.
+  - Tarjetas (Cards) de KPIs para: Conveyor Full, Desempeño de Grúas (Cranes), Plummers (Lubricadoras), Downtime de Conveyors, Robots y Entrega de Prensas.
 
-## 🚀 Características Principales
+## 2. Servidor Backend (Python)
+- **Archivo Principal:** `serve.py` (ejecutado a través de `run.bat`).
+- **Arquitectura:** Se migró de un modelo de "monitoreo continuo" (scripts agresivos en segundo plano que saturaban la red) a un modelo de lectura directa optimizada usando la librería `pylogix`.
+- **Rutas API:** El servidor levanta endpoints (`/api/...`) que el frontend consulta para obtener datos en formato JSON, integrando lecturas de PLCs, bases de datos SQL Server remotas y archivos XML.
 
-*   **Filtro Histórico por Turno o Rango 📅**: Permite seleccionar rangos de fecha y hora libres para consultar el histórico de producción y paradas, evitando datos puramente acumulados.
-*   **Módulos de Monitoreo**:
-    1.  **NO TIRE** (Razón de parada: `160000`): Filtra paradas mayores a 0 minutos. Muestra un mensaje amigable en caso de que todas estén en cero.
-    2.  **MANTENCIONES PREVENTIVAS ROBOT ASRS** (Razón de parada: `210002`): Muestra solo grupos con paradas mayores a 1 minuto.
-    3.  **CONVEYORS (Downtime CV)**: Lee en tiempo real el tiempo de STOP (`faulted` y `runtime`) de los conveyors CC01, CC02 y CC03 conectándose directo a los PLCs de control.
-    4.  **CRANE PERFORMANCE**: Extrae de forma dinámica el rendimiento y paradas por pasillo (Aisle 1 al 11) mostrando el Top 3 de Downtime y Paradas Menores en tablas organizadas.
-    5.  **PRESS DELIVERY PERFORMANCE**: Monitorea el rendimiento de despachos a prensas (grupos 400B, 500A/B, 600A/B), comparando despachados vs vulcanizados en barras de progreso individuales e incorporando una visualización de eficiencia de despacho general en dos columnas.
-    6.  **TICKET DIARIO (AOP)**: Extracción automática del requerimiento de producción de neumáticos diario desde los servidores corporativos AOP, desplegado directamente en el encabezado.
-*   **Historiador Incorporado 💾**: Base de datos SQLite local integrada en el backend que guarda capturas de datos cada 60 segundos con una política de auto-sobreescritura para retener exactamente 7 días de información.
-*   **Diseño Premium**: Interfaz moderna en modo oscuro, responsiva, con micro-animaciones, gráficos mejorados y paleta de colores HSL.
-
----
-
-## 🛠️ Requisitos de Instalación y Uso
-
-### 1. Requisitos Previos
-*   **Python 3.x** instalado en el sistema.
-*   Librerías de python necesarias (instalables mediante pip):
-    ```bash
-    pip install pylogix
-    ```
-
-### 2. Ejecutar el Proyecto
-Para iniciar el backend que actúa como servidor web y API proxy:
-1. Abre una consola en el directorio del proyecto.
-2. Ejecuta:
-   ```bash
-   python serve.py
-   ```
-3. El servidor iniciará en el puerto local `8080`.
-4. Accede desde tu navegador a:
-   ```
-   http://127.0.0.1:8080/index.html
-   ```
+## 3. Base de Datos Histórica (Shift Logger)
+- **Base de Datos:** `shift_history.db` (SQLite).
+- **Lógica de Almacenamiento:** Para evitar el consumo innecesario de recursos de red, se implementó un "Reloj Interno" (Cron) en `serve.py` que despierta exactamente 10 segundos antes de terminar cada turno (`05:59:50`, `13:59:50`, `21:59:50`).
+- **Función:** Lee los valores finales (minutos acumulados) de los PLCs y guarda el resumen del turno (Ej. `Turno de 06:00 a 14:00 - Máquina CC01 - Estado RUN: 400 mins`).
+- **Retención:** El código limpia automáticamente la base de datos para no guardar registros con más de 3 días de antigüedad.
 
 ---
 
-## 📂 Estructura del Proyecto
+## ⚠️ PUNTOS PENDIENTES (Bloqueados)
 
-*   **`index.html`**: Estructura base del Dashboard, optimizada con semántica HTML5 y contenedores dinámicos.
-*   **`style.css`**: Hoja de estilos con variables CSS para el tema visual premium y layouts flexibles.
-*   **`script.js`**: Controlador de lógica frontend (peticiones asíncronas a la API, renderizado y cálculos).
-*   **`serve.py`**: Backend en Python que expone las API REST de datos, realiza polling a los PLCs, escribe en SQLite y actúa como proxy robusto hacia los servidores locales.
-*   **`conveyor_history.db`**: Base de datos SQLite (generada automáticamente) para almacenar el historial de conveyors por 7 días.
+Se ha dejado **suspendida** la integración de tiempos en vivo para las tarjetas de:
+1. **Plummers (Lubricadoras)**
+2. **Downtime Conveyor**
+3. **Robots**
 
----
+**Motivo de la suspensión:**
+Se determinó que la computadora no debe realizar el cálculo de tiempos en Python mediante "polling" (lecturas cada segundo) para no saturar la red industrial. La directiva actual es delegar el conteo de tiempos (lógica de timers) directamente a los PLCs.
 
-## 🌐 Conexión de Red Interna
-El backend realiza solicitudes a los servidores locales internos:
-*   Prensas / Reportes: `http://10.107.194.85:8080/`
-*   Pasillos (Crane Performance): `http://10.107.194.62/`
-*   PLCs Conveyors: `10.107.210.111`, `10.107.210.121`, `10.107.210.131`
+**Acciones requeridas por el Ingeniero de Software / PLC:**
+1. El ingeniero del área debe crear lógica de Timers Retentivos (RTO) en los PLCs para acumular los tiempos de RUN, IDLE y STOP de los equipos.
+2. Esos acumulados deben ser divididos entre 60,000 para obtener **Minutos Reales** y ser guardados en nuevos Tags (ej. `CC02_RUN_MINS`).
+3. El ingeniero debe resetear esos Timers a cero (RES) al inicio de cada turno.
 
-Asegúrate de ejecutar la aplicación en un equipo que cuente con acceso físico o VPN a este segmento de red.
+**Para reactivar el Dashboard:**
+Una vez que el ingeniero entregue los nombres de esos nuevos Tags, se deben actualizar en la parte superior del archivo `serve.py` dentro del diccionario `PLC_TAGS_CONFIG`. Finalmente, en `script.js`, se deben descomentar las líneas que ocultan las tablas para que el Dashboard vuelva a mostrar la información en pantalla.
