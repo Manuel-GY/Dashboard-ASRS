@@ -4,6 +4,7 @@ import time
 import json
 import sqlite3
 import threading
+import concurrent.futures
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 
@@ -521,7 +522,60 @@ def api_press_delivery():
                     groups[group]["vulcanized"] += product_cnt
     except: pass
 
-    return jsonify({"success": True, "presses": groups, "uptime": 99.40}) # Placeholder calculos reales omitidos brevemente por brevedad, adaptarlos si se necesita
+    # Fetch Dynamic Hourly KPI
+    import concurrent.futures
+    machines_map = {0: '400B', 1: '500A', 2: '500B', 3: '600A', 4: '600B'}
+    variables = ['t_idle', 't_estop', 't_znl', 't_trays']
+    target_hours = set()
+    current_dt = start_dt.replace(minute=0, second=0, microsecond=0)
+    end_floor = end_dt.replace(minute=0, second=0, microsecond=0)
+    while current_dt <= end_floor:
+        target_hours.add(current_dt.hour)
+        current_dt += timedelta(hours=1)
+        
+    total_minutes = max(0, (end_dt - start_dt).total_seconds() / 60.0)
+    
+    def fetch_machine_var(m_id, var):
+        url = f"http://10.107.194.70/ASRS/press_kpi_data.php?machine={m_id}&variable={var}"
+        try:
+            res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
+            return m_id, var, res.json()
+        except:
+            return m_id, var, []
+
+    # Initialize times to 0
+    for m in groups:
+        groups[m]['times'] = {'idle': 0.0, 'estop': 0.0, 'cortinas': 0.0, 'prensa': 0.0, 'despachando': 0.0}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = []
+        for m_id in machines_map:
+            for var in variables:
+                futures.append(executor.submit(fetch_machine_var, m_id, var))
+        
+        for f in concurrent.futures.as_completed(futures):
+            m_id, var, data = f.result()
+            m_name = machines_map.get(m_id)
+            if m_name not in groups: continue
+            
+            val_key = var.replace('t_', '')
+            if val_key == 'znl': val_key = 'cortinas'
+            if val_key == 'trays': val_key = 'prensa'
+            
+            for item in data:
+                hour_str = str(item.get('time'))
+                if hour_str.isdigit() and int(hour_str) in target_hours:
+                    val = item.get(var)
+                    if val:
+                        try: groups[m_name]['times'][val_key] += float(val)
+                        except: pass
+
+    for m_name in groups:
+        t_data = groups[m_name]['times']
+        sum_down = t_data['idle'] + t_data['estop'] + t_data['cortinas'] + t_data['prensa']
+        t_data['despachando'] = max(0, total_minutes - sum_down)
+
+    return jsonify({"success": True, "presses": groups, "uptime": 99.40})
 
 @app.route('/api/daily-ticket')
 def api_daily_ticket():

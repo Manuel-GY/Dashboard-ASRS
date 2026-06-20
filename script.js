@@ -341,8 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="press-progress-bar-fill" style="width: 0%;"></div>
                         </div>
                         <div class="press-row-stats">
-                            <span>Desp: <strong>-</strong></span>
-                            <span>Vulc: <strong>-</strong></span>
+                            <span>Despacho robots: <strong>-</strong></span>
+                            <span>Carga manual: <strong>-</strong></span>
+                            <span>Vulcanizados total: <strong>-</strong></span>
                         </div>
                     </div>
                 `).join('')}
@@ -507,25 +508,34 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 if (data.success) {
-                    setIndicatorColor('ind-press-delivery', data.uptime >= 98.00);
-
                     const container = document.getElementById('press-delivery-container');
                     const overallVal = document.getElementById('press-overall-val');
-                    if (overallVal) {
-                        overallVal.textContent = data.uptime.toFixed(2) + '%';
-                    }
 
                     let pressesHtml = '';
+                    let globalDelivered = 0;
+                    let globalVulcanized = 0;
                     const order = ["400B", "500A", "500B", "600A", "600B"];
+                    
                     order.forEach(p => {
                         const stats = data.presses[p] || { delivered: 0, cancelled: 0, total: 0, vulcanized: 0 };
-                        const valid = stats.delivered + stats.cancelled;
-                        const compliance = valid > 0 ? (stats.delivered / valid * 100) : 100.0;
-                        const complianceColor = compliance >= 98.0 ? 'var(--success-color)' : (compliance >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
+                        const t = stats.times || {idle: 0, estop: 0, cortinas: 0, prensa: 0, despachando: 0};
+                        const totalTime = (t.idle + t.estop + t.cortinas + t.prensa + t.despachando) || 1;
                         
+                        const idlePct = (t.idle / totalTime) * 100;
+                        const estopPct = (t.estop / totalTime) * 100;
+                        const cortinasPct = (t.cortinas / totalTime) * 100;
+                        const prensaPct = (t.prensa / totalTime) * 100;
+                        const despPct = (t.despachando / totalTime) * 100;
+
                         const vulcanized = stats.vulcanized || 0;
                         const delivered = stats.delivered || 0;
                         const manual = Math.max(0, vulcanized - delivered); // Prevent negative just in case
+                        
+                        globalDelivered += delivered;
+                        globalVulcanized += vulcanized;
+
+                        const compliance = vulcanized > 0 ? (delivered / vulcanized * 100) : 100.0;
+                        const complianceColor = compliance >= 98.0 ? 'var(--success-color)' : (compliance >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
 
                         pressesHtml += `
                             <div class="press-row-item">
@@ -533,18 +543,28 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <span class="press-row-id">${p}</span>
                                     <span class="press-row-pct" style="color: ${complianceColor};">${compliance.toFixed(1)}%</span>
                                 </div>
-                                <div class="press-progress-bar-bg">
-                                    <div class="press-progress-bar-fill" style="width: ${compliance}%; background-color: ${complianceColor};"></div>
+                                <div class="press-progress-bar-bg" style="display: flex;">
+                                    <div title="Despachando: ${t.despachando.toFixed(0)}m" style="width: ${despPct}%; background-color: #84FF63; height: 100%;"></div>
+                                    <div title="IDLE: ${t.idle.toFixed(0)}m" style="width: ${idlePct}%; background-color: #F3F30F; height: 100%;"></div>
+                                    <div title="Cortinas: ${t.cortinas.toFixed(0)}m" style="width: ${cortinasPct}%; background-color: #49E2FF; height: 100%;"></div>
+                                    <div title="Prensa: ${t.prensa.toFixed(0)}m" style="width: ${prensaPct}%; background-color: #C8783C; height: 100%;"></div>
+                                    <div title="E-Stop: ${t.estop.toFixed(0)}m" style="width: ${estopPct}%; background-color: #FF0000; height: 100%;"></div>
                                 </div>
                                 <div class="press-row-stats" style="justify-content: space-between; display: flex;">
-                                    <span>Desp: <strong>${delivered}</strong></span>
-                                    <span>Manual: <strong>${manual}</strong></span>
-                                    <span>Vulc: <strong>${vulcanized}</strong></span>
+                                    <span>Despacho robots: <strong>${delivered}</strong></span>
+                                    <span>Carga manual: <strong>${manual}</strong></span>
+                                    <span>Vulcanizados total: <strong>${vulcanized}</strong></span>
                                 </div>
                             </div>
                         `;
                     });
                     
+                    const overallCompliance = globalVulcanized > 0 ? (globalDelivered / globalVulcanized * 100) : 100.0;
+                    if (overallVal) {
+                        overallVal.textContent = overallCompliance.toFixed(2) + '%';
+                    }
+                    setIndicatorColor('ind-press-delivery', overallCompliance >= 98.00);
+
                     container.innerHTML = `
                         <div class="press-delivery-right" style="width: 100%; border-left: none; padding-left: 0;">
                             ${pressesHtml}
