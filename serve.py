@@ -579,31 +579,36 @@ def api_press_delivery():
 
 @app.route('/api/daily-ticket')
 def api_daily_ticket():
-    now = datetime.now()
-    start_dt = now.replace(hour=6, minute=0, second=0, microsecond=0)
-    if now.hour < 6: start_dt = start_dt - timedelta(days=1)
-    end_dt = start_dt + timedelta(hours=24)
-    
-    start_formatted = start_dt.strftime('%Y/%m/%d %H:%M:%S')
-    end_formatted = end_dt.strftime('%Y/%m/%d %H:%M:%S')
-    
-    url = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/Production_Counts_Crosstab/Production_Counts_Crosstab.CrossTab/CrossTab/DataSource/DS1"
-    params = {
-        "ARG_TRANS_START_DATE": start_formatted, "ARG_TRANS_END_DATE": end_formatted,
-        "ARG_MACHINE_GROUP_GUID": "9A98FF823A234EEDE05356C26B0A13F5", "ARG_TIME_SUMMARY": "DD",
-        "ARG_MACH_TYPE": "", "ARG_COLUMN": "MACH_PART_NAME;", "ARG_ROW": "PRODUCTION_HOUR;",
-        "ARG_DATA": "PRODUCT_CNT;", "ARG_LANG": "ENG", "ARG_LANGUAGE_CD": "en", "ARG_USER": ""
-    }
     try:
-        res = requests.get(url, params=params, headers={"Accept-language": "en"}, timeout=10, proxies={"http": None, "https": None})
-        root = ET.fromstring(res.content)
-        total = 0
-        for row in root.findall('.//Row'):
-            cnt_el = row.find('PRODUCT_CNT')
-            if cnt_el is not None:
-                try: total += int(float(cnt_el.text or "0"))
-                except: pass
-        return jsonify({"success": True, "total": total, "formatted": f"{total:,}"})
+        now = datetime.now()
+        # El formato en la página AOP es MM/DD
+        date_str = now.strftime('%m/%d')
+        
+        url = "http://akrmfgcorp.akr.goodyear.com/mfgcorp/aop/pzkmtsc.jsp?RptView=LA"
+        
+        res = requests.get(url, timeout=10, proxies={"http": None, "https": None})
+        res.raise_for_status()
+        
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        target = 0
+        for tr in soup.find_all('tr'):
+            tds = tr.find_all(['td', 'th'])
+            if tds and tds[0].get_text(strip=True) == date_str:
+                if len(tds) > 3:
+                    chile_fcst_str = tds[3].get_text(strip=True)
+                    try:
+                        target = int(float(chile_fcst_str) * 1000)
+                        break
+                    except ValueError:
+                        pass
+        
+        if target > 0:
+            return jsonify({"success": True, "total": target, "formatted": f"{target:,}"})
+        else:
+            return jsonify({"success": False, "error": "Target no encontrado para hoy en AOP"}), 503
+            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
