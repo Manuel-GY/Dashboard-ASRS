@@ -12,8 +12,6 @@ import requests
 from flask import Flask, request, jsonify, send_from_directory, abort
 from bs4 import BeautifulSoup
 from pylogix import PLC
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 # Configuración y constantes
 PLC_TAGS_CONFIG = {
@@ -37,109 +35,21 @@ PLC_TAGS_CONFIG = {
     }
 }
 
-# Base de datos
-DB_PATH = 'shift_history.db'
 
-def init_shift_db():
-    con = sqlite3.connect(DB_PATH)
-    con.execute("""CREATE TABLE IF NOT EXISTS shift_summaries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        fecha TEXT,
-        turno TEXT,
-        maquina TEXT,
-        estado TEXT,
-        minutos REAL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )""")
-    # Eliminar datos antiguos (más de 3 días)
-    cutoff_dt = datetime.now() - timedelta(days=3)
-    con.execute('DELETE FROM shift_summaries WHERE timestamp < ?', (cutoff_dt.strftime('%Y-%m-%d %H:%M:%S'),))
-    con.commit()
-    con.close()
 
-def get_shift_info(dt):
-    hour = dt.hour
-    if 6 <= hour < 14:
-        shift_name = "Day"
-        shift_date = dt.date()
-    elif 14 <= hour < 22:
-        shift_name = "Afternoon"
-        shift_date = dt.date()
-    elif hour >= 22:
-        shift_name = "Night"
-        shift_date = dt.date()
-    else:
-        shift_name = "Night"
-        shift_date = (dt - timedelta(days=1)).date()
-    return shift_date.isoformat(), shift_name
-
-def log_shift_data():
-    now = datetime.now()
-    _, shift_name = get_shift_info(now)
-    fecha_str = now.strftime('%d/%m/%Y')
-    
-    if shift_name == 'Day': shift_text = '06:00 a 14:00'
-    elif shift_name == 'Afternoon': shift_text = '14:00 a 22:00'
-    else: shift_text = '22:00 a 06:00'
-    
-    con = sqlite3.connect(DB_PATH)
-    
-    for category, machines in PLC_TAGS_CONFIG.items():
-        for maq, conf in machines.items():
+def fetch_live_plc_data(machines, category_map, default_state):
+    """
+    Función de utilidad para consultar los PLCs en tiempo real sin usar caché.
+    """
+    res = {}
+    for maq in machines:
+        category = category_map(maq)
+        if maq in PLC_TAGS_CONFIG[category]:
+            conf = PLC_TAGS_CONFIG[category][maq]
             comm = PLC()
             comm.IPAddress = conf['ip']
             comm.ProcessorSlot = conf['slot']
-            try:
-                ret = comm.Read(list(conf['tags'].values()))
-                for r in ret:
-                    if r.Status == 'Success':
-                        val = float(r.Value)
-                        estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
-                        con.execute("""INSERT INTO shift_summaries (fecha, turno, maquina, estado, minutos) 
-                                       VALUES (?, ?, ?, ?, ?)""", 
-                                    (fecha_str, shift_text, maq, estado, val))
-            except Exception as e:
-                print(f'[ShiftLogger] Error PLC {maq}: {e}')
-            comm.Close()
-            
-    con.commit()
-    con.close()
-    print(f'[{now.strftime("%H:%M:%S")}] Shift History Saved!')
-
-# PLC Cache en memoria
-plc_cache = {
-    'conveyor': {
-        'CC01': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
-        'CC02': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
-        'CC03': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
-        'LR1':  {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
-        'LR2':  {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
-        'ULR1': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0},
-        'ULR2': {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0}
-    },
-    'robots': {
-        'RL1': {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0},
-        'RL2': {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0}
-    },
-    'plummers': {
-        'L1': {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'},
-        'L2': {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'},
-        'L3': {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'}
-    }
-}
-plc_cache_lock = threading.Lock()
-
-def poll_plcs():
-    """Hilo en segundo plano para cachear los datos de los PLCs cada 10s."""
-    while True:
-        temp_cache = {'conveyor': {}, 'robots': {}, 'plummers': {}}
-        
-        # 1. Conveyors
-        for maq, conf in PLC_TAGS_CONFIG['conveyors'].items():
-            comm = PLC()
-            comm.IPAddress = conf['ip']
-            comm.ProcessorSlot = conf['slot']
-            maq_res = {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0}
+            maq_res = dict(default_state)
             try:
                 ret = comm.Read(list(conf['tags'].values()))
                 for r in ret:
@@ -148,68 +58,9 @@ def poll_plcs():
                         maq_res[estado] = round(float(r.Value), 2)
             except: pass
             comm.Close()
-            temp_cache['conveyor'][maq] = maq_res
+            res[maq] = maq_res
+    return res
 
-        # 2. Conveyor-Robots (LR, ULR) -> Mapean a conveyor
-        for maq in ['LR1', 'LR2', 'ULR1', 'ULR2']:
-            if maq in PLC_TAGS_CONFIG['robots']:
-                conf = PLC_TAGS_CONFIG['robots'][maq]
-                comm = PLC()
-                comm.IPAddress = conf['ip']
-                comm.ProcessorSlot = conf['slot']
-                maq_res = {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0}
-                try:
-                    ret = comm.Read(list(conf['tags'].values()))
-                    for r in ret:
-                        if r.Status == 'Success':
-                            estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
-                            maq_res[estado] = round(float(r.Value), 2)
-                except: pass
-                comm.Close()
-                temp_cache['conveyor'][maq] = maq_res
-
-        # 3. Engineering Robots (RL) -> Mapean a robots
-        for maq in ['RL1', 'RL2']:
-            if maq in PLC_TAGS_CONFIG['robots']:
-                conf = PLC_TAGS_CONFIG['robots'][maq]
-                comm = PLC()
-                comm.IPAddress = conf['ip']
-                comm.ProcessorSlot = conf['slot']
-                maq_res = {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0}
-                try:
-                    ret = comm.Read(list(conf['tags'].values()))
-                    for r in ret:
-                        if r.Status == 'Success':
-                            estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
-                            maq_res[estado] = round(float(r.Value), 2)
-                except: pass
-                comm.Close()
-                temp_cache['robots'][maq] = maq_res
-
-        # 4. Plummers
-        for maq in ['L1', 'L2', 'L3']:
-            if maq in PLC_TAGS_CONFIG['plummers']:
-                conf = PLC_TAGS_CONFIG['plummers'][maq]
-                comm = PLC()
-                comm.IPAddress = conf['ip']
-                comm.ProcessorSlot = conf['slot']
-                maq_res = {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'}
-                try:
-                    ret = comm.Read(list(conf['tags'].values()))
-                    for r in ret:
-                        if r.Status == 'Success':
-                            estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
-                            maq_res[estado] = round(float(r.Value), 2)
-                except: pass
-                comm.Close()
-                temp_cache['plummers'][maq] = maq_res
-
-        with plc_cache_lock:
-            plc_cache['conveyor'].update(temp_cache['conveyor'])
-            plc_cache['robots'].update(temp_cache['robots'])
-            plc_cache['plummers'].update(temp_cache['plummers'])
-        
-        time.sleep(10)
 
 
 app = Flask(__name__, static_folder='.', static_url_path='')
@@ -354,15 +205,15 @@ def api_cc02_turnos():
 
 @app.route('/api/plc-conveyor')
 def api_plc_conveyor():
-    with plc_cache_lock:
-        data = plc_cache['conveyor'].copy()
+    machines = ['CC01', 'CC03', 'LR1', 'LR2', 'ULR1', 'ULR2']
+    cat_map = lambda m: 'conveyors' if 'CC' in m else 'robots'
+    data = fetch_live_plc_data(machines, cat_map, {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0})
     return jsonify({"success": True, "data": data})
 
 @app.route('/api/asrs-engineering-data')
 def api_asrs_engineering():
-    with plc_cache_lock:
-        robots = plc_cache['robots'].copy()
-        plummers = plc_cache['plummers'].copy()
+    robots = fetch_live_plc_data(['RL1', 'RL2'], lambda m: 'robots', {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0})
+    plummers = fetch_live_plc_data(['L1', 'L2', 'L3'], lambda m: 'plummers', {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'})
     return jsonify({"success": True, "robots": robots, "plummers": plummers})
 
 @app.route('/api/crane-performance')
@@ -661,16 +512,6 @@ def api_daily_ticket():
 
 
 if __name__ == '__main__':
-    init_shift_db()
-    
-    # Iniciar caché de PLC
-    threading.Thread(target=poll_plcs, daemon=True).start()
-    
-    # Iniciar Scheduler
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(log_shift_data, CronTrigger(hour='5,13,21', minute='59', second='50'))
-    scheduler.start()
-    
     try:
         print("Servidor Flask corriendo en el puerto 8080...")
         from waitress import serve
