@@ -51,31 +51,18 @@
             </div>
         </header>
 
-        <!-- Controls Bar for Time Filtering -->
-        <section class="controls-bar">
-            <div class="range-inputs">
-                <div class="input-field">
-                    <label for="start-date">Inicio:</label>
-                    <input type="date" id="start-date">
-                    <input type="time" id="start-time" aria-label="Hora de inicio">
+        <section class="controls-bar" style="justify-content: center; flex-direction: column; align-items: center;">
+            <div class="preset-container" style="margin: 0 auto;">
+                <span class="preset-label" id="shift-label-display" style="font-weight: bold; margin-right: 15px; color: var(--accent-color);">Turno Actual</span>
+                <div class="preset-buttons" id="shift-selector-buttons">
+                    <button type="button" class="btn-preset active" id="btn-shift-0">Turno Actual</button>
+                    <button type="button" class="btn-preset" id="btn-shift-1">Turno Anterior</button>
+                    <button type="button" class="btn-preset" id="btn-shift-2">Hace 2 Turnos</button>
+                    <button type="button" class="btn-preset" id="btn-shift-3">Hace 3 Turnos</button>
                 </div>
-                <div class="input-field">
-                    <label for="end-date">Fin:</label>
-                    <input type="date" id="end-date">
-                    <input type="time" id="end-time" aria-label="Hora de fin">
-                </div>
-                <button id="btn-query" class="btn-primary">Consultar</button>
             </div>
-            
-            <div class="preset-container">
-                <span class="preset-label">Consultas Rápidas:</span>
-                <div class="preset-buttons">
-                    <button type="button" class="btn-preset" id="preset-turn-day">Turno Día</button>
-                    <button type="button" class="btn-preset" id="preset-turn-afternoon">Turno Tarde</button>
-                    <button type="button" class="btn-preset" id="preset-turn-night">Turno Noche</button>
-                    <button type="button" class="btn-preset" id="preset-last-8">Últimas 8h</button>
-                    <button type="button" class="btn-preset" id="preset-last-24">Últimas 24h</button>
-                </div>
+            <div id="last-update-label" style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 10px; font-weight: 500;">
+                Última actualización: --/--/---- --:--
             </div>
         </section>
 

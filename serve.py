@@ -19,7 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 PLC_TAGS_CONFIG = {
     'conveyors': {
         'CC01': {'ip': '10.107.210.231', 'slot': 0, 'tags': {'RUN': 'CC01_RUN_MINS', 'STOP': 'CC01_STOP_MINS', 'IDLE': 'CC01_IDLE_MINS'}},
-        'CC02': {'ip': '10.107.210.232', 'slot': 0, 'tags': {'RUN': 'CC02_RUN_MINS', 'STOP': 'CC02_STOP_MINS', 'IDLE': 'CC02_IDLE_MINS'}},
+        'CC02': {'ip': '10.107.210.121', 'slot': 0, 'tags': {'RUN': 'CC02_RUN_MINS', 'STOP': 'CC02_STOP_MINS', 'IDLE': 'CC02_IDLE_MINS'}},
         'CC03': {'ip': '10.107.210.233', 'slot': 0, 'tags': {'RUN': 'CC03_RUN_MINS', 'STOP': 'CC03_STOP_MINS', 'IDLE': 'CC03_IDLE_MINS'}},
     },
     'robots': {
@@ -304,6 +304,53 @@ def api_io_data():
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
+
+@app.route('/api/cc02-turnos')
+def api_cc02_turnos():
+    """
+    Endpoint para leer los contadores de Downtime del CC02 en tiempo real vía pylogix.
+    NOTA PENDIENTE (PLC): 
+    Actualmente el bloque 'Downtime2' en el PLC reinicia los acumuladores a las 00:00 (medianoche).
+    Se debe solicitar al programador del PLC que cambie la condición de reset a las 06:00 AM 
+    para que el Turno de Noche (T1) no pierda los datos de las horas previas.
+    """
+    comm = PLC()
+    comm.IPAddress = '10.107.210.121'
+    comm.ProcessorSlot = 0
+    try:
+        tags_to_read = [
+            'DowntimeCC02.T1_TimerOK', 'DowntimeCC02.T1_TimerFault',
+            'DowntimeCC02.T2_TimerOK', 'DowntimeCC02.T2_TimerFault',
+            'DowntimeCC02.T3_TimerOK', 'DowntimeCC02.T3_TimerFault'
+        ]
+        results = comm.Read(tags_to_read)
+        
+        data = {
+            "T1": {"run": 0, "auto": 0, "fault": 0},
+            "T2": {"run": 0, "auto": 0, "fault": 0},
+            "T3": {"run": 0, "auto": 0, "fault": 0}
+        }
+        
+        for r in results:
+            print(f"[CC02 Live] Tag: {r.TagName}, Status: {r.Status}, Value: {r.Value}")
+            if r.Status == 'Success':
+                tag = r.TagName
+                val = int(r.Value)
+                if 'T1_TimerOK' in tag: data['T1']['run'] = val
+                elif 'T1_TimerFault' in tag: data['T1']['fault'] = val
+                elif 'T2_TimerOK' in tag: data['T2']['run'] = val
+                elif 'T2_TimerFault' in tag: data['T2']['fault'] = val
+                elif 'T3_TimerOK' in tag: data['T3']['run'] = val
+                elif 'T3_TimerFault' in tag: data['T3']['fault'] = val
+                
+        return jsonify({
+            "success": True,
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 503
+    finally:
+        comm.Close()
 
 @app.route('/api/plc-conveyor')
 def api_plc_conveyor():

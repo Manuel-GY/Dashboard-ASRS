@@ -119,70 +119,96 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
-    // Filter controls
-    const startDateInput = document.getElementById('start-date');
-    const startTimeInput = document.getElementById('start-time');
-    const endDateInput = document.getElementById('end-date');
-    const endTimeInput = document.getElementById('end-time');
-    const btnQuery = document.getElementById('btn-query');
+    // ============================================================================
+    // GESTIÓN DE FECHAS, HORAS Y TURNOS
+    // ============================================================================
+    
+    // Variables globales para almacenar el rango de tiempo actualmente seleccionado
+    let currentStartDt = null;
+    let currentEndDt = null;
 
-    // Restringir el calendario HTML al día de ayer como mínimo
-    const now = new Date();
-    const minDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const minDateString = minDate.toISOString().split('T')[0];
-    if (startDateInput) startDateInput.setAttribute('min', minDateString);
-    if (endDateInput) endDateInput.setAttribute('min', minDateString);
-
-    function formatDate(date) {
+    /**
+     * Convierte un objeto Date al formato ISO-like requerido por la API del backend (YYYY-MM-DDTHH:MM)
+     */
+    function formatDateForApi(date) {
+        if (!date) return '';
         const yyyy = date.getFullYear();
         const mm = String(date.getMonth() + 1).padStart(2, '0');
         const dd = String(date.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    }
-
-    function formatTime(date) {
         const hh = String(date.getHours()).padStart(2, '0');
         const min = String(date.getMinutes()).padStart(2, '0');
-        return `${hh}:${min}`;
-    }
-
-    function setInputs(startDt, endDt) {
-        startDateInput.value = formatDate(startDt);
-        startTimeInput.value = formatTime(startDt);
-        endDateInput.value = formatDate(endDt);
-        endTimeInput.value = formatTime(endDt);
+        return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
     }
 
     function getStartDateTime() {
-        return `${startDateInput.value}T${startTimeInput.value}`;
+        return formatDateForApi(currentStartDt);
     }
 
     function getEndDateTime() {
-        return `${endDateInput.value}T${endTimeInput.value}`;
+        return formatDateForApi(currentEndDt);
     }
 
-    // Helper to get current shift interval up to now
-    function getCurrentShiftInterval() {
+    /**
+     * Función principal de control de turnos.
+     * Recibe un 'offset' (0 = Actual, 1 = Anterior, 2 = Hace 2 turnos, etc.)
+     * y calcula dinámicamente las fechas de inicio y fin de ese turno basado en 
+     * los horarios estándar de planta (06:00, 14:00, 22:00).
+     */
+    function setShiftInterval(offset) {
         const now = new Date();
         const hour = now.getHours();
-        let startDt;
+        let currentShiftStartHour;
 
         if (hour >= 6 && hour < 14) {
-            startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6, 0, 0, 0);
+            currentShiftStartHour = 6;
         } else if (hour >= 14 && hour < 22) {
-            startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 0, 0, 0);
-        } else if (hour >= 22) {
-            startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 22, 0, 0, 0);
+            currentShiftStartHour = 14;
         } else {
-            const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            startDt = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 22, 0, 0, 0);
+            currentShiftStartHour = 22;
         }
-        return { startDt, endDt: now };
+
+        let startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), currentShiftStartHour, 0, 0, 0);
+        
+        // Adjust for night shift (22:00) that started yesterday
+        if (currentShiftStartHour === 22 && hour < 6) {
+            startDt.setDate(startDt.getDate() - 1);
+        }
+
+        // Apply offset (each offset is -8 hours)
+        if (offset > 0) {
+            startDt.setHours(startDt.getHours() - (8 * offset));
+        }
+
+        let endDt = new Date(startDt);
+        endDt.setHours(endDt.getHours() + 8);
+
+        // Don't query the future
+        if (offset === 0 && endDt > now) {
+            endDt = now;
+        }
+
+        currentStartDt = startDt;
+        currentEndDt = endDt;
+        
+        // Update label text
+        const label = document.getElementById('shift-label-display');
+        if (label) {
+            let shiftName = '';
+            const stH = startDt.getHours();
+            if (stH === 6) shiftName = 'Día';
+            else if (stH === 14) shiftName = 'Tarde';
+            else shiftName = 'Noche';
+            
+            const dayStr = String(startDt.getDate()).padStart(2, '0') + '/' + String(startDt.getMonth() + 1).padStart(2, '0');
+            
+            if (offset === 0) label.textContent = `Turno Actual (${shiftName} ${dayStr})`;
+            else if (offset === 1) label.textContent = `Turno Anterior (${shiftName} ${dayStr})`;
+            else label.textContent = `Hace ${offset} Turnos (${shiftName} ${dayStr})`;
+        }
     }
 
     // Default to current shift up to now
-    const initialInterval = getCurrentShiftInterval();
-    setInputs(initialInterval.startDt, initialInterval.endDt);
+    setShiftInterval(0);
 
     // Helper: color status indicator based on objective
     function setIndicatorColor(indicatorId, isHealthy) {
@@ -312,6 +338,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         setIndicatorColor('ind-downtime-conveyor', null);
 
+        // 4.5 CC02 Turnos
+        const eRun = document.getElementById('cc02-run');
+        const eIdle = document.getElementById('cc02-idle');
+        const eStop = document.getElementById('cc02-stop');
+        if (eRun) eRun.textContent = '-';
+        if (eIdle) eIdle.textContent = '-';
+        if (eStop) eStop.textContent = '-';
 
         // 5. Crane Performance
         document.getElementById('crane-uptime').textContent = '-';
@@ -383,11 +416,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchPLCConveyorData(start = '', end = '') {
-        const convCard = document.getElementById('conv-tbody')?.closest('.card-content');
-        const robotsCard = document.getElementById('robots-tbody')?.closest('.card-content');
-        const msgHtml = `<div class="empty-state-msg">La información no está disponible por el momento</div>`;
-        if (convCard) convCard.innerHTML = msgHtml;
-        if (robotsCard) robotsCard.innerHTML = msgHtml;
+        // En lugar de borrar la tarjeta entera, solo la dejamos con guiones si no hay datos de CC01 y CC03.
+        // CC02 será llenado por fetchCC02Turnos.
         setIndicatorColor('ind-downtime-conveyor', null);
         setIndicatorColor('ind-robots', null);
     }
@@ -609,11 +639,45 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
+    function fetchCC02Turnos(start) {
+        const eRun = document.getElementById('cc02-run');
+        const eIdle = document.getElementById('cc02-idle');
+        const eStop = document.getElementById('cc02-stop');
+        if (eRun) eRun.textContent = '...';
+        if (eIdle) eIdle.textContent = '...';
+        if (eStop) eStop.textContent = '...';
+
+        fetchWithRetry('/api/cc02-turnos')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    let targetShift = 'T1'; // Noche por defecto
+                    if (start) {
+                        const startDt = new Date(start);
+                        const hour = startDt.getHours();
+                        if (hour >= 6 && hour < 14) {
+                            targetShift = 'T2'; // Mañana
+                        } else if (hour >= 14 && hour < 22) {
+                            targetShift = 'T3'; // Tarde
+                        }
+                    }
+
+                    if (eRun) eRun.textContent = data.data[targetShift].run;
+                    if (eIdle) eIdle.textContent = '-'; // CC02 no tiene Idle en este bloque
+                    if (eStop) eStop.textContent = data.data[targetShift].fault;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching CC02 turnos:', error);
+            });
+    }
+
     function fetchAllData() {
         fetchDailyTicket();
         fetchInputOutputData(getStartDateTime(), getEndDateTime());
         fetchConveyorFullData(getStartDateTime(), getEndDateTime());
         fetchPLCConveyorData(getStartDateTime(), getEndDateTime());
+        fetchCC02Turnos(getStartDateTime());
         fetchCranePerformanceData();
         fetchAsrsEngineeringData();
         fetchPressDeliveryData();
@@ -625,99 +689,105 @@ document.addEventListener('DOMContentLoaded', () => {
         // 160000 = No Tire, 210002 = PM Robot
         // Se suman ambos motivos en la misma tarjeta "NO TIRE"
         fetchDowntimeData('160000,210002', startVal, endVal, 'no-tire-total-percent', 'no-tire-total-min', 'nt', 'ind-no-tire', 0.50);
+
+        // Update "Última actualización" label
+        const updateLbl = document.getElementById('last-update-label');
+        if (updateLbl) {
+            const now = new Date();
+            const dateStr = String(now.getDate()).padStart(2, '0') + '/' + String(now.getMonth()+1).padStart(2, '0') + '/' + now.getFullYear();
+            const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            updateLbl.textContent = `Última actualización: ${dateStr} ${timeStr}`;
+        }
     }
 
-
-    btnQuery.addEventListener('click', () => {
-        if (!startDateInput.value || !startTimeInput.value || !endDateInput.value || !endTimeInput.value) {
-            alert('Por favor seleccione fecha y hora de inicio y fin.');
-            return;
-        }
-
-        const startDt = new Date(getStartDateTime());
-        const endDt = new Date(getEndDateTime());
-        const now = new Date();
-
-        // Validar que la fecha de inicio no sea mayor a la de fin
-        if (startDt > endDt) {
-            alert('La fecha de inicio no puede ser mayor a la fecha de fin.');
-            return;
-        }
-
-        // Restringir el buscador a las últimas 24 horas (margen de 24.5h)
-        const diffHoursPast = (now - startDt) / (1000 * 60 * 60);
-        if (diffHoursPast > 24.5) {
-            alert('La información disponible está restringida a las últimas 24 horas. Por favor seleccione una fecha y hora de inicio más reciente.');
-            return;
-        }
-
-        fetchAllData();
-    });
 
     function getSelectedBaseDate() {
-        let baseVal = endDateInput.value;
-        if (!baseVal) {
-            baseVal = startDateInput.value;
-        }
-        if (!baseVal) {
-            baseVal = formatDate(new Date());
-        }
-        return baseVal;
+        // Retorna solo la fecha (YYYY-MM-DD) del inicio del turno consultado, usado por APIs que agrupan por día
+        if (!currentStartDt) return new Date().toISOString().split('T')[0];
+        const yyyy = currentStartDt.getFullYear();
+        const mm = String(currentStartDt.getMonth() + 1).padStart(2, '0');
+        const dd = String(currentStartDt.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     }
 
-    function getPresetShiftDates(startHour) {
+    // ============================================================================
+    // EVENT LISTENERS DE BOTONES DE TURNO
+    // ============================================================================
+    [0, 1, 2, 3].forEach(offset => {
+        const btn = document.getElementById(`btn-shift-${offset}`);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                // Actualizar estado visual activo de los botones
+                document.querySelectorAll('#shift-selector-buttons .btn-preset').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                // Calcular las nuevas fechas y recargar todos los datos del dashboard
+                setShiftInterval(offset);
+                fetchAllData();
+            });
+        }
+    });
+
+    // ============================================================================
+    // PROGRAMADOR INTELIGENTE DE ACTUALIZACIONES (ENTREGA DE TURNO)
+    // ============================================================================
+    /**
+     * Calcula los minutos restantes para el próximo cambio de turno oficial 
+     * (06:00, 14:00, 22:00) y agenda una actualización automática a los 5 minutos pasados 
+     * esa hora (ej: 06:05). Así asegura que la BD guardó todo el cierre de turno.
+     */
+    function scheduleNextShiftUpdate() {
         const now = new Date();
-        // Siempre usar el día de hoy como base para los presets rápidos de turno
-        let startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startHour, 0, 0);
+        const currentHour = now.getHours();
+        let nextUpdate = new Date(now);
         
-        // Si la hora de inicio del turno es en el futuro, retrocedemos 24 horas (al día anterior)
-        if (startDt > now) {
-            startDt = new Date(startDt.getTime() - 24 * 60 * 60 * 1000);
+        // Queremos actualizar a y 05 minutos después del cambio de turno
+        if (currentHour < 6 || (currentHour === 6 && now.getMinutes() < 5)) {
+            nextUpdate.setHours(6, 5, 0, 0);
+        } else if (currentHour < 14 || (currentHour === 14 && now.getMinutes() < 5)) {
+            nextUpdate.setHours(14, 5, 0, 0);
+        } else if (currentHour < 22 || (currentHour === 22 && now.getMinutes() < 5)) {
+            nextUpdate.setHours(22, 5, 0, 0);
+        } else {
+            // Siguiente actualización es mañana a las 06:05
+            nextUpdate.setDate(nextUpdate.getDate() + 1);
+            nextUpdate.setHours(6, 5, 0, 0);
         }
         
-        let endDt = new Date(startDt.getTime() + 8 * 60 * 60 * 1000);
-        // Si la hora de término del turno es en el futuro, la limitamos al momento actual (para no consultar el futuro)
-        if (endDt > now) {
-            endDt = now;
-        }
-        return { startDt, endDt };
+        const timeUntilUpdate = nextUpdate - now;
+        
+        setTimeout(() => {
+            // Actualizar el intervalo de tiempo para que refleje el turno correcto si cambió
+            // Buscamos qué botón está activo
+            let activeOffset = 0;
+            document.querySelectorAll('#shift-selector-buttons .btn-preset').forEach((btn, idx) => {
+                if (btn.classList.contains('active')) {
+                    activeOffset = idx;
+                }
+            });
+            setShiftInterval(activeOffset);
+            fetchAllData();
+            
+            // Programar el siguiente
+            scheduleNextShiftUpdate();
+        }, timeUntilUpdate);
     }
-
-    // Program presets
-    document.getElementById('preset-turn-day').addEventListener('click', () => {
-        const { startDt, endDt } = getPresetShiftDates(6);
-        setInputs(startDt, endDt);
-        fetchAllData();
-    });
-
-    document.getElementById('preset-turn-afternoon').addEventListener('click', () => {
-        const { startDt, endDt } = getPresetShiftDates(14);
-        setInputs(startDt, endDt);
-        fetchAllData();
-    });
-
-    document.getElementById('preset-turn-night').addEventListener('click', () => {
-        const { startDt, endDt } = getPresetShiftDates(22);
-        setInputs(startDt, endDt);
-        fetchAllData();
-    });
-
-    document.getElementById('preset-last-8').addEventListener('click', () => {
-        const endDt = new Date();
-        const startDt = new Date(endDt.getTime() - 8 * 60 * 60 * 1000);
-        setInputs(startDt, endDt);
-        fetchAllData();
-    });
-
-    document.getElementById('preset-last-24').addEventListener('click', () => {
-        const endDt = new Date();
-        const startDt = new Date(endDt.getTime() - 24 * 60 * 60 * 1000);
-        setInputs(startDt, endDt);
-        fetchAllData();
-    });
 
     // Initial triggers
     initStaticWidgets();
     fetchAllData();
+    
+    // Iniciar el programador inteligente y mantener el de 2 horas como respaldo
+    scheduleNextShiftUpdate();
+    setInterval(() => {
+        let activeOffset = 0;
+        document.querySelectorAll('#shift-selector-buttons .btn-preset').forEach((btn, idx) => {
+            if (btn.classList.contains('active')) {
+                activeOffset = idx;
+            }
+        });
+        setShiftInterval(activeOffset);
+        fetchAllData();
+    }, 7200000); // Respaldo cada 2 horas
 
 });
