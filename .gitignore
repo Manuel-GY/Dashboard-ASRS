@@ -17,3 +17,4 @@ browse_plc.py
 
 estop_history.db*
 shift_history.db*
+venv/
