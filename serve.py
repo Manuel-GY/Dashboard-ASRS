@@ -1,9 +1,11 @@
 import os
 import sys
+import re
 import time
 import json
 import sqlite3
 import threading
+import urllib.parse
 import concurrent.futures
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
@@ -12,39 +14,6 @@ import requests
 from flask import Flask, request, jsonify, send_from_directory, abort
 from bs4 import BeautifulSoup
 from pylogix import PLC
-
-# Configuración y constantes
-PLC_TAGS_CONFIG = {
-    'conveyors': {},
-    'robots': {},
-    'plummers': {},
-}
-
-
-
-def fetch_live_plc_data(machines, category_map, default_state):
-    """
-    Función de utilidad para consultar los PLCs en tiempo real sin usar caché.
-    """
-    res = {}
-    for maq in machines:
-        category = category_map(maq)
-        if maq in PLC_TAGS_CONFIG[category]:
-            conf = PLC_TAGS_CONFIG[category][maq]
-            comm = PLC()
-            comm.IPAddress = conf['ip']
-            comm.ProcessorSlot = conf['slot']
-            maq_res = dict(default_state)
-            try:
-                ret = comm.Read(list(conf['tags'].values()))
-                for r in ret:
-                    if r.Status == 'Success':
-                        estado = [k for k,v in conf['tags'].items() if v == r.TagName][0]
-                        maq_res[estado] = round(float(r.Value), 2)
-            except: pass
-            comm.Close()
-            res[maq] = maq_res
-    return res
 
 
 
@@ -70,7 +39,7 @@ def api_io_data():
     try:
         if start_str: start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
         if end_str: end_dt = datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-    except: pass
+    except Exception as e: print(f'[WARN] Error parsing date params: {e}')
 
     if start_dt: start_dt = start_dt + timedelta(hours=1)
     if end_dt: end_dt = end_dt + timedelta(hours=1)
@@ -124,7 +93,7 @@ def api_io_data():
         res.raise_for_status()
         html = res.text
         
-        import re
+
         def extract(id_name):
             match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
             return match.group(1) if match else "0"
@@ -152,7 +121,7 @@ def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
         try:
             start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
             target_date, target_shift = get_current_shift_info(start_dt)
-        except: pass
+        except Exception as e: print(f'[WARN] Error parsing start date: {e}')
     
     current_date, _ = get_current_shift_info()
     
@@ -233,7 +202,7 @@ def api_plc_conveyor():
         try:
             start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
             target_date, target_shift = get_current_shift_info(start_dt)
-        except: pass
+        except Exception as e: print(f'[WARN] Error parsing conveyor start date: {e}')
     
     current_date, current_shift = get_current_shift_info()
     machines = ['CC01', 'CC02', 'CC03']
@@ -264,14 +233,27 @@ def api_plc_conveyor():
             shift_key = current_shift if not target_shift else target_shift
             tags_to_read = [
                 f'{base_tag}.{shift_key}_TimerOK', 
-                f'{base_tag}.{shift_key}_TimerFault'
+                f'{base_tag}.{shift_key}_TimerFault',
+                f'{base_tag}.{shift_key}_TimerAuto'
             ]
             results = comm.Read(tags_to_read)
+            auto_val = 0
+            run_val = 0
+            fault_val = 0
             for r in results:
                 if r.Status == 'Success':
-                    if 'TimerOK' in r.TagName: data[machine]['RUN'] = int(r.Value)
-                    elif 'TimerFault' in r.TagName: data[machine]['STOP'] = int(r.Value)
-        except: pass
+                    if 'TimerOK' in r.TagName:
+                        run_val = int(r.Value)
+                        data[machine]['RUN'] = run_val
+                    elif 'TimerFault' in r.TagName:
+                        fault_val = int(r.Value)
+                        data[machine]['STOP'] = fault_val
+                    elif 'TimerAuto' in r.TagName:
+                        auto_val = int(r.Value)
+            
+            idle_val = auto_val - run_val - fault_val
+            data[machine]['IDLE'] = max(0, idle_val)
+        except Exception as e: print(f'[WARN] Error reading PLC {machine}: {e}')
         finally: comm.Close()
 
     get_cc_turno('CC01', '10.107.210.111', 'DowntimeCC01')
@@ -289,7 +271,7 @@ def api_asrs_engineering():
         try:
             start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
             target_date, target_shift = get_current_shift_info(start_dt)
-        except: pass
+        except Exception as e: print(f'[WARN] Error parsing engineering start date: {e}')
     
     current_date, current_shift = get_current_shift_info()
     robots_list = []
@@ -306,7 +288,7 @@ def api_asrs_engineering():
             conn.close()
             
             robots = {m: {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0} for m in robots_list}
-            plummers = {m: {'run': '-', 'stop': '-'} for m in plummers_list}
+            plummers = {m: {'run': '-', 'idle': '-', 'stop': '-'} for m in plummers_list}
             
             for maq, est, mins in rows:
                 if maq in robots: robots[maq][est] = mins
@@ -316,7 +298,7 @@ def api_asrs_engineering():
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 503
 
-    robots = fetch_live_plc_data([], lambda m: 'robots', {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0})
+    robots = {}
     plummers = {m: {'run': '-', 'idle': '-', 'stop': '-'} for m in plummers_list}
     
     def get_plummer_turno(machine, ip, base_tag):
@@ -347,7 +329,7 @@ def api_asrs_engineering():
             
             idle_val = auto_val - run_val - fault_val
             plummers[machine]['idle'] = max(0, idle_val)
-        except: pass
+        except Exception as e: print(f'[WARN] Error reading Plummer {machine}: {e}')
         finally: comm.Close()
 
     get_plummer_turno('L1', '10.107.210.51', 'DownTimePlummer1')
@@ -368,7 +350,6 @@ def api_crane_performance():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    import urllib.parse
     url = f"http://10.107.194.62/sbs/reports/gtasrs_aisle_history.php?run=1&str_ts={urllib.parse.quote(start_param)}&end_ts={urllib.parse.quote(end_param)}"
     
     try:
@@ -377,7 +358,7 @@ def api_crane_performance():
         html_text = res.text
         
         aisle_data = []
-        import re
+
         matches = re.finditer(r'value=[\'"]Aisle\s+(\d+)\s+([\d\.]+)%\s+(\d+)\s+min[\'"]', html_text, re.IGNORECASE)
         for m in matches:
             aisle_data.append({"aisle": int(m.group(1)), "downtime_percent": float(m.group(2)), "downtime_minutes": int(m.group(3))})
@@ -391,7 +372,7 @@ def api_crane_performance():
                     if len(parts) >= 5:
                         try:
                             aisle_data.append({"aisle": int(parts[1]), "downtime_percent": float(parts[2].replace('%', '')), "downtime_minutes": int(parts[3])})
-                        except: pass
+                        except Exception as e: print(f'[WARN] Error parsing aisle data: {e}')
 
         return jsonify({"success": True, "url_queried": url, "data": aisle_data})
     except Exception as e:
@@ -479,7 +460,7 @@ def api_downtime():
                 down_el = row.find('DOWN_TIME')
                 if mach_el is not None and down_el is not None:
                     mach = (mach_el.text or "").strip()
-                    import re
+
                     match = re.match(r'^([1-6])(\d+)$', mach)
                     if match:
                         group = match.group(1) + '00' + ('A' if int(match.group(2)) % 2 != 0 else 'B')
@@ -513,7 +494,6 @@ def api_press_delivery():
 
     start_formatted = start_dt.strftime('%Y/%m/%d %H:%M:%S')
     end_formatted = end_dt.strftime('%Y/%m/%d %H:%M:%S')
-    import urllib.parse
     
     url_compliance = f"http://10.107.194.62/sbs/reports/auto_order_compliance.php?byheader=0&sortby=order_num&sortorder=ASC&str_ts={urllib.parse.quote(start_formatted)}&end_ts={urllib.parse.quote(end_formatted)}&prszone=&prsrow=all_rows&prscav=all_cavs"
     groups = {f"{r}00{s}": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0} for r in range(4,7) for s in ["A","B"] if f"{r}00{s}" != "400A"}
@@ -534,7 +514,7 @@ def api_press_delivery():
                         groups[group]["total"] += 1
                         if status == "Fulfilled": groups[group]["delivered"] += 1
                         elif status == "Cancelled": groups[group]["cancelled"] += 1
-    except: pass
+    except Exception as e: print(f'[WARN] Error fetching press compliance: {e}')
 
     # Vulcanization
     url_cross = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/Production_Counts_Crosstab/Production_Counts_Crosstab.CrossTab/CrossTab/DataSource/DS1"
@@ -553,15 +533,15 @@ def api_press_delivery():
             if mach_el is not None and cnt_el is not None:
                 dest = (mach_el.text or "").strip()
                 try: product_cnt = int(float(cnt_el.text or "0"))
-                except: product_cnt = 0
+                except Exception as e: product_cnt = 0
                 if dest in ignored_cavities: continue
                 group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
                 if group in groups:
                     groups[group]["vulcanized"] += product_cnt
-    except: pass
+    except Exception as e: print(f'[WARN] Error fetching vulcanization: {e}')
 
     # Fetch Dynamic Hourly KPI
-    import concurrent.futures
+
     machines_map = {0: '400B', 1: '500A', 2: '500B', 3: '600A', 4: '600B'}
     variables = ['t_idle', 't_estop', 't_znl', 't_trays']
     target_hours = set()
@@ -578,7 +558,8 @@ def api_press_delivery():
         try:
             res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
             return m_id, var, res.json()
-        except:
+        except Exception as e:
+            print(f'[WARN] Error fetching KPI m={m_id} v={var}: {e}')
             return m_id, var, []
 
     # Initialize times to 0
@@ -606,7 +587,7 @@ def api_press_delivery():
                     val = item.get(var)
                     if val:
                         try: groups[m_name]['times'][val_key] += float(val)
-                        except: pass
+                        except Exception as e: print(f'[WARN] Error parsing KPI val: {e}')
 
     for m_name in groups:
         t_data = groups[m_name]['times']
@@ -627,7 +608,7 @@ def api_daily_ticket():
         res = requests.get(url, timeout=10, proxies={"http": None, "https": None})
         res.raise_for_status()
         
-        from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(res.text, 'html.parser')
         
         target = 0
@@ -727,31 +708,22 @@ def fetch_and_save_shift_data():
                     turno = tag.split('_')[0].replace(f'{base_tag}.', '')
                     estado = 'run' if 'TimerOK' in tag else ('idle' if 'TimerAuto' in tag else 'fault')
                     upsert_shift_data(date_str, turno, robot_id, estado, val)
-        except: pass
+        except Exception as e: print(f'[WARN] Error saving shift data for {robot_id}: {e}')
         finally: comm.Close()
 
-    save_robot_turn_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1')
-    save_robot_turn_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2')
-    save_robot_turn_data('LR1', '10.107.210.141', 'PickDownTimeLoad1')
-    save_robot_turn_data('LR2', '10.107.210.140', 'PickDownTimeLoad2')
+    save_robot_turn_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1', has_idle=True)
+    save_robot_turn_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2', has_idle=True)
+    save_robot_turn_data('LR1', '10.107.210.141', 'PickDownTimeLoad1', has_idle=True)
+    save_robot_turn_data('LR2', '10.107.210.140', 'PickDownTimeLoad2', has_idle=True)
     
-    save_robot_turn_data('CC01', '10.107.210.111', 'DowntimeCC01')
-    save_robot_turn_data('CC02', '10.107.210.121', 'DowntimeCC02')
-    save_robot_turn_data('CC03', '10.107.210.131', 'DowntimeCC03')
+    save_robot_turn_data('CC01', '10.107.210.111', 'DowntimeCC01', has_idle=True)
+    save_robot_turn_data('CC02', '10.107.210.121', 'DowntimeCC02', has_idle=True)
+    save_robot_turn_data('CC03', '10.107.210.131', 'DowntimeCC03', has_idle=True)
 
-    save_robot_turn_data('L1', '10.107.210.51', 'DownTimePlummer1')
-    save_robot_turn_data('L2', '10.107.210.52', 'DownTimePlummer2')
-    save_robot_turn_data('L3', '10.107.210.53', 'DownTimePlummer3')
+    save_robot_turn_data('L1', '10.107.210.51', 'DownTimePlummer1', has_idle=True)
+    save_robot_turn_data('L2', '10.107.210.52', 'DownTimePlummer2', has_idle=True)
+    save_robot_turn_data('L3', '10.107.210.53', 'DownTimePlummer3', has_idle=True)
 
-    # 4. Other machines from config
-    # We assign their values to the CURRENT shift in the DB
-    cat_map = lambda m: 'none'
-    all_machines = []
-    live_data = fetch_live_plc_data(all_machines, cat_map, {})
-    for maq, data in live_data.items():
-        for estado, val in data.items():
-            upsert_shift_data(date_str, current_shift, maq, estado, float(val))
-    
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 
 def background_polling_task():

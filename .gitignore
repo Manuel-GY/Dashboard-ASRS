@@ -1,20 +1,14 @@
-# Python cache
+# Python
 __pycache__/
 *.pyc
+venv/
 
-# Local SQLite databases
-conveyor_history.db
-conveyor_history.db-journal
+# Databases
+*.db
+*.db-journal
 
 # Temporary test files
-test_output.html
-parsed.json
-aisle.html
-tables.html
-test_aisle.py
-test_html.py
+test_*.py
 browse_plc.py
-
-estop_history.db*
-shift_history.db*
-venv/
+*.html.bak
+parsed.json

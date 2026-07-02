@@ -13,3 +13,4 @@ pip install -r requirements.txt >nul 2>&1
 echo.
 echo Iniciando Servidor Web ASRS...
 python serve.py
+pause

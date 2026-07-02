@@ -418,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         ['cc01', 'cc02', 'cc03'].forEach(m => {
             if (document.getElementById(`${m}-run`)) document.getElementById(`${m}-run`).textContent = '...';
+            if (document.getElementById(`${m}-idle`)) document.getElementById(`${m}-idle`).textContent = '...';
             if (document.getElementById(`${m}-stop`)) document.getElementById(`${m}-stop`).textContent = '...';
         });
 
@@ -430,6 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const mId = m.toLowerCase();
                         if (data.data[m]) {
                             if (document.getElementById(`${mId}-run`)) document.getElementById(`${mId}-run`).textContent = data.data[m].RUN !== undefined ? data.data[m].RUN : '-';
+                            if (document.getElementById(`${mId}-idle`)) document.getElementById(`${mId}-idle`).textContent = data.data[m].IDLE !== undefined ? data.data[m].IDLE : '-';
                             if (document.getElementById(`${mId}-stop`)) document.getElementById(`${mId}-stop`).textContent = data.data[m].STOP !== undefined ? data.data[m].STOP : '-';
                         }
                     });
