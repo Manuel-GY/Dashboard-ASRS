@@ -1,9 +1,9 @@
 @echo off
-IF NOT EXIST venv (
-    echo Creando entorno virtual (venv)...
-    python -m venv venv
-)
+IF EXIST venv\Scripts\activate.bat GOTO activate
+echo Creando entorno virtual...
+python -m venv venv
 
+:activate
 echo Activando entorno virtual...
 call venv\Scripts\activate.bat
 
