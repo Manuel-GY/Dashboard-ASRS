@@ -307,11 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-conveyor-full', null);
 
         // 2. Plummers
-        document.getElementById('plummers-tbody').innerHTML = `
-            <tr><td><strong>Lubricadora 1</strong></td><td>-</td><td>-</td><td>-</td></tr>
-            <tr><td><strong>Lubricadora 2</strong></td><td>-</td><td>-</td><td>-</td></tr>
-            <tr><td><strong>Lubricadora 3</strong></td><td>-</td><td>-</td><td>-</td></tr>
-        `;
         document.getElementById('plummers-total-tires').textContent = '-';
         setIndicatorColor('ind-plummers', null);
 
@@ -416,8 +411,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchPLCConveyorData(start = '', end = '') {
-        // En lugar de borrar la tarjeta entera, solo la dejamos con guiones si no hay datos de CC01 y CC03.
-        // CC02 será llenado por fetchCC02Turnos.
+        let url = '/api/plc-conveyor';
+        if (start && end) {
+            url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        }
+        
+        ['cc01', 'cc02', 'cc03'].forEach(m => {
+            if (document.getElementById(`${m}-run`)) document.getElementById(`${m}-run`).textContent = '...';
+            if (document.getElementById(`${m}-stop`)) document.getElementById(`${m}-stop`).textContent = '...';
+        });
+
+        fetchWithRetry(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    const machines = ['CC01', 'CC02', 'CC03'];
+                    machines.forEach(m => {
+                        const mId = m.toLowerCase();
+                        if (data.data[m]) {
+                            if (document.getElementById(`${mId}-run`)) document.getElementById(`${mId}-run`).textContent = data.data[m].RUN !== undefined ? data.data[m].RUN : '-';
+                            if (document.getElementById(`${mId}-stop`)) document.getElementById(`${mId}-stop`).textContent = data.data[m].STOP !== undefined ? data.data[m].STOP : '-';
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Error fetching PLC Conveyor data:', error));
+            
         setIndicatorColor('ind-downtime-conveyor', null);
         setIndicatorColor('ind-robots', null);
     }
@@ -611,9 +630,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fetchAsrsEngineeringData() {
+        let url = '/api/asrs-engineering-data';
+        const start = getStartDateTime();
+        const end = getEndDateTime();
+        if (start && end) {
+            url += `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        }
+
         const plummersCard = document.getElementById('plummers-tbody')?.closest('.card-content');
-        const msgHtml = `<div class="empty-state-msg">La información no está disponible por el momento</div>`;
-        if (plummersCard) plummersCard.innerHTML = msgHtml;
+        if (plummersCard && plummersCard.innerHTML.includes('La información no está disponible')) {
+            plummersCard.innerHTML = `
+                <table class="data-table">
+                    <thead><tr><th></th><th>Run</th><th>Stop</th></tr></thead>
+                    <tbody id="plummers-tbody">
+                        <tr style="height: 33%;"><td style="padding: 15px 10px;">Lubricadora 1</td><td id="l1-run">...</td><td id="l1-idle">...</td><td id="l1-stop">...</td></tr>
+                        <tr style="height: 33%;"><td style="padding: 15px 10px;">Lubricadora 2</td><td id="l2-run">...</td><td id="l2-idle">...</td><td id="l2-stop">...</td></tr>
+                        <tr style="height: 33%;"><td style="padding: 15px 10px;">Lubricadora 3</td><td id="l3-run">...</td><td id="l3-idle">...</td><td id="l3-stop">...</td></tr>
+                    </tbody>
+                </table>`;
+        }
+
+        ['l1', 'l2', 'l3'].forEach(m => {
+            if (document.getElementById(`${m}-run`)) document.getElementById(`${m}-run`).textContent = '...';
+            if (document.getElementById(`${m}-idle`)) document.getElementById(`${m}-idle`).textContent = '...';
+            if (document.getElementById(`${m}-stop`)) document.getElementById(`${m}-stop`).textContent = '...';
+        });
+
+        fetchWithRetry(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.plummers) {
+                    ['L1', 'L2', 'L3'].forEach(m => {
+                        const mId = m.toLowerCase();
+                        if (data.plummers[m]) {
+                            if (document.getElementById(`${mId}-run`)) document.getElementById(`${mId}-run`).textContent = data.plummers[m].run !== undefined ? data.plummers[m].run : '-';
+                            if (document.getElementById(`${mId}-idle`)) document.getElementById(`${mId}-idle`).textContent = data.plummers[m].idle !== undefined ? data.plummers[m].idle : '-';
+                            if (document.getElementById(`${mId}-stop`)) document.getElementById(`${mId}-stop`).textContent = data.plummers[m].stop !== undefined ? data.plummers[m].stop : '-';
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Error fetching ASRS Engineering data:', error));
+
         const totalTires = document.getElementById('plummers-total-tires');
         if (totalTires) totalTires.textContent = "-";
         setIndicatorColor('ind-plummers', null);
@@ -639,15 +697,71 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
-    function fetchCC02Turnos(start) {
-        const eRun = document.getElementById('cc02-run');
-        const eIdle = document.getElementById('cc02-idle');
-        const eStop = document.getElementById('cc02-stop');
+
+
+    function fetchLR1Turnos(start) {
+        const eRun = document.getElementById('lr1-run');
+        const eIdle = document.getElementById('lr1-idle');
+        const eStop = document.getElementById('lr1-stop');
         if (eRun) eRun.textContent = '...';
         if (eIdle) eIdle.textContent = '...';
         if (eStop) eStop.textContent = '...';
 
-        fetchWithRetry('/api/cc02-turnos')
+        fetchWithRetry('/api/lr1-turnos')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    let targetShift = 'T1';
+                    if (start) {
+                        const startDt = new Date(start);
+                        const hour = startDt.getHours();
+                        if (hour >= 6 && hour < 14) targetShift = 'T2';
+                        else if (hour >= 14 && hour < 22) targetShift = 'T3';
+                    }
+                    if (eRun) eRun.textContent = data.data[targetShift].run;
+                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
+                    if (eStop) eStop.textContent = data.data[targetShift].fault;
+                }
+            })
+            .catch(error => console.error('Error fetching LR1 turnos:', error));
+    }
+
+    function fetchLR2Turnos(start) {
+        const eRun = document.getElementById('lr2-run');
+        const eIdle = document.getElementById('lr2-idle');
+        const eStop = document.getElementById('lr2-stop');
+        if (eRun) eRun.textContent = '...';
+        if (eIdle) eIdle.textContent = '...';
+        if (eStop) eStop.textContent = '...';
+
+        fetchWithRetry('/api/lr2-turnos')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    let targetShift = 'T1';
+                    if (start) {
+                        const startDt = new Date(start);
+                        const hour = startDt.getHours();
+                        if (hour >= 6 && hour < 14) targetShift = 'T2';
+                        else if (hour >= 14 && hour < 22) targetShift = 'T3';
+                    }
+                    if (eRun) eRun.textContent = data.data[targetShift].run;
+                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
+                    if (eStop) eStop.textContent = data.data[targetShift].fault;
+                }
+            })
+            .catch(error => console.error('Error fetching LR2 turnos:', error));
+    }
+
+    function fetchULR1Turnos(start) {
+        const eRun = document.getElementById('ulr1-run');
+        const eIdle = document.getElementById('ulr1-idle');
+        const eStop = document.getElementById('ulr1-stop');
+        if (eRun) eRun.textContent = '...';
+        if (eIdle) eIdle.textContent = '...';
+        if (eStop) eStop.textContent = '...';
+
+        fetchWithRetry('/api/ulr1-turnos')
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.data) {
@@ -656,19 +770,52 @@ document.addEventListener('DOMContentLoaded', () => {
                         const startDt = new Date(start);
                         const hour = startDt.getHours();
                         if (hour >= 6 && hour < 14) {
-                            targetShift = 'T2'; // Mañana
+                            targetShift = 'T2'; // Día
                         } else if (hour >= 14 && hour < 22) {
                             targetShift = 'T3'; // Tarde
                         }
                     }
 
                     if (eRun) eRun.textContent = data.data[targetShift].run;
-                    if (eIdle) eIdle.textContent = '-'; // CC02 no tiene Idle en este bloque
+                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
                     if (eStop) eStop.textContent = data.data[targetShift].fault;
                 }
             })
             .catch(error => {
-                console.error('Error fetching CC02 turnos:', error);
+                console.error('Error fetching ULR1 turnos:', error);
+            });
+    }
+
+    function fetchULR2Turnos(start) {
+        const eRun = document.getElementById('ulr2-run');
+        const eIdle = document.getElementById('ulr2-idle');
+        const eStop = document.getElementById('ulr2-stop');
+        if (eRun) eRun.textContent = '...';
+        if (eIdle) eIdle.textContent = '...';
+        if (eStop) eStop.textContent = '...';
+
+        fetchWithRetry('/api/ulr2-turnos')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    let targetShift = 'T1'; // Noche por defecto
+                    if (start) {
+                        const startDt = new Date(start);
+                        const hour = startDt.getHours();
+                        if (hour >= 6 && hour < 14) {
+                            targetShift = 'T2'; // Día
+                        } else if (hour >= 14 && hour < 22) {
+                            targetShift = 'T3'; // Tarde
+                        }
+                    }
+
+                    if (eRun) eRun.textContent = data.data[targetShift].run;
+                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
+                    if (eStop) eStop.textContent = data.data[targetShift].fault;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching ULR2 turnos:', error);
             });
     }
 
@@ -677,7 +824,10 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchInputOutputData(getStartDateTime(), getEndDateTime());
         fetchConveyorFullData(getStartDateTime(), getEndDateTime());
         fetchPLCConveyorData(getStartDateTime(), getEndDateTime());
-        fetchCC02Turnos(getStartDateTime());
+        fetchLR1Turnos(getStartDateTime());
+        fetchLR2Turnos(getStartDateTime());
+        fetchULR1Turnos(getStartDateTime());
+        fetchULR2Turnos(getStartDateTime());
         fetchCranePerformanceData();
         fetchAsrsEngineeringData();
         fetchPressDeliveryData();

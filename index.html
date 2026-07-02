@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard ASRS</title>
-    <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=2">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js?v=2"></script>
+    <script src="script.js?v=2" defer></script>
     <!-- Google Fonts for Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -96,27 +98,27 @@
                     </div>
                 </div>
                 <div class="card-content">
-                    <table class="data-table">
+                    <table class="data-table" style="width: 100%;">
                         <thead>
                             <tr>
                                 <th></th>
-                                <th>Run</th>
-                                <th>Idle</th>
-                                <th>Stop</th>
+                                <th style="text-align: center;">RUN</th>
+                                <th style="text-align: center;">IDLE</th>
+                                <th style="text-align: center;">STOP</th>
                             </tr>
                         </thead>
                         <tbody id="plummers-tbody">
                             <tr style="height: 33%;">
                                 <td style="padding: 15px 10px;">Lubricadora 1</td>
-                                <td id="l1-run">-</td><td id="l1-idle">-</td><td id="l1-stop">-</td>
+                                <td id="l1-run" style="font-weight: 700; color: var(--success-color); text-align: center;">-</td><td id="l1-idle" style="font-weight: 700; color: var(--warning-color); text-align: center;">-</td><td id="l1-stop" style="font-weight: 700; color: var(--danger-color); text-align: center;">-</td>
                             </tr>
                             <tr style="height: 33%;">
                                 <td style="padding: 15px 10px;">Lubricadora 2</td>
-                                <td id="l2-run">-</td><td id="l2-idle">-</td><td id="l2-stop">-</td>
+                                <td id="l2-run" style="font-weight: 700; color: var(--success-color); text-align: center;">-</td><td id="l2-idle" style="font-weight: 700; color: var(--warning-color); text-align: center;">-</td><td id="l2-stop" style="font-weight: 700; color: var(--danger-color); text-align: center;">-</td>
                             </tr>
                             <tr style="height: 33%;">
                                 <td style="padding: 15px 10px;">Lubricadora 3</td>
-                                <td id="l3-run">-</td><td id="l3-idle">-</td><td id="l3-stop">-</td>
+                                <td id="l3-run" style="font-weight: 700; color: var(--success-color); text-align: center;">-</td><td id="l3-idle" style="font-weight: 700; color: var(--warning-color); text-align: center;">-</td><td id="l3-stop" style="font-weight: 700; color: var(--danger-color); text-align: center;">-</td>
                             </tr>
                         </tbody>
                     </table>
@@ -138,6 +140,7 @@
                             <tr>
                                 <th></th>
                                 <th style="text-align: center;">RUN</th>
+                                <th style="text-align: center;">IDLE</th>
                                 <th style="text-align: center;">STOP</th>
                             </tr>
                         </thead>
@@ -145,21 +148,25 @@
                             <tr>
                                 <td><strong>LR1</strong></td>
                                 <td id="lr1-run" style="font-weight: 700; color: var(--success-color);">-</td>
+                                <td id="lr1-idle" style="font-weight: 700; color: var(--warning-color);">-</td>
                                 <td id="lr1-stop" style="font-weight: 700; color: var(--danger-color);">-</td>
                             </tr>
                             <tr>
                                 <td><strong>LR2</strong></td>
                                 <td id="lr2-run" style="font-weight: 700; color: var(--success-color);">-</td>
+                                <td id="lr2-idle" style="font-weight: 700; color: var(--warning-color);">-</td>
                                 <td id="lr2-stop" style="font-weight: 700; color: var(--danger-color);">-</td>
                             </tr>
                             <tr>
                                 <td><strong>ULR1</strong></td>
                                 <td id="ulr1-run" style="font-weight: 700; color: var(--success-color);">-</td>
+                                <td id="ulr1-idle" style="font-weight: 700; color: var(--warning-color);">-</td>
                                 <td id="ulr1-stop" style="font-weight: 700; color: var(--danger-color);">-</td>
                             </tr>
                             <tr>
                                 <td><strong>ULR2</strong></td>
                                 <td id="ulr2-run" style="font-weight: 700; color: var(--success-color);">-</td>
+                                <td id="ulr2-idle" style="font-weight: 700; color: var(--warning-color);">-</td>
                                 <td id="ulr2-stop" style="font-weight: 700; color: var(--danger-color);">-</td>
                             </tr>
                         </tbody>

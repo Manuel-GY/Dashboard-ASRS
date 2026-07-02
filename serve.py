@@ -15,24 +15,9 @@ from pylogix import PLC
 
 # Configuración y constantes
 PLC_TAGS_CONFIG = {
-    'conveyors': {
-        'CC01': {'ip': '10.107.210.231', 'slot': 0, 'tags': {'RUN': 'CC01_RUN_MINS', 'STOP': 'CC01_STOP_MINS', 'IDLE': 'CC01_IDLE_MINS'}},
-        'CC02': {'ip': '10.107.210.121', 'slot': 0, 'tags': {'RUN': 'CC02_RUN_MINS', 'STOP': 'CC02_STOP_MINS', 'IDLE': 'CC02_IDLE_MINS'}},
-        'CC03': {'ip': '10.107.210.233', 'slot': 0, 'tags': {'RUN': 'CC03_RUN_MINS', 'STOP': 'CC03_STOP_MINS', 'IDLE': 'CC03_IDLE_MINS'}},
-    },
-    'robots': {
-        'LR1': {'ip': '10.107.210.141', 'slot': 0, 'tags': {'RUN': 'LR1_RUN_MINS', 'STOP': 'LR1_STOP_MINS'}},
-        'LR2': {'ip': '10.107.210.140', 'slot': 0, 'tags': {'RUN': 'LR2_RUN_MINS', 'STOP': 'LR2_STOP_MINS'}},
-        'ULR1': {'ip': '10.107.210.142', 'slot': 0, 'tags': {'RUN': 'ULR1_RUN_MINS', 'STOP': 'ULR1_STOP_MINS'}},
-        'ULR2': {'ip': '10.107.210.143', 'slot': 0, 'tags': {'RUN': 'ULR2_RUN_MINS', 'STOP': 'ULR2_STOP_MINS'}},
-        'RL1': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'working': 'RL1_WORK_MINS', 'idle': 'RL1_IDLE_MINS', 'waiting': 'RL1_WAIT_MINS', 'failure': 'RL1_FAIL_MINS'}},
-        'RL2': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'working': 'RL2_WORK_MINS', 'idle': 'RL2_IDLE_MINS', 'waiting': 'RL2_WAIT_MINS', 'failure': 'RL2_FAIL_MINS'}},
-    },
-    'plummers': {
-        'L1': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L1_RUN_MINS', 'idle': 'L1_IDLE_MINS', 'stop': 'L1_STOP_MINS'}},
-        'L2': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L2_RUN_MINS', 'idle': 'L2_IDLE_MINS', 'stop': 'L2_STOP_MINS'}},
-        'L3': {'ip': '10.107.210.160', 'slot': 0, 'tags': {'run': 'L3_RUN_MINS', 'idle': 'L3_IDLE_MINS', 'stop': 'L3_STOP_MINS'}},
-    }
+    'conveyors': {},
+    'robots': {},
+    'plummers': {},
 }
 
 
@@ -156,65 +141,220 @@ def api_io_data():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
-@app.route('/api/cc02-turnos')
-def api_cc02_turnos():
-    """
-    Endpoint para leer los contadores de Downtime del CC02 en tiempo real vía pylogix.
-    NOTA PENDIENTE (PLC): 
-    Actualmente el bloque 'Downtime2' en el PLC reinicia los acumuladores a las 00:00 (medianoche).
-    Se debe solicitar al programador del PLC que cambie la condición de reset a las 06:00 AM 
-    para que el Turno de Noche (T1) no pierda los datos de las horas previas.
-    """
+
+
+def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
+    start_str = request.args.get('start', '')
+    target_date = None
+    target_shift = 'T1'
+    
+    if start_str:
+        try:
+            start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+            target_date, target_shift = get_current_shift_info(start_dt)
+        except: pass
+    
+    current_date, _ = get_current_shift_info()
+    
+    data = {
+        "T1": {"run": 0, "fault": 0, "auto": 0, "idle": 0},
+        "T2": {"run": 0, "fault": 0, "auto": 0, "idle": 0},
+        "T3": {"run": 0, "fault": 0, "auto": 0, "idle": 0}
+    }
+    
+    if target_date and target_date != current_date:
+        # Query DB for historical data
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute('SELECT turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina = ?', (target_date, machine_name))
+            rows = cursor.fetchall()
+            for r in rows:
+                t, est, mins = r
+                if t in data and est in data[t]:
+                    data[t][est] = mins
+            conn.close()
+            return jsonify({"success": True, "data": data, "source": "db"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 503
+
     comm = PLC()
-    comm.IPAddress = '10.107.210.121'
+    comm.IPAddress = ip_address
     comm.ProcessorSlot = 0
     try:
         tags_to_read = [
-            'DowntimeCC02.T1_TimerOK', 'DowntimeCC02.T1_TimerFault',
-            'DowntimeCC02.T2_TimerOK', 'DowntimeCC02.T2_TimerFault',
-            'DowntimeCC02.T3_TimerOK', 'DowntimeCC02.T3_TimerFault'
+            f'{base_tag}.T1_TimerOK', f'{base_tag}.T1_TimerFault', f'{base_tag}.T1_TimerAuto',
+            f'{base_tag}.T2_TimerOK', f'{base_tag}.T2_TimerFault', f'{base_tag}.T2_TimerAuto',
+            f'{base_tag}.T3_TimerOK', f'{base_tag}.T3_TimerFault', f'{base_tag}.T3_TimerAuto'
         ]
         results = comm.Read(tags_to_read)
-        
-        data = {
-            "T1": {"run": 0, "auto": 0, "fault": 0},
-            "T2": {"run": 0, "auto": 0, "fault": 0},
-            "T3": {"run": 0, "auto": 0, "fault": 0}
-        }
-        
         for r in results:
-            print(f"[CC02 Live] Tag: {r.TagName}, Status: {r.Status}, Value: {r.Value}")
             if r.Status == 'Success':
                 tag = r.TagName
                 val = int(r.Value)
                 if 'T1_TimerOK' in tag: data['T1']['run'] = val
                 elif 'T1_TimerFault' in tag: data['T1']['fault'] = val
+                elif 'T1_TimerAuto' in tag: data['T1']['auto'] = val
                 elif 'T2_TimerOK' in tag: data['T2']['run'] = val
                 elif 'T2_TimerFault' in tag: data['T2']['fault'] = val
+                elif 'T2_TimerAuto' in tag: data['T2']['auto'] = val
                 elif 'T3_TimerOK' in tag: data['T3']['run'] = val
                 elif 'T3_TimerFault' in tag: data['T3']['fault'] = val
+                elif 'T3_TimerAuto' in tag: data['T3']['auto'] = val
+        
+        for t in ['T1', 'T2', 'T3']:
+            idle = data[t]['auto'] - data[t]['run'] - data[t]['fault']
+            data[t]['idle'] = max(0, idle)
                 
-        return jsonify({
-            "success": True,
-            "data": data
-        })
+        return jsonify({"success": True, "data": data, "source": "plc"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
     finally:
         comm.Close()
 
+@app.route('/api/ulr1-turnos')
+def api_ulr1_turnos(): return fetch_robot_turnos_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1')
+
+@app.route('/api/ulr2-turnos')
+def api_ulr2_turnos(): return fetch_robot_turnos_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2')
+
+@app.route('/api/lr1-turnos')
+def api_lr1_turnos(): return fetch_robot_turnos_data('LR1', '10.107.210.141', 'PickDownTimeLoad1')
+
+@app.route('/api/lr2-turnos')
+def api_lr2_turnos(): return fetch_robot_turnos_data('LR2', '10.107.210.140', 'PickDownTimeLoad2')
+
 @app.route('/api/plc-conveyor')
 def api_plc_conveyor():
-    machines = ['CC01', 'CC03', 'LR1', 'LR2', 'ULR1', 'ULR2']
-    cat_map = lambda m: 'conveyors' if 'CC' in m else 'robots'
-    data = fetch_live_plc_data(machines, cat_map, {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0})
-    return jsonify({"success": True, "data": data})
+    start_str = request.args.get('start', '')
+    target_date = None
+    target_shift = None
+    if start_str:
+        try:
+            start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+            target_date, target_shift = get_current_shift_info(start_dt)
+        except: pass
+    
+    current_date, current_shift = get_current_shift_info()
+    machines = ['CC01', 'CC02', 'CC03']
+    
+    if target_date and (target_date != current_date or target_shift != current_shift):
+        # Fetch from DB
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(machines))), [target_date, target_shift] + machines)
+            rows = cursor.fetchall()
+            conn.close()
+            data = {m: {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0} for m in machines}
+            for maq, est, mins in rows:
+                if maq in data:
+                    data[maq][est] = mins
+            return jsonify({"success": True, "data": data, "source": "db"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 503
+            
+    data = {m: {'RUN': '-', 'IDLE': '-', 'STOP': '-'} for m in machines}
+    
+    def get_cc_turno(machine, ip, base_tag):
+        comm = PLC()
+        comm.IPAddress = ip
+        comm.ProcessorSlot = 0
+        try:
+            shift_key = current_shift if not target_shift else target_shift
+            tags_to_read = [
+                f'{base_tag}.{shift_key}_TimerOK', 
+                f'{base_tag}.{shift_key}_TimerFault'
+            ]
+            results = comm.Read(tags_to_read)
+            for r in results:
+                if r.Status == 'Success':
+                    if 'TimerOK' in r.TagName: data[machine]['RUN'] = int(r.Value)
+                    elif 'TimerFault' in r.TagName: data[machine]['STOP'] = int(r.Value)
+        except: pass
+        finally: comm.Close()
+
+    get_cc_turno('CC01', '10.107.210.111', 'DowntimeCC01')
+    get_cc_turno('CC02', '10.107.210.121', 'DowntimeCC02')
+    get_cc_turno('CC03', '10.107.210.131', 'DowntimeCC03')
+    
+    return jsonify({"success": True, "data": data, "source": "plc"})
 
 @app.route('/api/asrs-engineering-data')
 def api_asrs_engineering():
-    robots = fetch_live_plc_data(['RL1', 'RL2'], lambda m: 'robots', {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0})
-    plummers = fetch_live_plc_data(['L1', 'L2', 'L3'], lambda m: 'plummers', {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'tires': '-'})
-    return jsonify({"success": True, "robots": robots, "plummers": plummers})
+    start_str = request.args.get('start', '')
+    target_date = None
+    target_shift = None
+    if start_str:
+        try:
+            start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+            target_date, target_shift = get_current_shift_info(start_dt)
+        except: pass
+    
+    current_date, current_shift = get_current_shift_info()
+    robots_list = []
+    plummers_list = ['L1', 'L2', 'L3']
+    
+    if target_date and (target_date != current_date or target_shift != current_shift):
+        # Fetch from DB
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            all_mach = robots_list + plummers_list
+            cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(all_mach))), [target_date, target_shift] + all_mach)
+            rows = cursor.fetchall()
+            conn.close()
+            
+            robots = {m: {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0} for m in robots_list}
+            plummers = {m: {'run': '-', 'stop': '-'} for m in plummers_list}
+            
+            for maq, est, mins in rows:
+                if maq in robots: robots[maq][est] = mins
+                if maq in plummers: plummers[maq][est] = mins
+                
+            return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "db"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 503
+
+    robots = fetch_live_plc_data([], lambda m: 'robots', {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0})
+    plummers = {m: {'run': '-', 'idle': '-', 'stop': '-'} for m in plummers_list}
+    
+    def get_plummer_turno(machine, ip, base_tag):
+        comm = PLC()
+        comm.IPAddress = ip
+        comm.ProcessorSlot = 0
+        try:
+            shift_key = current_shift if not target_shift else target_shift
+            tags_to_read = [
+                f'{base_tag}.{shift_key}_TimerOK', 
+                f'{base_tag}.{shift_key}_TimerFault',
+                f'{base_tag}.{shift_key}_TimerAuto'
+            ]
+            results = comm.Read(tags_to_read)
+            auto_val = 0
+            run_val = 0
+            fault_val = 0
+            for r in results:
+                if r.Status == 'Success':
+                    if 'TimerOK' in r.TagName: 
+                        run_val = int(r.Value)
+                        plummers[machine]['run'] = run_val
+                    elif 'TimerFault' in r.TagName: 
+                        fault_val = int(r.Value)
+                        plummers[machine]['stop'] = fault_val
+                    elif 'TimerAuto' in r.TagName:
+                        auto_val = int(r.Value)
+            
+            idle_val = auto_val - run_val - fault_val
+            plummers[machine]['idle'] = max(0, idle_val)
+        except: pass
+        finally: comm.Close()
+
+    get_plummer_turno('L1', '10.107.210.51', 'DownTimePlummer1')
+    get_plummer_turno('L2', '10.107.210.52', 'DownTimePlummer2')
+    get_plummer_turno('L3', '10.107.210.53', 'DownTimePlummer3')
+    
+    return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "plc"})
 
 @app.route('/api/crane-performance')
 def api_crane_performance():
@@ -511,7 +651,124 @@ def api_daily_ticket():
         return jsonify({"success": False, "error": str(e)}), 503
 
 
+# ============================================================================
+# DATABASE & BACKGROUND TASK LOGIC
+# ============================================================================
+DB_PATH = 'shift_history.db'
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS shift_summaries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT,
+                        turno TEXT,
+                        maquina TEXT,
+                        estado TEXT,
+                        minutos REAL,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
+    conn.commit()
+    conn.close()
+
+def upsert_shift_data(fecha, turno, maquina, estado, minutos):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''SELECT id FROM shift_summaries 
+                      WHERE fecha = ? AND turno = ? AND maquina = ? AND estado = ?''', 
+                   (fecha, turno, maquina, estado))
+    row = cursor.fetchone()
+    if row:
+        cursor.execute('''UPDATE shift_summaries 
+                          SET minutos = ?, timestamp = CURRENT_TIMESTAMP 
+                          WHERE id = ?''', (minutos, row[0]))
+    else:
+        cursor.execute('''INSERT INTO shift_summaries (fecha, turno, maquina, estado, minutos) 
+                          VALUES (?, ?, ?, ?, ?)''', (fecha, turno, maquina, estado, minutos))
+    conn.commit()
+    conn.close()
+
+def get_current_shift_info(dt=None):
+    if dt is None:
+        dt = datetime.now()
+    hour = dt.hour
+    if hour >= 6 and hour < 14:
+        shift = 'T2'
+        date_str = dt.strftime('%Y-%m-%d')
+    elif hour >= 14 and hour < 22:
+        shift = 'T3'
+        date_str = dt.strftime('%Y-%m-%d')
+    else:
+        shift = 'T1'
+        if hour < 6:
+            date_str = (dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        else:
+            date_str = dt.strftime('%Y-%m-%d')
+    return date_str, shift
+
+def fetch_and_save_shift_data():
+    date_str, current_shift = get_current_shift_info()
+    
+    def save_robot_turn_data(robot_id, ip, base_tag, has_idle=False):
+        comm = PLC()
+        comm.IPAddress = ip
+        comm.ProcessorSlot = 0
+        try:
+            tags_to_read = [f'{base_tag}.T1_TimerOK', f'{base_tag}.T1_TimerFault',
+                            f'{base_tag}.T2_TimerOK', f'{base_tag}.T2_TimerFault',
+                            f'{base_tag}.T3_TimerOK', f'{base_tag}.T3_TimerFault']
+            if has_idle:
+                tags_to_read.extend([f'{base_tag}.T1_TimerAuto', f'{base_tag}.T2_TimerAuto', f'{base_tag}.T3_TimerAuto'])
+                
+            results = comm.Read(tags_to_read)
+            for r in results:
+                if r.Status == 'Success':
+                    tag = r.TagName
+                    val = round(float(r.Value), 2)
+                    turno = tag.split('_')[0].replace(f'{base_tag}.', '')
+                    estado = 'run' if 'TimerOK' in tag else ('idle' if 'TimerAuto' in tag else 'fault')
+                    upsert_shift_data(date_str, turno, robot_id, estado, val)
+        except: pass
+        finally: comm.Close()
+
+    save_robot_turn_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1')
+    save_robot_turn_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2')
+    save_robot_turn_data('LR1', '10.107.210.141', 'PickDownTimeLoad1')
+    save_robot_turn_data('LR2', '10.107.210.140', 'PickDownTimeLoad2')
+    
+    save_robot_turn_data('CC01', '10.107.210.111', 'DowntimeCC01')
+    save_robot_turn_data('CC02', '10.107.210.121', 'DowntimeCC02')
+    save_robot_turn_data('CC03', '10.107.210.131', 'DowntimeCC03')
+
+    save_robot_turn_data('L1', '10.107.210.51', 'DownTimePlummer1')
+    save_robot_turn_data('L2', '10.107.210.52', 'DownTimePlummer2')
+    save_robot_turn_data('L3', '10.107.210.53', 'DownTimePlummer3')
+
+    # 4. Other machines from config
+    # We assign their values to the CURRENT shift in the DB
+    cat_map = lambda m: 'none'
+    all_machines = []
+    live_data = fetch_live_plc_data(all_machines, cat_map, {})
+    for maq, data in live_data.items():
+        for estado, val in data.items():
+            upsert_shift_data(date_str, current_shift, maq, estado, float(val))
+    
+    print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
+
+def background_polling_task():
+    init_db()
+    while True:
+        try:
+            fetch_and_save_shift_data()
+        except Exception as e:
+            print(f"Error in background polling: {e}")
+        
+        # Sleep for 2 hours
+        time.sleep(2 * 60 * 60)
+
 if __name__ == '__main__':
+    # Iniciar la tarea en segundo plano
+    threading.Thread(target=background_polling_task, daemon=True).start()
+    
     try:
         print("Servidor Flask corriendo en el puerto 8080...")
         from waitress import serve
