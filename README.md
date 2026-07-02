@@ -5,9 +5,12 @@ Este documento resume la arquitectura de grado industrial, desarrollo y estado a
 ## 1. Arquitectura del Backend (Python + Flask)
 - **Framework:** `Flask` (API Web) para servir las rutas HTTP, expuesto a producción mediante `Waitress`.
 - **Ejecución y Entorno Virtual:** El proyecto arranca mediante `run.bat`. Este script crea automáticamente un entorno virtual aislado (`venv`) e instala las dependencias desde `requirements.txt` para garantizar la estabilidad del sistema frente a actualizaciones globales de Python.
-- **Sincronización Híbrida (En Tiempo Real / Histórica):** 
-  - Para el turno activo, el servidor consulta directamente a los PLCs Allen-Bradley en vivo a través de la librería `pylogix`. Esto garantiza que los usuarios siempre vean los minutos exactos al momento de abrir la pantalla.
-  - Para turnos pasados (históricos), el sistema extrae la información de una base de datos local SQLite (`shift_history.db`). Esto reduce la carga innecesaria a la red industrial al no tener que sobreconsultar datos estáticos.
+- **Arquitectura de Sincronización y Agregación de Datos:** 
+  El Dashboard actúa como un agregador central de múltiples sistemas de la planta:
+  - **Métricas de Rendimiento (Cranes, Presses, Daily Ticket):** El servidor hace *web scraping* y consume XML/JSONs de los sistemas internos existentes de la planta (ej. *SBS Reports*, *ProductionWebEditServerRS*).
+  - **Estado de Máquinas (Plummers, Robots, Downtime Conveyor):** Para estas tarjetas, el servidor utiliza una **Sincronización Híbrida (En Tiempo Real / Histórica)**:
+    - *Turno Activo:* Consulta directamente a los PLCs Allen-Bradley en vivo a través de la librería `pylogix`. Esto garantiza que los usuarios siempre vean los minutos exactos al momento de abrir la pantalla.
+    - *Turnos Pasados:* Extrae la información de una base de datos local SQLite (`shift_history.db`). Esto reduce la carga innecesaria a la red industrial al no sobreconsultar datos estáticos.
 - **Seguridad:** El servidor bloquea automáticamente cualquier intento web de descargar código fuente (`.py`, `.bat`) o extraer directamente las bases de datos (`.db`).
 
 ## 2. Interfaz de Usuario (Frontend)
