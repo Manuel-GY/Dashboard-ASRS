@@ -11,7 +11,7 @@ Este documento resume la arquitectura de grado industrial, desarrollo y estado a
   - **Estado de Máquinas (Plummers, Robots, Downtime Conveyor):** Para estas tarjetas, el servidor utiliza una **Sincronización Híbrida (En Tiempo Real / Histórica)**:
     - *Turno Activo:* Consulta directamente a los PLCs Allen-Bradley en vivo a través de la librería `pylogix`. Esto garantiza que los usuarios siempre vean los minutos exactos al momento de abrir la pantalla.
     - *Turnos Pasados:* Extrae la información de una base de datos local SQLite (`shift_history.db`). Esto reduce la carga innecesaria a la red industrial al no sobreconsultar datos estáticos.
-- **Seguridad:** El servidor bloquea automáticamente cualquier intento web de descargar código fuente (`.py`, `.bat`) o extraer directamente las bases de datos (`.db`).
+- **Seguridad:** Para prevenir vulnerabilidades de "Path Traversal" (evasión de directorios), el proyecto aísla y empaqueta estrictamente los archivos de la interfaz gráfica (`index.html`, `script.js`, `style.css`) dentro del directorio `/static`. El servidor Flask está configurado para servir recursos de manera exclusiva desde esta carpeta, lo que blinda al sistema haciendo matemáticamente imposible la descarga o exposición accidental del código fuente (`.py`, `.bat`) o bases de datos industriales (`.db`).
 
 ## 2. Interfaz de Usuario (Frontend)
 - **Tecnologías:** HTML5, CSS3 (Vanilla), JavaScript.
@@ -36,5 +36,5 @@ La integración de tiempos en vivo para las tarjetas de **Plummers**, **Downtime
    > **`IDLE = TimerAuto - TimerOK - TimerFault`**
 
 3. **Requisito de Reset en Ladder (Issue Conocido):**
-   Para que esta fórmula funcione y los datos en la pantalla sean reales, es imperativo que los acumuladores del PLC (especialmente `TimerAuto` y `TimerOK`) se limpien (`0`) estrictamente al iniciar el turno correspondiente.
-   *Actualmente se ha detectado que ciertos robots (ej. `ULR1`, `LR1`, `LR2`) mantienen acumuladores que superan la barrera lógica de los 480 minutos (8 horas) por turno, lo que corrompe el cálculo matemático del IDLE temporalmente hasta que se corrija dicha rutina en el programa de Studio 5000.*
+   Para que esta fórmula funcione y los datos en la pantalla sean reales, es imperativo que los acumuladores del PLC (específicamente los bloques de conteo `CTU` que fungen como *Timers*) se limpien a `0` estrictamente al iniciar el turno correspondiente mediante la ejecución de una instrucción **`RES`** (Reset).
+   *Se ha documentado que en la lógica actual del PLC, los robots (ej. `ULR1`, `ULR2`, `LR1`, `LR2`) carecen de esta instrucción `RES` en paralelo al cambio de turno, provocando que mantengan acumuladores infinitos que superan ampliamente la barrera física de 480 minutos (8 horas). La anomalía ha sido reportada y delegada al equipo de Ingeniería de Software para su mitigación directa en el código de Studio 5000.*
