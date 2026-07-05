@@ -17,6 +17,20 @@ from pylogix import PLC
 
 
 
+
+def get_capped_now():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0]:
+            return datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
+    except:
+        pass
+    return datetime.now()
+
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 @app.route('/')
@@ -26,84 +40,36 @@ def index():
 @app.route('/api/io-data')
 def api_io_data():
     start_str = request.args.get('start', '')
-    end_str = request.args.get('end', '')
-    start_dt = None
-    end_dt = None
-    try:
-        if start_str: start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-        if end_str: end_dt = datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-    except Exception as e: print(f'[WARN] Error parsing date params: {e}')
-
-    if start_dt: start_dt = start_dt + timedelta(hours=1)
-    if end_dt: end_dt = end_dt + timedelta(hours=1)
-
-    prefix = "s1"
-    if start_dt and end_dt:
-        now_dt = datetime.now()
-        current_date = now_dt.date()
-        candidates = []
-        for d in [current_date - timedelta(days=1), current_date, current_date + timedelta(days=1)]:
-            candidates.append(datetime.combine(d, datetime.strptime("07:00", "%H:%M").time()))
-            candidates.append(datetime.combine(d, datetime.strptime("15:00", "%H:%M").time()))
-            candidates.append(datetime.combine(d, datetime.strptime("23:00", "%H:%M").time()))
-        candidates.sort()
-        
-        s1_start = next((c for c in reversed(candidates) if c <= now_dt), None)
-        
-        if s1_start:
-            s1_end = s1_start + timedelta(hours=8)
-            s2_start = s1_start - timedelta(hours=8)
-            s2_end = s1_start
-            s3_start = s2_start - timedelta(hours=8)
-            s3_end = s2_start
-            s4_start = s3_start - timedelta(hours=8)
-            s4_end = s3_start
+    
+    target_date, target_shift = get_current_shift_info()
+    if start_str:
+        try:
+            start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
+            target_date, target_shift = get_current_shift_info(start_dt)
+        except Exception as e:
+            print(f'[WARN] Error parsing date params: {e}')
             
-            shifts = {"s1": (s1_start, s1_end), "s2": (s2_start, s2_end), "s3": (s3_start, s3_end), "s4": (s4_start, s4_end)}
-            
-            if start_dt < s4_start:
-                return jsonify({
-                    "entrada": "-", "manual": "-", "auto": "-",
-                    "rate_entrada": "-", "rate_manual": "-", "rate_auto": "-",
-                    "mock": False, "message": "Sin información para fechas anteriores a 1 día"
-                })
-                
-            max_overlap = -1
-            best_prefix = "s1"
-            for p, (s_start, s_end) in shifts.items():
-                overlap_start = max(start_dt, s_start)
-                overlap_end = min(end_dt, s_end)
-                if overlap_end > overlap_start:
-                    overlap_sec = (overlap_end - overlap_start).total_seconds()
-                    if overlap_sec > max_overlap:
-                        max_overlap = overlap_sec
-                        best_prefix = p
-            prefix = best_prefix
-
     try:
-        url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
-        res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
-        res.raise_for_status()
-        html = res.text
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT entrada, manual, auto, rate_entrada, rate_manual, rate_auto FROM io_history WHERE fecha = ? AND turno = ?", (target_date, target_shift))
+        row = cursor.fetchone()
+        conn.close()
         
-
-        def extract(id_name):
-            match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
-            return match.group(1) if match else "0"
-
-        return jsonify({
-            "entrada": extract(f"{prefix}_inbound_total"),
-            "manual": extract(f"{prefix}_outbound_cv31_actual"),
-            "auto": extract(f"{prefix}_press_total"),
-            "rate_entrada": extract(f"{prefix}_inbound_avg"),
-            "rate_manual": extract(f"{prefix}_manual_rate"),
-            "rate_auto": extract(f"{prefix}_press_rate"),
-            "mock": False
-        })
+        if row:
+            return jsonify({
+                "entrada": row[0], "manual": row[1], "auto": row[2],
+                "rate_entrada": row[3], "rate_manual": row[4], "rate_auto": row[5],
+                "mock": False
+            })
+        else:
+            return jsonify({
+                "entrada": "-", "manual": "-", "auto": "-",
+                "rate_entrada": "-", "rate_manual": "-", "rate_auto": "-",
+                "mock": False, "message": "Sin información guardada para este turno"
+            })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
-
-
 
 def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
     start_str = request.args.get('start', '')
@@ -285,9 +251,9 @@ def api_crane_performance():
     end_str = request.args.get('end', '')
     try:
         if start_str: start_param = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M').strftime('%Y/%m/%d %H:%M:00')
-        else: start_param = (datetime.now() - timedelta(hours=8)).strftime('%Y/%m/%d %H:%M:00')
+        else: start_param = (get_capped_now() - timedelta(hours=8)).strftime('%Y/%m/%d %H:%M:00')
         if end_str: end_param = datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M').strftime('%Y/%m/%d %H:%M:00')
-        else: end_param = datetime.now().strftime('%Y/%m/%d %H:%M:00')
+        else: end_param = get_capped_now().strftime('%Y/%m/%d %H:%M:00')
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -325,9 +291,9 @@ def api_conveyor_full():
     end_str = request.args.get('end', '')
     try:
         if start_str: start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-        else: start_dt = datetime.now() - timedelta(hours=24)
+        else: start_dt = get_capped_now() - timedelta(hours=24)
         if end_str: end_dt = datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-        else: end_dt = datetime.now()
+        else: end_dt = get_capped_now()
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -373,9 +339,9 @@ def api_downtime():
         
     try:
         if start_str: start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-        else: start_dt = datetime.now() - timedelta(hours=24)
+        else: start_dt = get_capped_now() - timedelta(hours=24)
         if end_str: end_dt = datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-        else: end_dt = datetime.now()
+        else: end_dt = get_capped_now()
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -428,9 +394,9 @@ def api_press_delivery():
     end_str = request.args.get('end', '')
     try:
         if start_str: start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-        else: start_dt = datetime.now() - timedelta(hours=8)
+        else: start_dt = get_capped_now() - timedelta(hours=8)
         if end_str: end_dt = datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-        else: end_dt = datetime.now()
+        else: end_dt = get_capped_now()
     except Exception as e: return jsonify({"error": str(e)}), 400
 
     start_formatted = start_dt.strftime('%Y/%m/%d %H:%M:%S')
@@ -540,7 +506,7 @@ def api_press_delivery():
 @app.route('/api/daily-ticket')
 def api_daily_ticket():
     try:
-        now = datetime.now()
+        now = get_capped_now()
         # El formato en la página AOP es MM/DD
         date_str = now.strftime('%m/%d')
         
@@ -580,6 +546,18 @@ DB_PATH = 'shift_history.db'
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS io_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT,
+                        turno TEXT,
+                        entrada TEXT,
+                        manual TEXT,
+                        auto TEXT,
+                        rate_entrada TEXT,
+                        rate_manual TEXT,
+                        rate_auto TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
     conn.execute('''CREATE TABLE IF NOT EXISTS shift_summaries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         fecha TEXT,
@@ -611,7 +589,7 @@ def upsert_shift_data(fecha, turno, maquina, estado, minutos):
 
 def get_current_shift_info(dt=None):
     if dt is None:
-        dt = datetime.now()
+        dt = get_capped_now()
     hour = dt.hour
     if hour >= 6 and hour < 14:
         shift = 'T2'
@@ -674,18 +652,63 @@ def fetch_and_save_shift_data():
     save_robot_turn_data('L2', '10.107.210.52', 'DownTimePlummer2', has_idle=True)
     save_robot_turn_data('L3', '10.107.210.53', 'DownTimePlummer3', has_idle=True)
 
+    # Fetch and save IO data to SQLite
+    try:
+        url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
+        res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
+        if res.status_code == 200:
+            import re
+            html = res.text
+            def extract(id_name):
+                match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
+                return match.group(1) if match else "0"
+            
+            entrada = extract("s1_inbound_total")
+            manual = extract("s1_outbound_cv31_actual")
+            auto = extract("s1_press_total")
+            rate_entrada = extract("s1_inbound_avg")
+            rate_manual = extract("s1_manual_rate")
+            rate_auto = extract("s1_press_rate")
+            
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM io_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute('''UPDATE io_history 
+                                  SET entrada=?, manual=?, auto=?, rate_entrada=?, rate_manual=?, rate_auto=?, timestamp=CURRENT_TIMESTAMP 
+                                  WHERE id=?''', (entrada, manual, auto, rate_entrada, rate_manual, rate_auto, row[0]))
+            else:
+                cursor.execute('''INSERT INTO io_history (fecha, turno, entrada, manual, auto, rate_entrada, rate_manual, rate_auto) 
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                               (date_str, current_shift, entrada, manual, auto, rate_entrada, rate_manual, rate_auto))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        print(f"[WARN] Error saving IO data: {e}")
+
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 
 def background_polling_task():
     init_db()
-    while True:
-        try:
-            fetch_and_save_shift_data()
-        except Exception as e:
-            print(f"Error in background polling: {e}")
+    
+    # Ejecutar primera lectura al arrancar
+    try:
+        fetch_and_save_shift_data()
+    except Exception as e:
+        print(f"Error in background polling init: {e}")
         
-        # Sleep for 2 hours
-        time.sleep(2 * 60 * 60)
+    while True:
+        now = datetime.now()
+        # Escanear cada 2 horas (horas pares) a los 5 minutos (06:05, 08:05, 10:05... 14:05... 22:05)
+        if now.hour % 2 == 0 and now.minute == 5:
+            try:
+                fetch_and_save_shift_data()
+            except Exception as e:
+                print(f"Error in background polling: {e}")
+            time.sleep(60) # Dormir 1 minuto para no volver a lanzar dentro del mismo minuto
+        else:
+            time.sleep(25) # Despertar cada 25 segundos para mirar el reloj
 
 if __name__ == '__main__':
     # Iniciar la tarea en segundo plano
