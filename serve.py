@@ -17,18 +17,11 @@ from pylogix import PLC
 
 
 
-app = Flask(__name__, static_folder='.', static_url_path='')
+app = Flask(__name__, static_folder='static', static_url_path='')
 
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
-
-# Proteger código fuente y bd
-@app.route('/<path:filename>')
-def serve_static(filename):
-    if filename.endswith('.py') or filename.endswith('.db') or filename.endswith('.bat'):
-        abort(403)
-    return send_from_directory('.', filename)
 
 @app.route('/api/io-data')
 def api_io_data():
@@ -124,6 +117,7 @@ def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
         except Exception as e: print(f'[WARN] Error parsing start date: {e}')
     
     current_date, _ = get_current_shift_info()
+    if not target_date: target_date = current_date
     
     data = {
         "T1": {"run": 0, "fault": 0, "auto": 0, "idle": 0},
@@ -131,55 +125,35 @@ def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
         "T3": {"run": 0, "fault": 0, "auto": 0, "idle": 0}
     }
     
-    if target_date and target_date != current_date:
-        # Query DB for historical data
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute('SELECT turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina = ?', (target_date, machine_name))
-            rows = cursor.fetchall()
-            for r in rows:
-                t, est, mins = r
-                if t in data and est in data[t]:
-                    data[t][est] = mins
-            conn.close()
-            return jsonify({"success": True, "data": data, "source": "db"})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 503
-
-    comm = PLC()
-    comm.IPAddress = ip_address
-    comm.ProcessorSlot = 0
     try:
-        tags_to_read = [
-            f'{base_tag}.T1_TimerOK', f'{base_tag}.T1_TimerFault', f'{base_tag}.T1_TimerAuto',
-            f'{base_tag}.T2_TimerOK', f'{base_tag}.T2_TimerFault', f'{base_tag}.T2_TimerAuto',
-            f'{base_tag}.T3_TimerOK', f'{base_tag}.T3_TimerFault', f'{base_tag}.T3_TimerAuto'
-        ]
-        results = comm.Read(tags_to_read)
-        for r in results:
-            if r.Status == 'Success':
-                tag = r.TagName
-                val = int(r.Value)
-                if 'T1_TimerOK' in tag: data['T1']['run'] = val
-                elif 'T1_TimerFault' in tag: data['T1']['fault'] = val
-                elif 'T1_TimerAuto' in tag: data['T1']['auto'] = val
-                elif 'T2_TimerOK' in tag: data['T2']['run'] = val
-                elif 'T2_TimerFault' in tag: data['T2']['fault'] = val
-                elif 'T2_TimerAuto' in tag: data['T2']['auto'] = val
-                elif 'T3_TimerOK' in tag: data['T3']['run'] = val
-                elif 'T3_TimerFault' in tag: data['T3']['fault'] = val
-                elif 'T3_TimerAuto' in tag: data['T3']['auto'] = val
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina = ?', (target_date, machine_name))
+        rows = cursor.fetchall()
         
+        for r in rows:
+            t, est, mins = r
+            if est == 'idle': est = 'auto'
+            if t in data and est in data[t]:
+                data[t][est] = mins
+                
+        for t in ['T1', 'T2', 'T3']:
+            prev_data = get_previous_odometer(cursor, target_date, t, machine_name)
+            for est in ['run', 'fault', 'auto']:
+                if data[t][est] > 0 and prev_data[est] > 0:
+                    delta = data[t][est] - prev_data[est]
+                    if delta >= 0:
+                        data[t][est] = delta
+                        
+        conn.close()
+                    
         for t in ['T1', 'T2', 'T3']:
             idle = data[t]['auto'] - data[t]['run'] - data[t]['fault']
             data[t]['idle'] = max(0, idle)
-                
-        return jsonify({"success": True, "data": data, "source": "plc"})
+            
+        return jsonify({"success": True, "data": data, "source": "db"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
-    finally:
-        comm.Close()
 
 @app.route('/api/ulr1-turnos')
 def api_ulr1_turnos(): return fetch_robot_turnos_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1')
@@ -205,62 +179,41 @@ def api_plc_conveyor():
         except Exception as e: print(f'[WARN] Error parsing conveyor start date: {e}')
     
     current_date, current_shift = get_current_shift_info()
+    if not target_date: target_date = current_date
+    if not target_shift: target_shift = current_shift
     machines = ['CC01', 'CC02', 'CC03']
     
-    if target_date and (target_date != current_date or target_shift != current_shift):
-        # Fetch from DB
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(machines))), [target_date, target_shift] + machines)
-            rows = cursor.fetchall()
-            conn.close()
-            data = {m: {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0} for m in machines}
-            for maq, est, mins in rows:
-                if maq in data:
-                    data[maq][est] = mins
-            return jsonify({"success": True, "data": data, "source": "db"})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 503
-            
-    data = {m: {'RUN': '-', 'IDLE': '-', 'STOP': '-'} for m in machines}
+    data = {m: {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0, 'AUTO': 0.0} for m in machines}
     
-    def get_cc_turno(machine, ip, base_tag):
-        comm = PLC()
-        comm.IPAddress = ip
-        comm.ProcessorSlot = 0
-        try:
-            shift_key = current_shift if not target_shift else target_shift
-            tags_to_read = [
-                f'{base_tag}.{shift_key}_TimerOK', 
-                f'{base_tag}.{shift_key}_TimerFault',
-                f'{base_tag}.{shift_key}_TimerAuto'
-            ]
-            results = comm.Read(tags_to_read)
-            auto_val = 0
-            run_val = 0
-            fault_val = 0
-            for r in results:
-                if r.Status == 'Success':
-                    if 'TimerOK' in r.TagName:
-                        run_val = int(r.Value)
-                        data[machine]['RUN'] = run_val
-                    elif 'TimerFault' in r.TagName:
-                        fault_val = int(r.Value)
-                        data[machine]['STOP'] = fault_val
-                    elif 'TimerAuto' in r.TagName:
-                        auto_val = int(r.Value)
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(machines))), [target_date, target_shift] + machines)
+        rows = cursor.fetchall()
+        
+        for maq, est, mins in rows:
+            if maq in data:
+                if est == 'idle': est = 'auto'
+                if est == 'run': data[maq]['RUN'] = mins
+                elif est == 'fault': data[maq]['STOP'] = mins
+                elif est == 'auto': data[maq]['AUTO'] = mins
+                
+        for maq in machines:
+            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
+            for k_est, db_est in [('RUN', 'run'), ('STOP', 'fault'), ('AUTO', 'auto')]:
+                if data[maq][k_est] > 0 and prev_data[db_est] > 0:
+                    delta = data[maq][k_est] - prev_data[db_est]
+                    if delta >= 0:
+                        data[maq][k_est] = delta
+                        
+            idle_val = data[maq]['AUTO'] - data[maq]['RUN'] - data[maq]['STOP']
+            data[maq]['IDLE'] = max(0, idle_val)
+            del data[maq]['AUTO']
             
-            idle_val = auto_val - run_val - fault_val
-            data[machine]['IDLE'] = max(0, idle_val)
-        except Exception as e: print(f'[WARN] Error reading PLC {machine}: {e}')
-        finally: comm.Close()
-
-    get_cc_turno('CC01', '10.107.210.111', 'DowntimeCC01')
-    get_cc_turno('CC02', '10.107.210.121', 'DowntimeCC02')
-    get_cc_turno('CC03', '10.107.210.131', 'DowntimeCC03')
-    
-    return jsonify({"success": True, "data": data, "source": "plc"})
+        conn.close()
+        return jsonify({"success": True, "data": data, "source": "db"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 503
 
 @app.route('/api/asrs-engineering-data')
 def api_asrs_engineering():
@@ -274,69 +227,53 @@ def api_asrs_engineering():
         except Exception as e: print(f'[WARN] Error parsing engineering start date: {e}')
     
     current_date, current_shift = get_current_shift_info()
+    if not target_date: target_date = current_date
+    if not target_shift: target_shift = current_shift
+    
     robots_list = []
     plummers_list = ['L1', 'L2', 'L3']
+    all_mach = robots_list + plummers_list
     
-    if target_date and (target_date != current_date or target_shift != current_shift):
-        # Fetch from DB
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            all_mach = robots_list + plummers_list
-            cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(all_mach))), [target_date, target_shift] + all_mach)
-            rows = cursor.fetchall()
-            conn.close()
-            
-            robots = {m: {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0} for m in robots_list}
-            plummers = {m: {'run': '-', 'idle': '-', 'stop': '-'} for m in plummers_list}
-            
-            for maq, est, mins in rows:
-                if maq in robots: robots[maq][est] = mins
-                if maq in plummers: plummers[maq][est] = mins
+    robots = {m: {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0} for m in robots_list}
+    plummers = {m: {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'auto': 0.0} for m in plummers_list}
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(all_mach))), [target_date, target_shift] + all_mach)
+        rows = cursor.fetchall()
+        
+        for maq, est, mins in rows:
+            if est == 'idle': est = 'auto'
+            if maq in robots: robots[maq][est] = mins
+            if maq in plummers:
+                if est == 'run': plummers[maq]['run'] = mins
+                elif est == 'fault': plummers[maq]['stop'] = mins
+                elif est == 'auto': plummers[maq]['auto'] = mins
                 
-            return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "db"})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 503
-
-    robots = {}
-    plummers = {m: {'run': '-', 'idle': '-', 'stop': '-'} for m in plummers_list}
-    
-    def get_plummer_turno(machine, ip, base_tag):
-        comm = PLC()
-        comm.IPAddress = ip
-        comm.ProcessorSlot = 0
-        try:
-            shift_key = current_shift if not target_shift else target_shift
-            tags_to_read = [
-                f'{base_tag}.{shift_key}_TimerOK', 
-                f'{base_tag}.{shift_key}_TimerFault',
-                f'{base_tag}.{shift_key}_TimerAuto'
-            ]
-            results = comm.Read(tags_to_read)
-            auto_val = 0
-            run_val = 0
-            fault_val = 0
-            for r in results:
-                if r.Status == 'Success':
-                    if 'TimerOK' in r.TagName: 
-                        run_val = int(r.Value)
-                        plummers[machine]['run'] = run_val
-                    elif 'TimerFault' in r.TagName: 
-                        fault_val = int(r.Value)
-                        plummers[machine]['stop'] = fault_val
-                    elif 'TimerAuto' in r.TagName:
-                        auto_val = int(r.Value)
+        for maq in robots_list:
+            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
+            for est in ['idle', 'working', 'waiting', 'failure']:
+                # Note: original code didn't seem to math robots for asrs engineering, but just in case
+                if robots[maq][est] > 0 and prev_data.get(est, 0) > 0:
+                    delta = robots[maq][est] - prev_data[est]
+                    if delta >= 0: robots[maq][est] = delta
+                    
+        for maq in plummers_list:
+            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
+            for k_est, db_est in [('run', 'run'), ('stop', 'fault'), ('auto', 'auto')]:
+                if plummers[maq][k_est] > 0 and prev_data[db_est] > 0:
+                    delta = plummers[maq][k_est] - prev_data[db_est]
+                    if delta >= 0: plummers[maq][k_est] = delta
+                    
+            idle_val = plummers[maq]['auto'] - plummers[maq]['run'] - plummers[maq]['stop']
+            plummers[maq]['idle'] = max(0, idle_val)
+            del plummers[maq]['auto']
             
-            idle_val = auto_val - run_val - fault_val
-            plummers[machine]['idle'] = max(0, idle_val)
-        except Exception as e: print(f'[WARN] Error reading Plummer {machine}: {e}')
-        finally: comm.Close()
-
-    get_plummer_turno('L1', '10.107.210.51', 'DownTimePlummer1')
-    get_plummer_turno('L2', '10.107.210.52', 'DownTimePlummer2')
-    get_plummer_turno('L3', '10.107.210.53', 'DownTimePlummer3')
-    
-    return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "plc"})
+        conn.close()
+        return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "db"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 503
 
 @app.route('/api/crane-performance')
 def api_crane_performance():
@@ -686,6 +623,18 @@ def get_current_shift_info(dt=None):
             date_str = dt.strftime('%Y-%m-%d')
     return date_str, shift
 
+def get_previous_odometer(cursor, target_date, turno, maquina):
+    prev = {'run': 0, 'fault': 0, 'auto': 0}
+    for est in ['run', 'fault', 'auto']:
+        search_est = 'idle' if est == 'auto' else est
+        cursor.execute('''SELECT minutos FROM shift_summaries 
+                          WHERE fecha < ? AND turno = ? AND maquina = ? AND estado IN (?, ?)
+                          ORDER BY fecha DESC LIMIT 1''', (target_date, turno, maquina, est, search_est))
+        row = cursor.fetchone()
+        if row: prev[est] = row[0]
+    return prev
+
+
 def fetch_and_save_shift_data():
     date_str, current_shift = get_current_shift_info()
     
@@ -694,20 +643,17 @@ def fetch_and_save_shift_data():
         comm.IPAddress = ip
         comm.ProcessorSlot = 0
         try:
-            tags_to_read = [f'{base_tag}.T1_TimerOK', f'{base_tag}.T1_TimerFault',
-                            f'{base_tag}.T2_TimerOK', f'{base_tag}.T2_TimerFault',
-                            f'{base_tag}.T3_TimerOK', f'{base_tag}.T3_TimerFault']
+            tags_to_read = [f'{base_tag}.{current_shift}_TimerOK', f'{base_tag}.{current_shift}_TimerFault']
             if has_idle:
-                tags_to_read.extend([f'{base_tag}.T1_TimerAuto', f'{base_tag}.T2_TimerAuto', f'{base_tag}.T3_TimerAuto'])
+                tags_to_read.append(f'{base_tag}.{current_shift}_TimerAuto')
                 
             results = comm.Read(tags_to_read)
             for r in results:
                 if r.Status == 'Success':
                     tag = r.TagName
                     val = round(float(r.Value), 2)
-                    turno = tag.split('_')[0].replace(f'{base_tag}.', '')
-                    estado = 'run' if 'TimerOK' in tag else ('idle' if 'TimerAuto' in tag else 'fault')
-                    upsert_shift_data(date_str, turno, robot_id, estado, val)
+                    estado = 'run' if 'TimerOK' in tag else ('auto' if 'TimerAuto' in tag else 'fault')
+                    upsert_shift_data(date_str, current_shift, robot_id, estado, val)
         except Exception as e: print(f'[WARN] Error saving shift data for {robot_id}: {e}')
         finally: comm.Close()
 
