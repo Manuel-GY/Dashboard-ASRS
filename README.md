@@ -5,12 +5,11 @@ Este documento resume la arquitectura de grado industrial, desarrollo y estado a
 ## 1. Arquitectura del Backend (Python + Flask)
 - **Framework:** `Flask` (API Web) para servir las rutas HTTP, expuesto a producción mediante `Waitress`.
 - **Ejecución y Entorno Virtual:** El proyecto arranca mediante `run.bat`. Este script crea automáticamente un entorno virtual aislado (`venv`) e instala las dependencias desde `requirements.txt` para garantizar la estabilidad del sistema frente a actualizaciones globales de Python.
-- **Arquitectura de Sincronización y Agregación de Datos:** 
-  El Dashboard actúa como un agregador central de múltiples sistemas de la planta:
-  - **Métricas de Rendimiento (Cranes, Presses, Daily Ticket):** El servidor hace *web scraping* y consume XML/JSONs de los sistemas internos existentes de la planta (ej. *SBS Reports*, *ProductionWebEditServerRS*).
-  - **Estado de Máquinas (Plummers, Robots, Downtime Conveyor):** Para estas tarjetas, el servidor utiliza una **Sincronización Híbrida (En Tiempo Real / Histórica)**:
-    - *Turno Activo:* Consulta directamente a los PLCs Allen-Bradley en vivo a través de la librería `pylogix`. Esto garantiza que los usuarios siempre vean los minutos exactos al momento de abrir la pantalla.
-    - *Turnos Pasados:* Extrae la información de una base de datos local SQLite (`shift_history.db`). Esto reduce la carga innecesaria a la red industrial al no sobreconsultar datos estáticos.
+- **Arquitectura de Sincronización CRON (Fotografías Temporales Ancladas):** 
+  El Dashboard actúa como un agregador central de múltiples sistemas de la planta que opera en bloques estáticos de 2 horas para garantizar la congruencia en la entrega de turnos:
+  - **Programador Cron Industrial:** El servidor ejecuta un hilo secundario en segundo plano anclado al reloj del sistema que "despierta" y ejecuta extracciones **exactamente a los 5 minutos de las horas pares** (ej. 06:05, 08:05, 10:05... 14:05... 22:05).
+  - **Base de Datos Local (SQLite):** Durante la extracción CRON, el sistema guarda en la base de datos local (`shift_history.db`) toda la información recopilada directamente desde los PLCs Allen-Bradley mediante la librería `pylogix` (Robots, Plummers) y mediante web scraping para el Daily Ticket (IO Data).
+  - **Limitador de Horizonte Temporal:** Para métricas secundarias que se leen bajo demanda desde servidores externos web (Grúas, Prensas, Conveyor Full), el servidor intercepta la petición HTTP y suplanta el reloj de "Tiempo Real" por el timestamp del último registro de la base de datos (`get_capped_now()`). Esto garantiza que **todos** los indicadores del dashboard muestren una "foto" sincronizada al mismo milisegundo, eliminando discrepancias operativas en los reportes.
 - **Seguridad:** Para prevenir vulnerabilidades de "Path Traversal" (evasión de directorios), el proyecto aísla y empaqueta estrictamente los archivos de la interfaz gráfica (`index.html`, `script.js`, `style.css`) dentro del directorio `/static`. El servidor Flask está configurado para servir recursos de manera exclusiva desde esta carpeta, lo que blinda al sistema haciendo matemáticamente imposible la descarga o exposición accidental del código fuente (`.py`, `.bat`) o bases de datos industriales (`.db`).
 
 ## 2. Interfaz de Usuario (Frontend)
