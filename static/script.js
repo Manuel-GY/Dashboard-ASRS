@@ -670,6 +670,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (document.getElementById(`${mId}-stop`)) document.getElementById(`${mId}-stop`).textContent = data.plummers[m].stop !== undefined ? data.plummers[m].stop : '-';
                         }
                     });
+
+                    // Set last update label to DB timestamp
+                    if (data.last_updated) {
+                        const updateLbl = document.getElementById('last-update-label');
+                        if (updateLbl) {
+                            const parts = data.last_updated.split(' ');
+                            if(parts.length === 2) {
+                                const dateParts = parts[0].split('-');
+                                const timeParts = parts[1].split(':');
+                                if(dateParts.length === 3 && timeParts.length >= 2) {
+                                    const dateStr = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                                    const timeStr = `${timeParts[0]}:${timeParts[1]}`;
+                                    updateLbl.textContent = `Última actualización: ${dateStr} ${timeStr} (DB)`;
+                                }
+                            } else {
+                                updateLbl.textContent = `Última actualización: ${data.last_updated}`;
+                            }
+                        }
+                    }
                 }
             })
             .catch(error => console.error('Error fetching ASRS Engineering data:', error));
@@ -841,15 +860,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // 160000 = No Tire, 210002 = PM Robot
         // Se suman ambos motivos en la misma tarjeta "NO TIRE"
         fetchDowntimeData('160000,210002', startVal, endVal, 'no-tire-total-percent', 'no-tire-total-min', 'nt', 'ind-no-tire', 0.50);
-
-        // Update "Última actualización" label
-        const updateLbl = document.getElementById('last-update-label');
-        if (updateLbl) {
-            const now = new Date();
-            const dateStr = String(now.getDate()).padStart(2, '0') + '/' + String(now.getMonth()+1).padStart(2, '0') + '/' + now.getFullYear();
-            const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-            updateLbl.textContent = `Última actualización: ${dateStr} ${timeStr}`;
-        }
     }
 
 

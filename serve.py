@@ -270,8 +270,12 @@ def api_asrs_engineering():
             plummers[maq]['idle'] = max(0, idle_val)
             del plummers[maq]['auto']
             
+        cursor.execute('SELECT MAX(timestamp) FROM shift_summaries')
+        max_ts_row = cursor.fetchone()
+        last_updated_db = max_ts_row[0] if max_ts_row and max_ts_row[0] else None
+            
         conn.close()
-        return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "db"})
+        return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "db", "last_updated": last_updated_db})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
