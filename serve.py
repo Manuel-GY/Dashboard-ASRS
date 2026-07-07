@@ -559,8 +559,20 @@ def init_db():
                         rate_entrada TEXT,
                         rate_manual TEXT,
                         rate_auto TEXT,
+                        construido TEXT,
+                        vulcanizado TEXT,
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                     )''')
+    # Migrar base de datos existente si le faltan las nuevas columnas
+    try:
+        conn.execute("ALTER TABLE io_history ADD COLUMN construido TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE io_history ADD COLUMN vulcanizado TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     conn.execute('''CREATE TABLE IF NOT EXISTS shift_summaries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         fecha TEXT,
@@ -739,9 +751,9 @@ if __name__ == '__main__':
     threading.Thread(target=background_polling_task, daemon=True).start()
     
     try:
-        print("Servidor Flask corriendo en el puerto 8080...")
+        print("Servidor Flask corriendo en el puerto 8006...")
         from waitress import serve
-        serve(app, host='0.0.0.0', port=8080)
+        serve(app, host='0.0.0.0', port=8006, threads=24)
     except Exception as e:
         print("Error iniciando Waitress, usando app.run()")
-        app.run(host='0.0.0.0', port=8080, threaded=True)
+        app.run(host='0.0.0.0', port=8006, threaded=True)
