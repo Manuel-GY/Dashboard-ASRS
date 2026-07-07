@@ -425,9 +425,10 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
 }
 
 .stat-box {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.6); /* Fondo más limpio para modo claro */
+    border: 1px solid rgba(0,0,0,0.05); /* Borde súper sutil */
     padding: 12px 8px;
-    border-radius: 8px;
+    border-radius: 12px; /* Bordes más redondeados */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -435,6 +436,13 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
     gap: 5px;
     flex: 1 1 90px;
     min-width: 85px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03); /* Sombra elegante base */
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-box:hover {
+    transform: translateY(-4px); /* Se levanta suavemente */
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08); /* Sombra más profunda al levantar */
 }
 
 .stat-box .label {
