@@ -911,3 +911,24 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleNextCronUpdate();
 
 });
+
+// Crane Tabs Switcher (Global Scope)
+window.switchCraneTab = function(tabName) {
+    // Update buttons
+    document.querySelectorAll('.crane-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const targetBtn = document.querySelector(`.crane-tab-btn[onclick="switchCraneTab('${tabName}')"]`);
+    if (targetBtn) targetBtn.classList.add('active');
+
+    // Update content
+    document.querySelectorAll('.crane-tab-content').forEach(content => {
+        content.style.display = 'none';
+        content.classList.remove('active');
+    });
+    const targetContent = document.getElementById(`tab-${tabName}`);
+    if (targetContent) {
+        targetContent.style.display = 'block';
+        targetContent.classList.add('active');
+    }
+};

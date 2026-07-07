@@ -562,31 +562,53 @@ body:not(.light-mode) .press-delivery-grid::-webkit-scrollbar-thumb {
     }
 }
 
-/* Crane Performance - Modern Vertical Layout */
-.crane-vertical-layout {
+/* Crane Performance - Tabs Layout */
+.crane-tabs-layout {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 15px;
     flex: 1;
 }
 
-.crane-list-section {
+.crane-tabs-header {
     display: flex;
-    flex-direction: column;
     gap: 8px;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 8px;
 }
 
-.crane-list-label {
+.crane-tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
     font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-muted);
-    background: rgba(0, 0, 0, 0.05);
-    padding: 6px 10px;
+    padding: 8px 16px;
     border-radius: 6px;
-    display: inline-block;
-    align-self: flex-start;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.crane-tab-btn:hover {
+    background: rgba(0,0,0,0.03);
+    color: var(--text-main);
+}
+
+.crane-tab-btn.active {
+    background: var(--accent-color);
+    color: white;
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+}
+
+.crane-tab-content {
+    animation: fade-in-tab 0.3s ease-out;
+}
+
+@keyframes fade-in-tab {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .crane-list-container {

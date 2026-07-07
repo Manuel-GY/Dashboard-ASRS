@@ -297,15 +297,19 @@
                         <span class="kpi-bracket">[Disponibilidad = <span class="highlight" id="crane-uptime">-</span> %]</span>
                     </div>
                 </div>
-                <div class="card-content crane-vertical-layout">
-                    <div class="crane-list-section">
-                        <span class="crane-list-label">Top 3 Downtime</span>
+                <div class="card-content crane-tabs-layout">
+                    <div class="crane-tabs-header">
+                        <button class="crane-tab-btn active" onclick="switchCraneTab('downtime')">Downtime</button>
+                        <button class="crane-tab-btn" onclick="switchCraneTab('minor')">Parada Menor</button>
+                    </div>
+                    
+                    <div class="crane-tab-content active" id="tab-downtime">
                         <div class="crane-list-container" id="crane-top-downtime">
                             <div class="crane-empty-row">-</div>
                         </div>
                     </div>
-                    <div class="crane-list-section">
-                        <span class="crane-list-label">Top 3 Parada Menor</span>
+                    
+                    <div class="crane-tab-content" id="tab-minor" style="display: none;">
                         <div class="crane-list-container" id="crane-top-minor">
                             <div class="crane-empty-row">-</div>
                         </div>
