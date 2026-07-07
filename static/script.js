@@ -36,7 +36,47 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
 
-    // (Theme toggle functionality removed to enforce dark mode)
+    // Theme toggle functionality
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const iconSun = document.getElementById('theme-icon-sun');
+    const iconMoon = document.getElementById('theme-icon-moon');
+    
+    const currentTheme = localStorage.getItem("theme") || "light";
+    
+    if (currentTheme === "dark") {
+        document.body.classList.add("dark-mode");
+        updateThemeIcon("dark");
+    } else {
+        document.body.classList.remove("dark-mode");
+        updateThemeIcon("light");
+    }
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener("click", function(e) {
+            e.preventDefault();
+            document.body.classList.toggle("dark-mode");
+            
+            let theme = "light";
+            if (document.body.classList.contains("dark-mode")) {
+                theme = "dark";
+            }
+            
+            localStorage.setItem("theme", theme);
+            updateThemeIcon(theme);
+        });
+    }
+
+    function updateThemeIcon(theme) {
+        if (iconSun && iconMoon) {
+            if (theme === "dark") {
+                iconSun.style.display = 'block';
+                iconMoon.style.display = 'none';
+            } else {
+                iconSun.style.display = 'none';
+                iconMoon.style.display = 'block';
+            }
+        }
+    }
 
     // Input/Output Data
     function fetchInputOutputData(start = '', end = '') {
