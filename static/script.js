@@ -894,33 +894,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // PROGRAMADOR INTELIGENTE DE ACTUALIZACIONES (ENTREGA DE TURNO)
     // ============================================================================
     /**
-     * Calcula los minutos restantes para el próximo cambio de turno oficial 
-     * (06:00, 14:00, 22:00) y agenda una actualización automática a los 5 minutos pasados 
-     * esa hora (ej: 06:05). Así asegura que la BD guardó todo el cierre de turno.
+     * Calcula los minutos restantes para la próxima extracción cron (horas pares a y 06 minutos)
+     * (ej: 06:06, 08:06, 10:06) y agenda una recarga automática en el navegador.
+     * Le da 1 minuto de ventaja sobre el backend (05 minutos) para garantizar que los datos estén listos.
      */
-    function scheduleNextShiftUpdate() {
+    function scheduleNextCronUpdate() {
         const now = new Date();
         const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
         let nextUpdate = new Date(now);
         
-        // Queremos actualizar a y 05 minutos después del cambio de turno
-        if (currentHour < 6 || (currentHour === 6 && now.getMinutes() < 5)) {
-            nextUpdate.setHours(6, 5, 0, 0);
-        } else if (currentHour < 14 || (currentHour === 14 && now.getMinutes() < 5)) {
-            nextUpdate.setHours(14, 5, 0, 0);
-        } else if (currentHour < 22 || (currentHour === 22 && now.getMinutes() < 5)) {
-            nextUpdate.setHours(22, 5, 0, 0);
-        } else {
-            // Siguiente actualización es mañana a las 06:05
-            nextUpdate.setDate(nextUpdate.getDate() + 1);
-            nextUpdate.setHours(6, 5, 0, 0);
+        let targetHour = currentHour;
+        // Si ya pasamos el minuto 6 o estamos en hora impar, avanzamos a la siguiente hora par
+        if (currentHour % 2 !== 0 || (currentHour % 2 === 0 && currentMinute >= 6)) {
+            targetHour = currentHour + (currentHour % 2 === 0 ? 2 : 1);
         }
+        
+        if (targetHour >= 24) {
+            targetHour = 0;
+            nextUpdate.setDate(nextUpdate.getDate() + 1);
+        }
+        
+        nextUpdate.setHours(targetHour, 6, 0, 0);
         
         const timeUntilUpdate = nextUpdate - now;
         
         setTimeout(() => {
-            // Actualizar el intervalo de tiempo para que refleje el turno correcto si cambió
-            // Buscamos qué botón está activo
+            // Actualizar estado del intervalo de fechas manteniendo el boton seleccionado
             let activeOffset = 0;
             document.querySelectorAll('#shift-selector-buttons .btn-preset').forEach((btn, idx) => {
                 if (btn.classList.contains('active')) {
@@ -930,8 +930,8 @@ document.addEventListener('DOMContentLoaded', () => {
             setShiftInterval(activeOffset);
             fetchAllData();
             
-            // Programar el siguiente
-            scheduleNextShiftUpdate();
+            // Programar el siguiente ciclo recursivamente
+            scheduleNextCronUpdate();
         }, timeUntilUpdate);
     }
 
@@ -939,17 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initStaticWidgets();
     fetchAllData();
     
-    // Iniciar el programador inteligente y mantener el de 2 horas como respaldo
-    scheduleNextShiftUpdate();
-    setInterval(() => {
-        let activeOffset = 0;
-        document.querySelectorAll('#shift-selector-buttons .btn-preset').forEach((btn, idx) => {
-            if (btn.classList.contains('active')) {
-                activeOffset = idx;
-            }
-        });
-        setShiftInterval(activeOffset);
-        fetchAllData();
-    }, 7200000); // Respaldo cada 2 horas
+    // Iniciar el programador sincronizado con el cron del backend
+    scheduleNextCronUpdate();
 
 });
