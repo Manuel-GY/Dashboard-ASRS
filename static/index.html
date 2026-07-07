@@ -337,19 +337,17 @@
                         <span class="kpi-bracket">[Disponibilidad = <span class="highlight" id="crane-uptime">-</span> %]</span>
                     </div>
                 </div>
-                <div class="card-content crane-tabs-layout">
-                    <div class="crane-tabs-header">
-                        <button class="crane-tab-btn active" onclick="switchCraneTab('downtime')">Downtime</button>
-                        <button class="crane-tab-btn" onclick="switchCraneTab('minor')">Parada Menor</button>
-                    </div>
+                <div class="card-content" style="display: flex; flex-direction: column; gap: 15px; padding-top: 10px;">
                     
-                    <div class="crane-tab-content active" id="tab-downtime">
+                    <div id="tab-downtime">
+                        <h3 style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px; padding-left: 5px; border-left: 3px solid var(--danger-color);">Top 3 Downtime</h3>
                         <div class="crane-list-container" id="crane-top-downtime">
                             <div class="crane-empty-row">-</div>
                         </div>
                     </div>
                     
-                    <div class="crane-tab-content" id="tab-minor" style="display: none;">
+                    <div id="tab-minor">
+                        <h3 style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px; padding-left: 5px; border-left: 3px solid var(--accent-color);">Top 3 Parada Menor</h3>
                         <div class="crane-list-container" id="crane-top-minor">
                             <div class="crane-empty-row">-</div>
                         </div>
