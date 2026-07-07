@@ -618,7 +618,7 @@ def get_previous_odometer(cursor, target_date, turno, maquina):
 
 
 def fetch_and_save_shift_data():
-    date_str, current_shift = get_current_shift_info()
+    date_str, current_shift = get_current_shift_info(datetime.now())
     
     def save_robot_turn_data(robot_id, ip, base_tag, has_idle=False):
         comm = PLC()
