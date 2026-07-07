@@ -52,7 +52,7 @@ def api_io_data():
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT entrada, manual, auto, rate_entrada, rate_manual, rate_auto FROM io_history WHERE fecha = ? AND turno = ?", (target_date, target_shift))
+        cursor.execute("SELECT entrada, manual, auto, rate_entrada, rate_manual, rate_auto, construido, vulcanizado FROM io_history WHERE fecha = ? AND turno = ?", (target_date, target_shift))
         row = cursor.fetchone()
         conn.close()
         
@@ -60,12 +60,15 @@ def api_io_data():
             return jsonify({
                 "entrada": row[0], "manual": row[1], "auto": row[2],
                 "rate_entrada": row[3], "rate_manual": row[4], "rate_auto": row[5],
+                "construido": row[6] if row[6] is not None else "-",
+                "vulcanizado": row[7] if row[7] is not None else "-",
                 "mock": False
             })
         else:
             return jsonify({
                 "entrada": "-", "manual": "-", "auto": "-",
                 "rate_entrada": "-", "rate_manual": "-", "rate_auto": "-",
+                "construido": "-", "vulcanizado": "-",
                 "mock": False, "message": "Sin información guardada para este turno"
             })
     except Exception as e:
@@ -686,6 +689,27 @@ def fetch_and_save_shift_data():
             conn.close()
     except Exception as e:
         print(f"[WARN] Error saving IO data: {e}")
+
+    # Fetch Construido and Vulcanizado from Goodyear API
+    try:
+        shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
+        gy_turno = shift_map.get(current_shift, 'noche')
+        url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
+        res_gy = requests.get(url_gy, timeout=5, proxies={"http": None, "https": None})
+        if res_gy.status_code == 200:
+            data_gy = res_gy.json()
+            if data_gy.get("status") == "success":
+                construido = str(data_gy["data"]["total"]["hva"]["prod"])
+                vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
+                
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE fecha=? AND turno=?",
+                               (construido, vulcanizado, date_str, current_shift))
+                conn.commit()
+                conn.close()
+    except Exception as e:
+        print(f"[WARN] Error fetching Goodyear tires data: {e}")
 
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 
