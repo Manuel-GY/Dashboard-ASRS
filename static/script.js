@@ -38,7 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Theme toggle functionality
     const themeToggleBtn = document.getElementById('theme-toggle');
-    const themeIcon = document.getElementById('theme-icon');
+    const iconSun = document.getElementById('theme-icon-sun');
+    const iconMoon = document.getElementById('theme-icon-moon');
     
     const prefersDarkScheme = window.matchMedia("(prefers-color-scheme: dark)");
     const currentTheme = localStorage.getItem("theme");
@@ -47,24 +48,32 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add("light-mode");
         updateThemeIcon("light");
     } else {
+        document.body.classList.remove("light-mode");
         updateThemeIcon("dark");
     }
 
-    themeToggleBtn.addEventListener("click", function() {
-        document.body.classList.toggle("light-mode");
-        let theme = "dark";
-        if (document.body.classList.contains("light-mode")) {
-            theme = "light";
-        }
-        localStorage.setItem("theme", theme);
-        updateThemeIcon(theme);
-    });
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener("click", function(e) {
+            e.preventDefault();
+            document.body.classList.toggle("light-mode");
+            let theme = "dark";
+            if (document.body.classList.contains("light-mode")) {
+                theme = "light";
+            }
+            localStorage.setItem("theme", theme);
+            updateThemeIcon(theme);
+        });
+    }
 
     function updateThemeIcon(theme) {
-        if (theme === "light") {
-            themeIcon.innerHTML = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
-        } else {
-            themeIcon.innerHTML = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>';
+        if (iconSun && iconMoon) {
+            if (theme === "light") {
+                iconSun.style.display = 'none';
+                iconMoon.style.display = 'block';
+            } else {
+                iconSun.style.display = 'block';
+                iconMoon.style.display = 'none';
+            }
         }
     }
 
