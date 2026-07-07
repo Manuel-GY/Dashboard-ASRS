@@ -61,6 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 theme = "dark";
             }
             
+            alert("Botón apretado. Cambiando a: " + theme);
+            
             localStorage.setItem("theme", theme);
             updateThemeIcon(theme);
         });
