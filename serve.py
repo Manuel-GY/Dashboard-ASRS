@@ -33,6 +33,53 @@ def get_capped_now():
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
+
+import urllib.parse
+from flask import current_app
+
+@app.before_request
+def serve_from_cache():
+    if request.path.startswith('/api/') and request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
+        if request.args.get('live') == '1':
+            return
+            
+        query_dict = dict(request.args)
+        query_dict.pop('live', None)
+        sorted_query = urllib.parse.urlencode(sorted(query_dict.items()))
+        cache_key = f"{request.path}?{sorted_query}"
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT response_json FROM api_cache WHERE cache_key=?", (cache_key,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return current_app.response_class(row[0], mimetype='application/json')
+
+@app.after_request
+def cache_response(response):
+    if request.path.startswith('/api/') and request.args.get('live') != '1' and response.status_code == 200:
+        if request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
+            query_dict = dict(request.args)
+            query_dict.pop('live', None)
+            sorted_query = urllib.parse.urlencode(sorted(query_dict.items()))
+            cache_key = f"{request.path}?{sorted_query}"
+            
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1 FROM api_cache WHERE cache_key=?", (cache_key,))
+                if not cursor.fetchone():
+                    cursor.execute('''INSERT INTO api_cache (cache_key, response_json, timestamp)
+                                      VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, response.get_data(as_text=True)))
+                    conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"[WARN] Cache insert error: {e}")
+    return response
+
+
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
@@ -573,6 +620,13 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    
+    conn.execute('''CREATE TABLE IF NOT EXISTS api_cache (
+                        cache_key TEXT PRIMARY KEY,
+                        response_json TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
+
     conn.execute('''CREATE TABLE IF NOT EXISTS shift_summaries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         fecha TEXT,
@@ -634,6 +688,17 @@ def get_previous_odometer(cursor, target_date, turno, maquina):
 
 def fetch_and_save_shift_data():
     date_str, current_shift = get_current_shift_info(datetime.now())
+
+    dt_now = datetime.now()
+    if current_shift == 'T1':
+        start_dt = datetime.strptime(date_str + ' 22:00', '%Y-%m-%d %H:%M') - timedelta(days=1 if dt_now.hour < 6 else 0)
+    elif current_shift == 'T2':
+        start_dt = datetime.strptime(date_str + ' 06:00', '%Y-%m-%d %H:%M')
+    else:
+        start_dt = datetime.strptime(date_str + ' 14:00', '%Y-%m-%d %H:%M')
+    end_dt = start_dt + timedelta(hours=8)
+    dt = dt_now # For date_str_param
+
     
     def save_robot_turn_data(robot_id, ip, base_tag, has_idle=False):
         comm = PLC()
@@ -730,6 +795,48 @@ def fetch_and_save_shift_data():
             print(f"[WARN] Error fetching Goodyear tires data (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 time.sleep(2)
+
+    
+    # === FETCH AND CACHE KPIs FOR CURRENT SHIFT ===
+    try:
+        start_str_param = start_dt.strftime('%Y-%m-%dT%H:%M')
+        end_str_param = end_dt.strftime('%Y-%m-%dT%H:%M')
+        date_str_param = dt.strftime('%Y-%m-%d')
+        
+        endpoints_to_cache = [
+            f"/api/conveyor-full?start={start_str_param}&end={end_str_param}",
+            f"/api/downtime?reason=10317&start={start_str_param}&end={end_str_param}",
+            f"/api/downtime?reason=10313&start={start_str_param}&end={end_str_param}",
+            f"/api/downtime?reason=10314&start={start_str_param}&end={end_str_param}",
+            f"/api/plc-conveyor?start={start_str_param}&end={end_str_param}",
+            f"/api/crane-performance?start={start_str_param}&end={end_str_param}",
+            f"/api/press-delivery?start={start_str_param}&end={end_str_param}",
+            f"/api/asrs-engineering?start={start_str_param}&end={end_str_param}",
+            f"/api/daily-ticket?date={date_str_param}"
+        ]
+        
+        for ep in endpoints_to_cache:
+            try:
+                full_url = f"http://127.0.0.1:8006{ep}&live=1"
+                res_ep = requests.get(full_url, timeout=30)
+                if res_ep.status_code == 200:
+                    import urllib.parse
+                    path_part, query_part = ep.split('?')
+                    q_dict = dict(urllib.parse.parse_qsl(query_part))
+                    q_dict.pop('live', None)
+                    sorted_query = urllib.parse.urlencode(sorted(q_dict.items()))
+                    cache_key = f"{path_part}?{sorted_query}"
+                    
+                    conn_cache = sqlite3.connect(DB_PATH)
+                    cursor_cache = conn_cache.cursor()
+                    cursor_cache.execute('''INSERT OR REPLACE INTO api_cache (cache_key, response_json, timestamp)
+                                      VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, res_ep.text))
+                    conn_cache.commit()
+                    conn_cache.close()
+            except Exception as e_ep:
+                print(f"[WARN] Failed to cache {ep}: {e_ep}")
+    except Exception as e_kpi:
+        print(f"[WARN] Error in background KPI caching: {e_kpi}")
 
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 
