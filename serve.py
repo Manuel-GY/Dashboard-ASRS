@@ -303,7 +303,7 @@ def api_conveyor_full():
     start_formatted = start_dt.strftime('%Y/%m/%d %H:%M:%S')
     end_formatted = end_dt.strftime('%Y/%m/%d %H:%M:%S')
     
-    url = "http://clsapsweb:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/SummaryDataByReason/SummaryDataByReason.EditGrid/EditGrid/DataSource/loadId"
+    url = "http://10.107.194.114:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/SummaryDataByReason/SummaryDataByReason.EditGrid/EditGrid/DataSource/loadId"
     params = {
         "ARG_MACH_TYPE": "HFPLT4", "ARG_MACH_PART_NAME": "",
         "ARG_START_DATE": start_formatted, "ARG_END_DATE": end_formatted,
