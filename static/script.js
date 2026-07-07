@@ -41,30 +41,62 @@ document.addEventListener('DOMContentLoaded', () => {
     const iconSun = document.getElementById('theme-icon-sun');
     const iconMoon = document.getElementById('theme-icon-moon');
     
-    const currentTheme = localStorage.getItem("theme") || "light";
-    
-    if (currentTheme === "dark") {
-        document.documentElement.classList.add("dark-mode");
-        updateThemeIcon("dark");
-    } else {
-        document.documentElement.classList.remove("dark-mode");
-        updateThemeIcon("light");
+    const darkThemeStyles = {
+        '--bg-base': '#0f172a',
+        '--bg-card': 'rgba(30, 41, 59, 0.7)',
+        '--border-color': 'rgba(255, 255, 255, 0.1)',
+        '--text-main': '#f8fafc',
+        '--text-muted': '#cbd5e1',
+        '--accent-color': '#38bdf8',
+        '--success-color': '#10b981',
+        '--warning-color': '#f59e0b',
+        '--danger-color': '#ef4444',
+        '--highlight-bg': 'rgba(255, 255, 255, 0.1)',
+        '--highlight-text': '#fff',
+        '--bg-gradient-1': 'rgba(56, 189, 248, 0.05)',
+        '--bg-gradient-2': 'rgba(16, 185, 129, 0.05)',
+        '--table-header-bg': 'rgba(0, 0, 0, 0.4)',
+        '--table-cell-bg': 'rgba(30, 41, 59, 0.9)'
+    };
+
+    const lightThemeStyles = {
+        '--bg-base': '#f1f5f9',
+        '--bg-card': 'rgba(255, 255, 255, 0.8)',
+        '--border-color': 'rgba(0, 0, 0, 0.1)',
+        '--text-main': '#0f172a',
+        '--text-muted': '#475569',
+        '--accent-color': '#0284c7',
+        '--success-color': '#059669',
+        '--warning-color': '#b45309',
+        '--danger-color': '#dc2626',
+        '--highlight-bg': 'rgba(0, 0, 0, 0.05)',
+        '--highlight-text': '#0f172a',
+        '--bg-gradient-1': 'rgba(2, 132, 199, 0.05)',
+        '--bg-gradient-2': 'rgba(5, 150, 105, 0.05)',
+        '--table-header-bg': 'rgba(0, 0, 0, 0.05)',
+        '--table-cell-bg': 'rgba(255, 255, 255, 0.9)'
+    };
+
+    function applyThemeToStyles(theme) {
+        const styles = theme === "dark" ? darkThemeStyles : lightThemeStyles;
+        for (const [key, value] of Object.entries(styles)) {
+            document.documentElement.style.setProperty(key, value);
+        }
+        updateThemeIcon(theme);
     }
+
+    const currentTheme = localStorage.getItem("theme") || "light";
+    applyThemeToStyles(currentTheme);
 
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener("click", function(e) {
             e.preventDefault();
-            document.documentElement.classList.toggle("dark-mode");
             
-            let theme = "light";
-            if (document.documentElement.classList.contains("dark-mode")) {
-                theme = "dark";
-            }
+            let theme = localStorage.getItem("theme") || "light";
+            theme = theme === "light" ? "dark" : "light";
             
-            alert("Botón apretado. Cambiando a: " + theme);
-            
+            applyThemeToStyles(theme);
             localStorage.setItem("theme", theme);
-            updateThemeIcon(theme);
         });
     }
 
