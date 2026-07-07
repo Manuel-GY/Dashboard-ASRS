@@ -687,7 +687,10 @@ def get_previous_odometer(cursor, target_date, turno, maquina):
 
 
 def fetch_and_save_shift_data():
-    date_str, current_shift = get_current_shift_info(datetime.now())
+    # Restamos 10 minutos para que las ejecuciones a las 14:05, 22:05 y 06:05 
+    # sigan evaluando y cerrando el turno anterior correctamente.
+    dt_eval = datetime.now() - timedelta(minutes=10)
+    date_str, current_shift = get_current_shift_info(dt_eval)
 
     dt_now = datetime.now()
     if current_shift == 'T1':
