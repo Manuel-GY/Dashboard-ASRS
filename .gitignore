@@ -12,3 +12,7 @@ test_*.py
 browse_plc.py
 *.html.bak
 parsed.json
+  
+# Windows Executables and Scripts  
+*.bat  
+*.exe  
