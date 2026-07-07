@@ -162,10 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let endDt = new Date(startDt);
         endDt.setHours(endDt.getHours() + 8);
 
-        // Don't query the future
-        if (offset === 0 && endDt > now) {
-            endDt = now;
-        }
+
 
         currentStartDt = startDt;
         currentEndDt = endDt;

@@ -808,24 +808,29 @@ def fetch_and_save_shift_data():
             f"/api/downtime?reason=10317&start={start_str_param}&end={end_str_param}",
             f"/api/downtime?reason=10313&start={start_str_param}&end={end_str_param}",
             f"/api/downtime?reason=10314&start={start_str_param}&end={end_str_param}",
+            f"/api/downtime?reason=160000,210002&start={start_str_param}&end={end_str_param}",
             f"/api/plc-conveyor?start={start_str_param}&end={end_str_param}",
             f"/api/crane-performance?start={start_str_param}&end={end_str_param}",
             f"/api/press-delivery?start={start_str_param}&end={end_str_param}",
-            f"/api/asrs-engineering?start={start_str_param}&end={end_str_param}",
-            f"/api/daily-ticket?date={date_str_param}"
+            f"/api/asrs-engineering-data?start={start_str_param}&end={end_str_param}",
+            "/api/daily-ticket"
         ]
         
         for ep in endpoints_to_cache:
             try:
-                full_url = f"http://127.0.0.1:8006{ep}&live=1"
+                full_url = f"http://127.0.0.1:8006{ep}&live=1" if '?' in ep else f"http://127.0.0.1:8006{ep}?live=1"
                 res_ep = requests.get(full_url, timeout=30)
                 if res_ep.status_code == 200:
                     import urllib.parse
-                    path_part, query_part = ep.split('?')
-                    q_dict = dict(urllib.parse.parse_qsl(query_part))
-                    q_dict.pop('live', None)
-                    sorted_query = urllib.parse.urlencode(sorted(q_dict.items()))
-                    cache_key = f"{path_part}?{sorted_query}"
+                    if '?' in ep:
+                        path_part, query_part = ep.split('?')
+                        q_dict = dict(urllib.parse.parse_qsl(query_part))
+                        q_dict.pop('live', None)
+                        sorted_query = urllib.parse.urlencode(sorted(q_dict.items()))
+                        cache_key = f"{path_part}?{sorted_query}" if sorted_query else path_part
+                    else:
+                        cache_key = ep
+
                     
                     conn_cache = sqlite3.connect(DB_PATH)
                     cursor_cache = conn_cache.cursor()
