@@ -44,20 +44,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentTheme = localStorage.getItem("theme") || "light";
     
     if (currentTheme === "dark") {
-        document.body.classList.add("dark-mode");
+        document.documentElement.classList.add("dark-mode");
         updateThemeIcon("dark");
     } else {
-        document.body.classList.remove("dark-mode");
+        document.documentElement.classList.remove("dark-mode");
         updateThemeIcon("light");
     }
 
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener("click", function(e) {
             e.preventDefault();
-            document.body.classList.toggle("dark-mode");
+            document.documentElement.classList.toggle("dark-mode");
             
             let theme = "light";
-            if (document.body.classList.contains("dark-mode")) {
+            if (document.documentElement.classList.contains("dark-mode")) {
                 theme = "dark";
             }
             
