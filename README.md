@@ -1,39 +1,59 @@
-# Dashboard ASRS - Documentación del Proyecto
+# Dashboard ASRS
 
-Este documento resume la arquitectura de grado industrial, desarrollo y estado actual del proyecto del Dashboard ASRS (v2.0).
+Sistema de monitoreo para las grúas ASRS y producción de Planta, diseñado para visualizar el desempeño, los tiempos de parada (downtime), eficiencias de entrada/salida y las tasas de producción de Construcción y Vulcanización.
 
-## 1. Arquitectura del Backend (Python + Flask)
-- **Framework:** `Flask` (API Web) para servir las rutas HTTP, expuesto a producción mediante `Waitress`.
-- **Ejecución y Entorno Virtual:** El proyecto arranca mediante `run.bat`. Este script crea automáticamente un entorno virtual aislado (`venv`) e instala las dependencias desde `requirements.txt` para garantizar la estabilidad del sistema frente a actualizaciones globales de Python.
-- **Arquitectura de Sincronización CRON (Fotografías Temporales Ancladas):** 
-  El Dashboard actúa como un agregador central de múltiples sistemas de la planta que opera en bloques estáticos de 2 horas para garantizar la congruencia en la entrega de turnos:
-  - **Programador Cron Industrial:** El servidor ejecuta un hilo secundario en segundo plano anclado al reloj del sistema que "despierta" y ejecuta extracciones **exactamente a los 5 minutos de las horas pares** (ej. 06:05, 08:05, 10:05... 14:05... 22:05).
-  - **Base de Datos Local (SQLite):** Durante la extracción CRON, el sistema guarda en la base de datos local (`shift_history.db`) toda la información recopilada directamente desde los PLCs Allen-Bradley mediante la librería `pylogix` (Robots, Plummers) y mediante web scraping para el Daily Ticket (IO Data).
-  - **Limitador de Horizonte Temporal:** Para métricas secundarias que se leen bajo demanda desde servidores externos web (Grúas, Prensas, Conveyor Full), el servidor intercepta la petición HTTP y suplanta el reloj de "Tiempo Real" por el timestamp del último registro de la base de datos (`get_capped_now()`). Esto garantiza que **todos** los indicadores del dashboard muestren una "foto" sincronizada al mismo milisegundo, eliminando discrepancias operativas en los reportes.
-- **Seguridad:** Para prevenir vulnerabilidades de "Path Traversal" (evasión de directorios), el proyecto aísla y empaqueta estrictamente los archivos de la interfaz gráfica (`index.html`, `script.js`, `style.css`) dentro del directorio `/static`. El servidor Flask está configurado para servir recursos de manera exclusiva desde esta carpeta, lo que blinda al sistema haciendo matemáticamente imposible la descarga o exposición accidental del código fuente (`.py`, `.bat`) o bases de datos industriales (`.db`).
+## Requisitos Previos
 
-## 2. Interfaz de Usuario (Frontend)
-- **Tecnologías:** HTML5, CSS3 (Vanilla), JavaScript.
-- **Resiliencia de Red:** El motor JavaScript incorpora un sistema de **Reintentos Automáticos (`fetchWithRetry`)**. Si la red de la planta sufre un micro-corte o alta latencia, el sistema reintentará las conexiones silenciosamente antes de mostrar un estado de "Fallo" al usuario.
-- **Diseño:** Interfaz modular, con colores estandarizados en `style.css` y prevenciones activas de caché usando versionado en las importaciones (`?v=2`).
-- **Programador Inteligente de Turnos:** La interfaz evita calendarios manuales usando botones contextuales ("Turno Actual", "Turno Anterior"). Además, el frontend agenda recargas automáticas exactamente 5 minutos después del cambio de turno oficial (ej. 06:05, 14:05, 22:05) para asegurar que la base de datos alcanzó a registrar el cierre del turno anterior correctamente.
+Asegúrate de tener instalado Python (preferiblemente 3.10 o superior) y el gestor de paquetes `pip`.
 
----
+Todas las librerías necesarias con sus versiones "congeladas" se encuentran en `requirements.txt`. Para instalarlas, ejecuta el siguiente comando en la terminal desde la raíz del proyecto:
 
-## ⚠️ NOTAS DE INTEGRACIÓN CON PLCS (CRÍTICO)
+```bash
+pip install -r requirements.txt
+```
 
-La integración de tiempos en vivo para las tarjetas de **Plummers**, **Downtime Conveyor** y **Robots** depende 100% de la lógica programada en las instrucciones AOI (como `Downtime3`) de cada PLC.
+Las dependencias principales son:
+- **Flask**: Para levantar el servidor web local.
+- **Waitress**: Servidor WSGI para producción en Windows (recomendado por encima del servidor de desarrollo de Flask).
+- **pylogix**: Para la conexión a los PLC y lectura de tags (tiempos de grúas).
+- **requests**: Para las consultas a las API internas (Goodyear).
+- **beautifulsoup4**: Para el parseo de HTML en algunas extracciones de datos (si es necesario).
 
-1. **Lectura Estructurada por Turno:**
-   El dashboard lee los atributos directos del turno que se está solicitando (`T1_`, `T2_`, `T3_`).
-   - `TimerOK`: Representa el tiempo (en minutos) que la máquina pasó ejecutando ciclos de trabajo válidos. (Mostrado en columna **RUN**).
-   - `TimerFault`: Representa el tiempo que la máquina pasó detenida por falla. (Mostrado en columna **STOP**).
-   - `TimerAuto`: Representa el tiempo total que la máquina estuvo encendida y habilitada en modo Automático.
+## Estructura del Código
 
-2. **Cálculo del Tiempo IDLE (Espera):**
-   El Dashboard calcula automáticamente los minutos de inactividad que no corresponden a fallas usando la siguiente fórmula:
-   > **`IDLE = TimerAuto - TimerOK - TimerFault`**
+- `serve.py`: Es el archivo principal (backend). Se encarga de levantar el servidor web y ejecuta **tareas en segundo plano (background tasks)**. Estas tareas consultan el estado de los PLC y las APIs internas cada ciertos segundos/minutos y guardan la información histórica en una base de datos local SQLite (`shift_history.db`).
+  - *Comentarios incluidos:* El código de `serve.py` se ha comentado para distinguir las funciones de inicialización de la BD, las llamadas a PLC, llamadas HTTP a la API de Goodyear (Construcción y Vulcanizado) y la exposición de Endpoints (JSON) para el Frontend.
+- `static/`: Contiene todo el Frontend de la aplicación (UI).
+  - `index.html`: La vista principal del Dashboard (HTML semántico basado en Grid Layout).
+  - `style.css`: La hoja de estilos. Contiene variables globales de CSS (Light/Dark mode) y la distribución visual responsiva.
+  - `script.js`: Archivo con la lógica del lado del cliente. Contiene los llamados `fetch()` hacia los Endpoints de `serve.py` (por ejemplo `/api/crane-data`, `/api/io-data`) y actualiza el HTML dinámicamente cada pocos segundos.
 
-3. **Requisito de Reset en Ladder (Issue Conocido):**
-   Para que esta fórmula funcione y los datos en la pantalla sean reales, es imperativo que los acumuladores del PLC (específicamente los bloques de conteo `CTU` que fungen como *Timers*) se limpien a `0` estrictamente al iniciar el turno correspondiente mediante la ejecución de una instrucción **`RES`** (Reset).
-   *Se ha documentado que en la lógica actual del PLC, los robots (ej. `ULR1`, `ULR2`, `LR1`, `LR2`) carecen de esta instrucción `RES` en paralelo al cambio de turno, provocando que mantengan acumuladores infinitos que superan ampliamente la barrera física de 480 minutos (8 horas). La anomalía ha sido reportada y delegada al equipo de Ingeniería de Software para su mitigación directa en el código de Studio 5000.*
+## Ejecución del Servidor
+
+En un entorno de Producción en Windows, **se recomienda NO utilizar los archivos `.bat`** que pudieran haberse usado en desarrollo.
+
+Para iniciar el sistema de manera oficial y robusta, ejecuta el siguiente comando por consola:
+
+```bash
+python serve.py
+```
+
+### Puerto de Alojamiento
+Por defecto, el archivo `serve.py` utiliza `waitress` para levantar el servidor y escuchar en el **puerto 5000**.
+Una vez ejecutado el comando, el dashboard será accesible localmente y en red mediante:
+
+`http://<IP_DEL_SERVIDOR>:5000/`
+
+(Si por algún motivo el puerto 5000 está ocupado, puedes buscar en `serve.py` al final del archivo la línea `serve(app, host='0.0.0.0', port=5000)` y cambiar el puerto).
+
+## Base de Datos (SQLite)
+
+El sistema genera y utiliza un archivo local llamado `shift_history.db`.
+- **io_history**: Guarda los datos de producción de Construcción (HVA) y Vulcanizado (Cura), así como las entradas/salidas de los turnos.
+- **shift_summaries**: Guarda un registro de los tiempos de funcionamiento y error (run, fault, auto) de cada máquina consultada vía PLC.
+
+**Mantenimiento**: Si alguna vez la base de datos se corrompe o requiere reiniciarse, simplemente puede renombrarse o eliminarse el archivo `shift_history.db` y `serve.py` lo volverá a crear vacío en la siguiente ejecución.
+
+## Notas para Soporte y Sistemas (IT)
+- Los archivos `.bat` y `.exe` locales están incluidos en el `.gitignore` para no entorpecer el despliegue del código limpio.
+- El archivo de estilos está configurado de manera modular. Si deseas ajustar el aspecto, las paletas de colores principales residen en `:root` al inicio de `static/style.css`.
