@@ -1003,3 +1003,197 @@ button[disabled] {
     cursor: not-allowed;
     pointer-events: none;
 }
+
+/* =========================================
+   IO PREMIUM LIGHT MODE DESIGN
+========================================= */
+.io-premium-card {
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.05);
+}
+
+.io-premium-header {
+    align-items: center;
+    border-bottom: 1px solid rgba(0,0,0,0.03);
+    padding-bottom: 12px;
+}
+
+.io-premium-efficiency {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(5, 150, 105, 0.08);
+    padding: 6px 15px;
+    border-radius: 30px;
+    border: 1px solid rgba(5, 150, 105, 0.15);
+}
+
+.io-eff-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.io-eff-value-container {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+
+.io-eff-value {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: var(--success-color);
+}
+
+.io-eff-percent {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--success-color);
+}
+
+.io-eff-target {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
+.io-premium-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 10px;
+}
+
+.io-column-title {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 15px;
+    padding-left: 8px;
+    border-left: 3px solid var(--border-color);
+}
+
+.io-premium-column {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.io-premium-box {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255,255,255,1), rgba(248,250,252,1));
+    border: 1px solid rgba(0,0,0,0.04);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+    transition: all 0.3s ease;
+}
+
+.io-premium-box:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.06);
+}
+
+.io-premium-box.highlight-box {
+    padding: 22px 20px;
+    border-width: 2px;
+    background: linear-gradient(135deg, rgba(255,255,255,1), rgba(240,253,244,0.5));
+}
+
+.io-premium-split {
+    display: flex;
+    gap: 15px;
+}
+
+.io-premium-box.mini-box {
+    flex: 1;
+    padding: 15px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.io-icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+}
+
+.io-box-data {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.io-box-label {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.io-box-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+.io-box-value small {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.io-box-rate-container {
+    background: rgba(0,0,0,0.03);
+    padding: 6px 12px;
+    border-radius: 8px;
+}
+
+.io-box-rate {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.io-box-rate small {
+    font-weight: 500;
+}
+
+.io-premium-box.mini-box .io-box-value {
+    font-size: 1.5rem;
+}
+
+.io-premium-box.mini-box .io-box-rate {
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.03);
+    border-radius: 6px;
+    display: inline-block;
+    margin-top: 4px;
+}
+
+/* Color Themes */
+.blue-theme { border-left: 5px solid var(--accent-color); }
+.blue-theme .io-icon-container { background: rgba(2, 132, 199, 0.1); color: var(--accent-color); }
+.blue-theme .io-box-value { color: var(--accent-color); }
+
+.red-theme { border-left: 5px solid var(--danger-color); }
+.red-theme .io-icon-container { background: rgba(220, 38, 38, 0.1); color: var(--danger-color); }
+.red-theme .io-box-value { color: var(--danger-color); }
+
+.green-theme { border-left: 5px solid var(--success-color); }
+.green-theme .io-icon-container { background: rgba(5, 150, 105, 0.1); color: var(--success-color); }
+.green-theme .io-box-value { color: var(--success-color); }
+.green-theme.highlight-box { border-color: rgba(5, 150, 105, 0.2); }
+
+.orange-theme { border-left: 5px solid var(--warning-color); }
+.orange-theme .io-box-value { color: var(--warning-color); }

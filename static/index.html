@@ -235,50 +235,81 @@
 
 
             <!-- INPUT / OUTPUT -->
-            <section class="card" style="grid-column: span 2;">
-                <div class="card-header">
+            <section class="card io-premium-card" style="grid-column: span 2;">
+                <div class="card-header io-premium-header">
                     <div class="card-title">
                         <span class="indicator green" id="ind-io"></span>
                         <h2>INPUT / OUTPUT</h2>
-                        <span class="kpi-bracket">[Eficiencia Entrada = <span class="highlight" id="io-efficiency">-</span> % - Objetivo: <span class="highlight">95.00</span> %]</span>
+                    </div>
+                    <div class="io-premium-efficiency">
+                        <span class="io-eff-title">Eficiencia Entrada</span>
+                        <div class="io-eff-value-container">
+                            <span class="io-eff-value" id="io-efficiency">-</span>
+                            <span class="io-eff-percent">%</span>
+                        </div>
+                        <span class="io-eff-target">Obj: 95.00%</span>
                     </div>
                 </div>
+                
                 <div class="card-content">
-                    <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="io-premium-grid">
                         
-                        <!-- Columna Izquierda: Construido y Vulcanizado -->
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div class="stat-box" style="display: flex; justify-content: space-between; align-items: center; background: rgba(56, 189, 248, 0.1); padding: 15px 20px; border-left: 5px solid var(--accent-color);">
-                                <span class="label" style="font-size: 1.2rem; margin-bottom: 0;">Construido</span>
-                                <span class="value" id="io-construido-val" style="color: var(--accent-color); font-size: 1.8rem;">- <small style="font-size: 1rem;">tires</small></span>
+                        <!-- Columna Izquierda: Construcción y Vulcanizado (Producción) -->
+                        <div class="io-premium-column">
+                            <h3 class="io-column-title">Producción</h3>
+                            
+                            <div class="io-premium-box blue-theme">
+                                <div class="io-icon-container">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                                </div>
+                                <div class="io-box-data">
+                                    <span class="io-box-label">Construido</span>
+                                    <span class="io-box-value" id="io-construido-val">- <small>tires</small></span>
+                                </div>
                             </div>
 
-                            <div class="stat-box" style="display: flex; justify-content: space-between; align-items: center; background: rgba(239, 68, 68, 0.1); padding: 15px 20px; border-left: 5px solid var(--danger-color);">
-                                <span class="label" style="font-size: 1.2rem; margin-bottom: 0;">Vulcanizado</span>
-                                <span class="value" id="io-vulcanizado-val" style="color: var(--danger-color); font-size: 1.8rem;">- <small style="font-size: 1rem;">tires</small></span>
+                            <div class="io-premium-box red-theme">
+                                <div class="io-icon-container">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                </div>
+                                <div class="io-box-data">
+                                    <span class="io-box-label">Vulcanizado</span>
+                                    <span class="io-box-value" id="io-vulcanizado-val">- <small>tires</small></span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Columna Derecha: ASRS y Manual/Auto -->
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div class="stat-box" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-left: 5px solid var(--success-color);">
-                                <span class="label" style="font-size: 1.2rem; margin-bottom: 0;">Entrada ASRS</span>
-                                <div style="text-align: right;">
-                                    <span class="value" id="io-entrada-val" style="color: var(--success-color); font-size: 1.8rem;">- <small style="font-size: 1rem;">tires</small></span>
-                                    <span class="sub-value" id="io-entrada-rate" style="display: block; margin-top: 4px;">Rate= - <small>tires/m</small></span>
+                        <!-- Columna Derecha: Almacenamiento ASRS -->
+                        <div class="io-premium-column">
+                            <h3 class="io-column-title">Almacenamiento</h3>
+                            
+                            <div class="io-premium-box green-theme highlight-box">
+                                <div class="io-icon-container">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                </div>
+                                <div class="io-box-data" style="flex:1;">
+                                    <span class="io-box-label">Entrada ASRS</span>
+                                    <span class="io-box-value" id="io-entrada-val">- <small>tires</small></span>
+                                </div>
+                                <div class="io-box-rate-container">
+                                    <span class="io-box-rate" id="io-entrada-rate">Rate= - <small>tires/m</small></span>
                                 </div>
                             </div>
 
-                            <div style="display: flex; gap: 15px;">
-                                <div class="stat-box" style="flex: 1; padding: 12px 15px;">
-                                    <span class="label" style="font-size: 1.1rem;">Manual</span>
-                                    <span class="value" id="io-manual-val" style="color: var(--warning-color); font-size: 1.5rem;">- <small style="font-size: 0.9rem;">tires</small></span>
-                                    <span class="sub-value" id="io-manual-rate">Rate= - <small>tires/m</small></span>
+                            <div class="io-premium-split">
+                                <div class="io-premium-box orange-theme mini-box">
+                                    <div class="io-box-data">
+                                        <span class="io-box-label">Manual</span>
+                                        <span class="io-box-value" id="io-manual-val">- <small>tires</small></span>
+                                        <span class="io-box-rate" id="io-manual-rate">Rate= - <small>tires/m</small></span>
+                                    </div>
                                 </div>
-                                <div class="stat-box" style="flex: 1; padding: 12px 15px;">
-                                    <span class="label" style="font-size: 1.1rem;">Automático</span>
-                                    <span class="value" id="io-auto-val" style="color: var(--success-color); font-size: 1.5rem;">- <small style="font-size: 0.9rem;">tires</small></span>
-                                    <span class="sub-value" id="io-auto-rate">Rate= - <small>tires/m</small></span>
+                                <div class="io-premium-box green-theme mini-box">
+                                    <div class="io-box-data">
+                                        <span class="io-box-label">Automático</span>
+                                        <span class="io-box-value" id="io-auto-val">- <small>tires</small></span>
+                                        <span class="io-box-rate" id="io-auto-rate">Rate= - <small>tires/m</small></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
