@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener("click", function(e) {
             e.preventDefault();
+            alert("¡Clic detectado por el botón!");
             document.body.classList.toggle("light-mode");
             let theme = "dark";
             if (document.body.classList.contains("light-mode")) {

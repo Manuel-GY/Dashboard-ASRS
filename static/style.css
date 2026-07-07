@@ -104,6 +104,9 @@ body {
     justify-content: center;
     transition: all 0.2s ease;
     margin-left: 10px;
+    z-index: 9999;
+    position: relative;
+    pointer-events: auto;
 }
 
 .theme-toggle-btn:hover {
