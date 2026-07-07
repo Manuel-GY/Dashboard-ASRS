@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="es" data-sidenav-size="condensed" data-theme="light" data-layout-mode="fluid" data-menu-color="dark" data-topbar-color="light" data-layout-position="fixed" class="menuitem-active">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hora a Hora por Hora en Hora</title>
+  <link href="assets/css/app-creative.min.css" rel="stylesheet" type="text/css" id="app-style">
+  <link rel="shortcut icon" href="assets/images/clock.png">
+
+
+  <!-- Daterangepicker css -->
+  <link rel="stylesheet" href="./assets/vendor/daterangepicker/daterangepicker.css">
+
+
+  <!-- Theme Config Js -->
+  <script src="./assets/js/hyper-config.js"></script>
+
+  <!-- Icons css -->
+  <link href="./assets/css/icons.min.css" rel="stylesheet" type="text/css" />
+  <script src="assets/vendor/fontawesome-pro-6.2.0-web/js/all.js"></script>
+
+  <!-- <script src="./assets/js/hora.js?v=1.5" defer></script> -->
+  <!-- <script src="./assets/js/hora_Irr_NoStock.js" defer></script> -->
+  <script src="./assets/js/banner.js" defer></script>
+  <script src="./assets/js/api_hora_a_hora.js?v=3.8" defer></script>
+  <script src="./assets/js/api_inventario.js?v=1.2" defer></script>
+
+</head>
+
+<style>
+  /* Agrega un estilo para el desvanecimiento */
+  .fade-out {
+    animation: fadeOut .1s ease-in-out;
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* Agrega un estilo para el desvanecimiento */
+  .fade-in {
+    animation: fadeIn .1s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  .popover {
+    max-width: 440px !important;
+  }
+</style>
+
+<body class="show">
+
+  <!-- Begin page -->
+  <div class="wrapper">
+    <!-- ========== Topbar Start ========== -->
+    
+<style>
+    img.rounded-circle:hover {
+        transform: scale(2);
+    }
+
+    img.rounded-circle {
+        transition: transform .2s;
+    }
+</style>
+<script src="./assets/js/safetyMsg.js" defer></script>
+
+
+<!-- ========== Topbar Start ========== -->
+<div class="navbar-custom">
+    <div class="topbar container-fluid">
+        <div class="d-flex align-items-center gap-lg-2 gap-1">
+
+            <!-- Topbar Brand Logo -->
+            <div class="logo-topbar">
+                <!-- Logo light -->
+                <a href="index.php" class="logo-light">
+                    <span class="logo-lg">
+                        <img src="./assets/images/goodyear125_Y.png" alt="logo" style="scale:2.5">
+                    </span>
+                    <span class="logo-sm">
+                        <img src="./assets/images/goodyear125_Y_sd.png" alt="small logo" style="scale:2.1">
+                    </span>
+                </a>
+
+                <!-- Logo Dark -->
+                <a href="index.php" class="logo-dark">
+                    <span class="logo-lg">
+                        <img src="./assets/images/goodyear125_Y.png" alt="dark logo" style="scale:2.5">
+                    </span>
+                    <span class="logo-sm">
+                        <img src="./assets/images/goodyear125_Y_sd.png" alt="small logo" style="scale:2.1">
+                    </span>
+                </a>
+            </div>
+
+            <!-- Sidebar Menu Toggle Button -->
+            <button class="button-toggle-menu">
+                <i class="mdi mdi-menu"></i>
+            </button>
+
+            <!-- Horizontal Menu Toggle Button -->
+            <button class="navbar-toggle" data-bs-toggle="collapse" data-bs-target="#topnav-menu-content">
+                <div class="lines">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </button>
+        </div>
+
+        <!-- Mensaje Seguridad -->
+        <div class="col-6 text-center d-flex align-items-center display-6" style="font-size:1.1rem; color: yellow;">
+            <span class="mdi mdi-format-quote-open-outline mdi-36px"></span>
+            <div id="msgSafety"></div><span class="mdi mdi-format-quote-close-outline mdi-36px"></span>
+        </div>
+
+        <ul class="topbar-menu d-flex align-items-center gap-3">
+
+            <li class="dropdown d-none d-sm-inline-block">
+                <a class="nav-link dropdown-toggle arrow-none" data-bs-toggle="dropdown" href="#" role="button"
+                    aria-haspopup="false" aria-expanded="false">
+                    <i class="ri-apps-2-line font-22"></i>
+                </a>
+                <div class="dropdown-menu dropdown-menu-end dropdown-menu-animated dropdown-lg p-0">
+
+                    <div class="p-2">
+                        <div class="row g-0">
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="http://10.107.194.69:18080/" target="_blank">
+                                    <img src="./assets/images/bandita.png" alt="slack">
+                                    <span>Portal PEC</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="http://10.107.194.72/ingenieria/redtag/add_reg.php"
+                                    target="_blank">
+                                    <img src="./assets/images/redtag.png" alt="Github">
+                                    <span>Red Tag</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item"
+                                    href="http://akrchlmfgweb/mfgweb/build/planning/pzwtbkbv.jsp?GrpID=HF_BUILD++&frmSbm=Submit"
+                                    target="_blank">
+                                    <img src="./assets/images/tire.png" alt="Github">
+                                    <span>PROCON</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="row g-0">
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="http://clstrace/mhh/" target="_blank">
+                                    <img src="./assets/images/track.png" alt="dribbble">
+                                    <span>MHH</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="http://10.107.194.51/gwi/index.jsp" target="_blank">
+                                    <img src="./assets/images/tomcat.png" alt="bitbucket">
+                                    <span>GWI</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item"
+                                    href="http://10.107.194.72/ingenieria/spare_parts/repuestos.php" target="_blank">
+                                    <img src="http://10.107.194.72/ingenieria/spare_parts/asset/img/ware_yellow.png"
+                                        alt="bitbucket">
+                                    <span>Repuestos Bodega</span>
+                                </a>
+                            </div>
+                            <div class="col">
+                                <a class="dropdown-icon-item" href="http://10.107.194.69/web/autoayuda/home"
+                                    target="_blank">
+                                    <img src="./assets/images/book.png" alt="bitbucket">
+                                    <span>CSD AutoAyuda</span>
+                                </a>
+                            </div>
+                        </div> <!-- end row-->
+                    </div>
+
+                </div>
+            </li>
+
+            <!-- <li class="d-none d-sm-inline-block">
+                <a class="nav-link" data-bs-toggle="offcanvas" href="#theme-settings-offcanvas">
+                    <i class="ri-settings-3-line font-22"></i>
+                </a>
+            </li> -->
+
+            <!-- Dia / Noche -->
+            <li class="d-none d-sm-inline-block">
+                <div class="nav-link" id="light-dark-mode" data-bs-toggle="tooltip" data-bs-placement="left"
+                    title="Theme Mode">
+                    <i class="ri-moon-line font-22"></i>
+                </div>
+            </li>
+
+            <!-- Full Screen -->
+            <li class="d-none d-md-inline-block">
+                <a class="nav-link" href="" data-toggle="fullscreen">
+                    <i class="ri-fullscreen-line font-22"></i>
+                </a>
+            </li>
+
+            <li class="dropdown">
+                <a href="#" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#login-modal">
+                            <i class="mdi mdi-login me-1"></i>
+                            <span>Log In</span>
+                        </a>            </li>
+        </ul>
+    </div>
+</div>
+<!-- ========== Topbar End ========== -->
+
+<!-- ========== Modal Log In ========== -->
+<div id="login-modal" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="text-center mt-2 mb-4">
+                    <span><img src="http://10.107.194.72/ingenieria/static/image/gopasslogo.png" alt=""
+                            height="50"></span>
+                </div>
+
+                <form action="assets/php/web_admin/connLDAP.php" class="ps-3 pe-3">
+                    <div class="mb-3">
+                        <label for="userId" class="form-label">Usuario</label>
+                        <input class="form-control" type="text" id="userId" required="" placeholder="userID" name="usr">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password1" class="form-label">Password</label>
+                        <input class="form-control" type="password" required="" id="password1"
+                            placeholder="Enter your Gopass" name="pwd">
+                    </div>
+                    <div class="mb-3 text-center">
+                        <button class="btn rounded-pill btn-primary" type="submit">Sign In</button>
+                    </div>
+
+                </form>
+
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div>    <!-- ========== Topbar End ========== -->
+
+    <!-- ========== Left Sidebar Start ========== -->
+    
+<div class="leftside-menu menuitem-active">
+
+    <!-- Brand Logo Light -->
+    <a href="index.php" class="logo logo-light">
+        <span class="logo-lg">
+            <img src="./assets/images/goodyear125_Y.png" alt="logo" style="scale:2.5;">
+        </span>
+        <span class="logo-sm">
+            <img src="./assets/images/goodyear125_Y_sd.png" alt="small logo" style="scale:1.4">
+        </span>
+    </a>
+
+    <!-- Brand Logo Dark -->
+    <a href="index.php" class="logo logo-dark">
+        <span class="logo-lg">
+            <img src="./assets/images/goodyear125_Y.png" alt="dark logo" style="scale:2.5;">
+        </span>
+        <span class="logo-sm">
+            <img src="./assets/images/goodyear125_Y_sd.png" alt="small logo">
+        </span>
+    </a>
+
+    <!-- Sidebar Hover Menu Toggle Button -->
+    <div class="button-sm-hover" data-bs-toggle="tooltip" data-bs-placement="right" title="Show Full Sidebar">
+        <i class="ri-checkbox-blank-circle-line align-middle"></i>
+    </div>
+
+    <!-- Full Sidebar Menu Close Button -->
+    <div class="button-close-fullsidebar">
+        <i class="ri-close-fill align-middle"></i>
+    </div>
+
+    <!-- Sidebar -left -->
+    <div class="h-100" id="leftside-menu-container" data-simplebar>
+        <!-- Leftbar User -->
+        <!-- <div class="leftbar-user">
+        <a href="pages-profile.html">
+            <img src="assets/images/users/avatar-1.jpg" alt="user-image" height="42" class="rounded-circle shadow-sm">
+            <span class="leftbar-user-name mt-2">Dominic Keller</span>
+        </a>
+    </div> -->
+
+        <!--- Sidemenu -->
+        <ul class="side-nav">
+
+            <!-- <li class="side-nav-title">Materiales</li> -->
+
+            <!-- Ingreso Materiales -->
+            <!-- <li class="side-nav-item">
+                <a data-bs-toggle="collapse" href="#sidebarEnergia" aria-expanded="false" aria-controls="sidebarEnergia" class="side-nav-link collapsed">
+                    <i class="uil-battery-bolt -alt"></i>
+                    <span class="badge bg-success float-end"></span>
+                    <span> Ingreso Materiales </span>
+                </a>
+                <div class="collapse" id="sidebarEnergia">
+                    <ul class="side-nav-second-level">
+
+                        <li class="side-nav-item">
+                            <a href="proyecto.php"> Proyectos </a>
+                        </li>
+
+                        <li class="side-nav-item">
+                            <a href="ingreso.php"> Ingreso a Bodega </a>
+                        </li>
+
+                        <li class="side-nav-item">
+                            <a href="https://cl01sv26a/Storeroom%20client/index.php" target="_blank"> Escaneo de Material/Posición </a>
+                        </li>
+
+
+
+
+                    </ul>
+                </div>
+            </li> -->
+
+            <!-- Variables Criticas -->
+            <!-- <li class="side-nav-item">
+                <a data-bs-toggle="collapse" href="#sidebarCrit" aria-expanded="false" aria-controls="sidebarCrit" class="side-nav-link collapsed">
+                    <i class="uil-heart-rate -alt"></i>
+                    <span class="badge bg-success float-end"></span>
+                    <span> Salida Materiales </span>
+                </a>
+                <div class="collapse" id="sidebarCrit">
+                    <ul class="side-nav-second-level"> -->
+
+                        <!-- Solicitud de materiales -->
+                        <!-- <li class="side-nav-item">
+                            <a href="solicitud.php"> Solicitud de materiales </a>
+                        </li>
+                        <li class="side-nav-item">
+                            <a href="solicitud_logs.php"> Mis solicitudes </a>
+                        </li>
+
+                        <li class="side-nav-item">
+                            <a href="https://cl01sv26a/Storeroom%20client/index.php" target="_blank"> Escaneo de Material/Posición </a>
+                        </li> -->
+
+                        <!-- EXTRUSION -->
+                        <!-- <li class="side-nav-item">
+                            <a data-bs-toggle="collapse" href="#ext" aria-expanded="false" aria-controls="ext" class="collapsed">
+                                <span> Extrusión </span>
+                                <span class="menu-arrow"></span>
+                            </a>
+                            <div class="collapse" id="ext" style="">
+                                <ul class="side-nav-third-level">
+                                    <li>
+                                        <a href="ext_e04.php">Lubricación E04</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li> -->
+
+                        <!-- ASRS -->
+                        <!-- <li class="side-nav-item">
+                            <a data-bs-toggle="collapse" href="#asrs" aria-expanded="false" aria-controls="asrs" class="collapsed">
+                                <span> ASRS </span>
+                                <span class="menu-arrow"></span>
+                            </a>
+                            <div class="collapse" id="asrs" style="">
+                                <ul class="side-nav-third-level">
+                                    <li>
+                                        <a href="#">Dew Point</a>
+                                    </li>
+                                </ul>
+                                <ul class="side-nav-third-level">
+                                    <li>
+                                        <a href="http://10.107.194.71/maintenance/monitoring/ASRS/conveyors.php">Temperaturas Variadores</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li> -->
+
+                        <!-- CASA DE MAQUINAS -->
+                        <!-- <li class="side-nav-item">
+                            <a data-bs-toggle="collapse" href="#cm" aria-expanded="false" aria-controls="cm" class="collapsed">
+                                <span> Casa de Máquinas </span>
+                                <span class="menu-arrow"></span>
+                            </a>
+                            <div class="collapse" id="cm" style="">
+                                <ul class="side-nav-third-level">
+                                    <li>
+                                        <a href="cm_temperatura.php">Temperaturas SSEE</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li> -->
+
+                    <!-- </ul>
+                </div>
+            </li> -->
+
+
+
+
+            <li class="side-nav-title">Apps</li>
+
+            <li class="side-nav-item">
+                <a href="http://10.107.194.72/ingenieria/" class="side-nav-link">
+                    <i class="uil-rss"></i>
+                    <span> Portal Ingeniería </span>
+                </a>
+            </li>
+
+        </ul>
+        <!--- End Sidemenu -->
+
+        <div class="clearfix"></div>
+    </div>
+</div>    <!-- ========== Left Sidebar End ========== -->
+
+    <div class="content-page">
+      <div class="content">
+
+        <!-- Campo superior -->
+        <div class="container mt-2">
+          <div class="row">
+
+            <div class="col-xl-2"></div>
+            <div class="col-xl-7 col-lg-8">
+              <table class="table table-sm table-borderless col">
+                <tbody>
+                  <tr>
+                    <th class="text-center" style="font-size:1rem">Inventario Verde Disponible</th>
+                    <th class="text-center" style="font-size:1rem">Inventario ASRS</th>
+                    <th class="text-center" style="font-size:1rem">Retenidos</th>
+                  </tr>
+                  <tr>
+                    <td id="invVerde" class="text-center" style="padding:0rem .5rem !important;font-size:1.4rem">
+                      <i class="fa-sharp fa-light fa-atom-simple fa-spin"></i>
+                    </td>
+                    <td id="invASRS" class="text-center" style="padding:0rem .5rem !important;font-size:1.4rem">
+                      <i class="fa-sharp fa-light fa-atom-simple fa-spin"></i>
+                    </td>
+                    <td id="retenido" class="text-center" style="padding:0rem .5rem !important;font-size:1.4rem">
+                      <i class="fa-sharp fa-light fa-atom-simple fa-spin"></i>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Campo Buscador -->
+            <div class="col">
+              <!-- Fecha -->
+                            <div class="input-group col-12">
+                <input type="text" class="form-control form-control-light" id="dash-daterange" name="time" fecha="2026-07-07">
+                <span class="input-group-text bg-primary border-primary text-white">
+                  <i class="mdi mdi-calendar-range font-13"></i>
+                </span>
+                <btn class="btn btn-primary ms-2" id="refresh">
+                  <i id="refresh-icon" class="mdi mdi-autorenew"></i>
+                </btn>
+              </div>
+              <!-- Turnos -->
+              <div class="">
+                <div class="col" style="font-size:.85rem" id="turnos" turno="manana">
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="noche" value="noche">
+                    <label class="form-check-label" for="inlineRadio3">Noche</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="manana" value="manana">
+                    <label class="form-check-label" for="inlineRadio1">Mañana</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="inlineRadioOptions" id="tarde" value="tarde">
+                    <label class="form-check-label" for="inlineRadio2">Tarde</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inventario materiales HF -->
+        <div class="container container-xxl mt-0">
+          <div class="row justify-content-center">
+            <div class="col-8">
+              <div class="text-center lead">Inventario de Materiales</div>
+              <table class="table table-sm text-center table-borderless">
+                <thead>
+                  <tr>
+                    <th style="padding-bottom: 0rem;">Apexer</th>
+                    <th style="padding-bottom: 0rem;">Pestaña</th>
+                    <th style="padding-bottom: 0rem;">Banda</th>
+                    <th style="padding-bottom: 0rem;">Lateral</th>
+                    <th style="padding-bottom: 0rem;">Breaker</th>
+                    <th style="padding-bottom: 0rem;">Cojín+Reposo</th>
+                    <th style="padding-bottom: 0rem;">Tela</th>
+                    <th style="padding-bottom: 0rem;">Overlay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <td style="padding-top: 0rem;" id="apexer"></td>
+                  <td style="padding-top: 0rem;" id="pestana"></td>
+                  <td style="padding-top: 0rem;" id="banda"></td>
+                  <td style="padding-top: 0rem;" id="lateral"></td>
+                  <td style="padding-top: 0rem;" id="breaker"></td>
+                  <td style="padding-top: 0rem;" id="cojin"></td>
+                  <td style="padding-top: 0rem;" id="tela"></td>
+                  <td style="padding-top: 0rem;" id="overlay"></td>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla Hora a Hora -->
+        <div class="container-fluid container-xxl">
+          <div id="spin" class="col-auto text-center d-flex align-items-center justify-content-center fade-out" style="font-size: 2rem; height: 300px;">
+            <i class="fa-sharp fa-light fa-tire fa-spin fa-2xl"></i>
+          </div>
+          <div class="row justify-content-center">
+            <!-- <div class="col-xl-10 col-12"> -->
+            <div class="col-auto">
+              <table id="tbl-data" class="table table-sm table-borderless mt-1 d-none">
+                <thead>
+                  <tr>
+                    <th class="align-middle" rowspan="2">Hora</th>
+                    <th class="text-center" rowspan="1">Mixer</th>
+                    <th class="text-center" colspan="6">Construcción</th>
+                    <th class="text-center" colspan="5">Vulcanización</th>
+                    <th class="align-middle text-center" class="text-center" rowspan="2">Acreditado</th>
+                  </tr>
+                  <tr>
+                    <td class="text-center">Batch</td>
+                    <td class="text-center border-start" style="border-left-color: #826e6e !important">Prod</td>
+                    <td class="text-center">Scrap</td>
+                    <td class="text-center">Break</td>
+                    <td class="text-center">No Stock</td>
+                    <td class="text-center">C. Change</td>
+                    <td class="text-center">Irregular</td>
+                    <td class="text-center border-start" style="border-left-color: #826e6e !important">Prod</td>
+                    <td class="text-center">Scrap</td>
+                    <td class="text-center">Break</td>
+                    <td class="text-center">No Tire</td>
+                    <td class="text-center border-end" style="border-right-color: #826e6e !important">C. Change</td>
+                  </tr>
+                </thead>
+                <tbody id="datas" class="table-group-divider" style="border-top-color: #826e6e; border-top-width: 2px;">
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tabla de datos de Irregular  -->
+            <div class="col-xl-8">
+              <div id="spinIrr" class="col-auto text-center d-flex align-items-center justify-content-center fade-out d-none" style="font-size: 2rem; height: 300px;">
+                <!-- <i class="fa-sharp fa-light fa-compass fa-spin fa-2xl"></i> -->
+              </div>
+              <table id="tbl-irregular" class="table table-sm table-borderless mt-4 d-none">
+                <thead>
+                  <tr>
+                    <th class="text-center" colspan="9">Irregular</th>
+                  </tr>
+                  <tr>
+                    <td>Hora</td>
+                    <td class="text-center">Bead</td>
+                    <td class="text-center">Brk</td>
+                    <td class="text-center">Linner</td>
+                    <td>Ply</td>
+                    <td class="text-center">Sol</td>
+                    <td class="text-center">Tread</td>
+                    <td class="text-center">Sw</td>
+                    <td class="text-center">Total</td>
+                  </tr>
+                </thead>
+                <tbody id="datasIrr" class="table-group-divider" style="border-top-color: #826e6e; border-top-width: 2px;">
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tabla de datos de No Stock  -->
+            <div class="col-xl-8">
+
+              <table id="tbl-noStock" class="table table-sm table-borderless mt-4 d-none">
+                <thead>
+                  <tr>
+                    <th class="text-center" colspan="9">No Stock</th>
+                  </tr>
+                  <tr>
+                    <td>Hora</td>
+                    <td class="text-center">Bead</td>
+                    <td class="text-center">Brk</td>
+                    <td class="text-center">Linner</td>
+                    <td class="text-center">Ply</td>
+                    <td class="text-center">Sol</td>
+                    <td class="text-center">Tread</td>
+                    <td class="text-center">Sw</td>
+                    <td class="text-center">Total</td>
+                  </tr>
+                </thead>
+                <tbody id="datasNoStock" class="table-group-divider" style="border-top-color: #826e6e; border-top-width: 2px;">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Start -->
+        <footer class="footer">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-6">
+                2024 © Sistemas de Manufactura - Ingeniería
+            </div>
+            <div class="col-md-6">
+                <div class="text-md-end footer-links d-none d-md-block">
+                    <a href="javascript: void(0);">About</a>
+                    <a href="javascript: void(0);">Support</a>
+                    <a href="javascript: void(0);">Contact Us</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- end Footer -->        <!-- end Footer -->
+
+      </div>
+    </div>
+
+
+  </div>
+  <!-- Vendor js -->
+  <script src="assets/js/vendor.min.js"></script>
+
+  <!-- App js -->
+  <script src="assets/js/app.min.js"></script>
+
+  <script src="assets/vendor/daterangepicker/moment.min.js"></script>
+  <script src="assets/vendor/daterangepicker/daterangepicker.js"></script>
+</body>
+
+</html>

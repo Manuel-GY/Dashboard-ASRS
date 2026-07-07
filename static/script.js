@@ -313,9 +313,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 5. Crane Performance
         document.getElementById('crane-uptime').textContent = '-';
-        const craneEmptyRow = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted);">-</td></tr>`;
-        const tbodyDt = document.querySelector('#crane-top-downtime tbody');
-        const tbodyMn = document.querySelector('#crane-top-minor tbody');
+        const craneEmptyRow = `<div class="crane-empty-row">-</div>`;
+        const tbodyDt = document.querySelector('#crane-top-downtime');
+        const tbodyMn = document.querySelector('#crane-top-minor');
         if (tbodyDt) tbodyDt.innerHTML = craneEmptyRow;
         if (tbodyMn) tbodyMn.innerHTML = craneEmptyRow;
         setIndicatorColor('ind-crane', null);
@@ -419,9 +419,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const end   = getEndDateTime();
 
         document.getElementById('crane-uptime').textContent = '...';
-        const craneLoadingRow = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted);">...</td></tr>`;
-        const tbodyDtLoad = document.querySelector('#crane-top-downtime tbody');
-        const tbodyMnLoad = document.querySelector('#crane-top-minor tbody');
+        const craneLoadingRow = `<div class="crane-empty-row">...</div>`;
+        const tbodyDtLoad = document.querySelector('#crane-top-downtime');
+        const tbodyMnLoad = document.querySelector('#crane-top-minor');
         if (tbodyDtLoad) tbodyDtLoad.innerHTML = craneLoadingRow;
         if (tbodyMnLoad) tbodyMnLoad.innerHTML = craneLoadingRow;
         setIndicatorColor('ind-crane', null);
@@ -464,31 +464,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 const topDowntime = sorted.filter(a => a.downtime_minutes > 10).slice(0, 3);
                 const topMinor = sorted.filter(a => a.downtime_minutes > 0 && a.downtime_minutes <= 10).slice(0, 3);
 
-                // Función para generar filas de tabla HTML con barras visuales
-                const formatAislesTable = (list, tbodyId) => {
-                    const tbody = document.querySelector(`#${tbodyId} tbody`);
-                    if (!tbody) return;
+                // Función para generar divs HTML con barras visuales
+                const formatAislesTable = (list, containerId) => {
+                    const container = document.querySelector(`#${containerId}`);
+                    if (!container) return;
                     if (list.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted); font-style:italic;">Sin datos</td></tr>`;
+                        container.innerHTML = `<div class="crane-empty-row" style="font-style:italic;">Sin datos</div>`;
                         return;
                     }
                     
                     const maxMins = Math.max(...list.map(a => a.downtime_minutes), 1);
                     
-                    tbody.innerHTML = list.map(a => {
+                    container.innerHTML = list.map(a => {
                         const pct = (a.downtime_minutes / maxMins) * 100;
                         return `
-                        <tr>
-                            <td style="font-weight:600; width:25%; padding:12px 8px; font-size:1.05rem;">Pasillo ${a.aisle}</td>
-                            <td style="width:75%; padding:12px 8px;">
-                                <div style="display:flex; align-items:center; gap:12px;">
-                                    <div style="flex:1; background:var(--border-color); height:10px; border-radius:5px; overflow:hidden;">
-                                        <div style="width:${pct}%; background:var(--danger-color); height:100%; border-radius:5px; transition:width 0.5s ease-out;"></div>
-                                    </div>
-                                    <span style="color:var(--danger-color); font-weight:700; font-size:1.1rem; width:55px; text-align:right;">${a.downtime_minutes}m</span>
+                        <div class="crane-list-item">
+                            <span class="crane-list-id">Pasillo ${a.aisle}</span>
+                            <div class="crane-list-bar-container">
+                                <div class="crane-list-bar-bg">
+                                    <div class="crane-list-bar-fill" style="width:${pct}%;"></div>
                                 </div>
-                            </td>
-                        </tr>
+                                <span class="crane-list-val">${a.downtime_minutes}m</span>
+                            </div>
+                        </div>
                         `;
                     }).join('');
                 };
@@ -502,9 +500,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(error => {
                 console.error('Error fetching Crane Performance data:', error);
                 document.getElementById('crane-uptime').textContent = 'Error';
-                const errRow = `<tr><td colspan="2" style="text-align:center; color:var(--danger-color);">Error</td></tr>`;
-                const tbodyDt = document.querySelector('#crane-top-downtime tbody');
-                const tbodyMn = document.querySelector('#crane-top-minor tbody');
+                const errRow = `<div class="crane-empty-row" style="color:var(--danger-color);">Error</div>`;
+                const tbodyDt = document.querySelector('#crane-top-downtime');
+                const tbodyMn = document.querySelector('#crane-top-minor');
                 if (tbodyDt) tbodyDt.innerHTML = errRow;
                 if (tbodyMn) tbodyMn.innerHTML = errRow;
                 setIndicatorColor('ind-crane', false);
