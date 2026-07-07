@@ -244,22 +244,39 @@
                     </div>
                 </div>
                 <div class="card-content">
-                    <div class="stats-grid">
-                        <div class="stat-box">
-                            <span class="label">Entrada</span>
-                            <span class="value" id="io-entrada-val">- <small>tires</small></span>
-                            <span class="sub-value" id="io-entrada-rate">Rate= - <small>tires/m</small></span>
+                    <div class="stats-grid" style="grid-template-columns: 1fr; gap: 15px;">
+                        
+                        <div class="stat-box" style="display: flex; justify-content: space-between; align-items: center; background: rgba(56, 189, 248, 0.1); padding: 10px 15px; border-left: 4px solid var(--accent-color);">
+                            <span class="label" style="font-size: 1.1rem; margin-bottom: 0;">Construido</span>
+                            <span class="value" id="io-construido-val" style="color: var(--accent-color);">- <small>tires</small></span>
                         </div>
-                        <div class="stat-box">
-                            <span class="label">Manual</span>
-                            <span class="value" id="io-manual-val">- <small>tires</small></span>
-                            <span class="sub-value" id="io-manual-rate">Rate= - <small>tires/m</small></span>
+
+                        <div class="stat-box" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px;">
+                            <span class="label" style="font-size: 1.1rem; margin-bottom: 0;">Entrada ASRS</span>
+                            <div style="text-align: right;">
+                                <span class="value" id="io-entrada-val" style="color: var(--success-color);">- <small>tires</small></span>
+                                <span class="sub-value" id="io-entrada-rate" style="display: block; margin-top: 4px;">Rate= - <small>tires/m</small></span>
+                            </div>
                         </div>
-                        <div class="stat-box">
-                            <span class="label">Auto</span>
-                            <span class="value" id="io-auto-val">- <small>tires</small></span>
-                            <span class="sub-value" id="io-auto-rate">Rate= - <small>tires/m</small></span>
+
+                        <div style="display: flex; gap: 15px;">
+                            <div class="stat-box" style="flex: 1; padding: 10px;">
+                                <span class="label">Manual</span>
+                                <span class="value" id="io-manual-val" style="color: var(--warning-color);">- <small>tires</small></span>
+                                <span class="sub-value" id="io-manual-rate">Rate= - <small>tires/m</small></span>
+                            </div>
+                            <div class="stat-box" style="flex: 1; padding: 10px;">
+                                <span class="label">Automático</span>
+                                <span class="value" id="io-auto-val" style="color: var(--success-color);">- <small>tires</small></span>
+                                <span class="sub-value" id="io-auto-rate">Rate= - <small>tires/m</small></span>
+                            </div>
                         </div>
+
+                        <div class="stat-box" style="display: flex; justify-content: space-between; align-items: center; background: rgba(239, 68, 68, 0.1); padding: 10px 15px; border-left: 4px solid var(--danger-color);">
+                            <span class="label" style="font-size: 1.1rem; margin-bottom: 0;">Vulcanizado</span>
+                            <span class="value" id="io-vulcanizado-val" style="color: var(--danger-color);">- <small>tires</small></span>
+                        </div>
+                        
                     </div>
                     <div id="io-message" class="downtime-empty-msg" style="display:none; font-size: 0.8rem; margin-top: 12px; width: 100%;"></div>
                 </div>
