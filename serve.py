@@ -703,25 +703,33 @@ def fetch_and_save_shift_data():
         print(f"[WARN] Error saving IO data: {e}")
 
     # Fetch Construido and Vulcanizado from Goodyear API
-    try:
-        shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
-        gy_turno = shift_map.get(current_shift, 'noche')
-        url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
-        res_gy = requests.get(url_gy, timeout=5, proxies={"http": None, "https": None})
-        if res_gy.status_code == 200:
-            data_gy = res_gy.json()
-            if data_gy.get("status") == "success":
-                construido = str(data_gy["data"]["total"]["hva"]["prod"])
-                vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
-                
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE fecha=? AND turno=?",
-                               (construido, vulcanizado, date_str, current_shift))
-                conn.commit()
-                conn.close()
-    except Exception as e:
-        print(f"[WARN] Error fetching Goodyear tires data: {e}")
+    shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
+    gy_turno = shift_map.get(current_shift, 'noche')
+    url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
+    
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            res_gy = requests.get(url_gy, timeout=15, proxies={"http": None, "https": None})
+            if res_gy.status_code == 200:
+                data_gy = res_gy.json()
+                if data_gy.get("status") == "success":
+                    construido = str(data_gy["data"]["total"]["hva"]["prod"])
+                    vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
+                    
+                    conn = sqlite3.connect(DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE fecha=? AND turno=?",
+                                   (construido, vulcanizado, date_str, current_shift))
+                    conn.commit()
+                    conn.close()
+                    break
+            else:
+                print(f"[WARN] Goodyear API returned status {res_gy.status_code} (attempt {attempt+1}/{max_retries})")
+        except Exception as e:
+            print(f"[WARN] Error fetching Goodyear tires data (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2)
 
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 
