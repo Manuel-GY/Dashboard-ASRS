@@ -56,12 +56,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('io-auto-val').innerHTML = `${data.auto} <small>tires</small>`;
                 document.getElementById('io-auto-rate').innerHTML = `Rate= ${data.rate_auto} <small>tires/m</small>`;
 
-                // Calculamos eficiencia aproximada
-                const totalOut = parseFloat(data.manual) + parseFloat(data.auto);
-                const totalIn = parseFloat(data.entrada);
+                // NUEVOS DATOS (Construido y Vulcanizado)
+                if (data.construido !== undefined) {
+                    document.getElementById('io-construido-val').innerHTML = `${data.construido} <small style="font-size: 1rem;">tires</small>`;
+                }
+                if (data.vulcanizado !== undefined) {
+                    document.getElementById('io-vulcanizado-val').innerHTML = `${data.vulcanizado} <small style="font-size: 1rem;">tires</small>`;
+                }
+
+                // NUEVA FÓRMULA DE EFICIENCIA: Entrada ASRS / Construido
+                const entradaASRS = parseFloat(data.entrada);
+                const construido = parseFloat(data.construido);
                 let efficiency = null;
-                if (!isNaN(totalIn) && !isNaN(totalOut) && totalIn > 0) {
-                    efficiency = (totalOut / totalIn) * 100;
+                
+                // Solo calcula si construido es un número válido y mayor a cero para evitar división por cero
+                if (!isNaN(entradaASRS) && !isNaN(construido) && construido > 0) {
+                    efficiency = (entradaASRS / construido) * 100;
                 }
                 const effEl = document.getElementById('io-efficiency');
                 if (effEl) {
