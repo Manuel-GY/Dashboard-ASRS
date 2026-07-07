@@ -36,57 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
 
-    // Theme toggle functionality
-    const themeToggleBtn = document.getElementById('theme-toggle');
-    const iconSun = document.getElementById('theme-icon-sun');
-    const iconMoon = document.getElementById('theme-icon-moon');
-    
-    const prefersDarkScheme = window.matchMedia("(prefers-color-scheme: dark)");
-    const currentTheme = localStorage.getItem("theme");
-    
-    if (currentTheme == "light" || (!currentTheme && !prefersDarkScheme.matches)) {
-        document.body.classList.add("light-mode");
-        document.body.classList.remove("dark-mode");
-        updateThemeIcon("light");
-    } else {
-        document.body.classList.remove("light-mode");
-        document.body.classList.add("dark-mode");
-        updateThemeIcon("dark");
-    }
-
-    if (themeToggleBtn) {
-        themeToggleBtn.addEventListener("click", function(e) {
-            e.preventDefault();
-            
-            let theme = "dark";
-            if (document.body.classList.contains("light-mode")) {
-                // Cambiar a oscuro
-                document.body.classList.remove("light-mode");
-                document.body.classList.add("dark-mode");
-                theme = "dark";
-            } else {
-                // Cambiar a claro
-                document.body.classList.remove("dark-mode");
-                document.body.classList.add("light-mode");
-                theme = "light";
-            }
-            
-            localStorage.setItem("theme", theme);
-            updateThemeIcon(theme);
-        });
-    }
-
-    function updateThemeIcon(theme) {
-        if (iconSun && iconMoon) {
-            if (theme === "light") {
-                iconSun.style.display = 'none';
-                iconMoon.style.display = 'block';
-            } else {
-                iconSun.style.display = 'block';
-                iconMoon.style.display = 'none';
-            }
-        }
-    }
+    // (Theme toggle functionality removed to enforce dark mode)
 
     // Input/Output Data
     function fetchInputOutputData(start = '', end = '') {
