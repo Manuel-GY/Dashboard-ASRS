@@ -41,46 +41,62 @@ document.addEventListener('DOMContentLoaded', () => {
     const iconSun = document.getElementById('theme-icon-sun');
     const iconMoon = document.getElementById('theme-icon-moon');
     
-    const darkThemeStyles = {
-        '--bg-base': '#0f172a',
-        '--bg-card': 'rgba(30, 41, 59, 0.7)',
-        '--border-color': 'rgba(255, 255, 255, 0.1)',
-        '--text-main': '#f8fafc',
-        '--text-muted': '#cbd5e1',
-        '--accent-color': '#38bdf8',
-        '--success-color': '#10b981',
-        '--warning-color': '#f59e0b',
-        '--danger-color': '#ef4444',
-        '--highlight-bg': 'rgba(255, 255, 255, 0.1)',
-        '--highlight-text': '#fff',
-        '--bg-gradient-1': 'rgba(56, 189, 248, 0.05)',
-        '--bg-gradient-2': 'rgba(16, 185, 129, 0.05)',
-        '--table-header-bg': 'rgba(0, 0, 0, 0.4)',
-        '--table-cell-bg': 'rgba(30, 41, 59, 0.9)'
-    };
-
-    const lightThemeStyles = {
-        '--bg-base': '#f1f5f9',
-        '--bg-card': 'rgba(255, 255, 255, 0.8)',
-        '--border-color': 'rgba(0, 0, 0, 0.1)',
-        '--text-main': '#0f172a',
-        '--text-muted': '#475569',
-        '--accent-color': '#0284c7',
-        '--success-color': '#059669',
-        '--warning-color': '#b45309',
-        '--danger-color': '#dc2626',
-        '--highlight-bg': 'rgba(0, 0, 0, 0.05)',
-        '--highlight-text': '#0f172a',
-        '--bg-gradient-1': 'rgba(2, 132, 199, 0.05)',
-        '--bg-gradient-2': 'rgba(5, 150, 105, 0.05)',
-        '--table-header-bg': 'rgba(0, 0, 0, 0.05)',
-        '--table-cell-bg': 'rgba(255, 255, 255, 0.9)'
-    };
-
     function applyThemeToStyles(theme) {
-        const styles = theme === "dark" ? darkThemeStyles : lightThemeStyles;
-        for (const [key, value] of Object.entries(styles)) {
-            document.documentElement.style.setProperty(key, value);
+        let styleTag = document.getElementById("dynamic-theme");
+        if (!styleTag) {
+            styleTag = document.createElement("style");
+            styleTag.id = "dynamic-theme";
+            document.head.appendChild(styleTag);
+        }
+
+        if (theme === "dark") {
+            styleTag.innerHTML = `
+                :root, html, body {
+                    --bg-base: #0f172a !important;
+                    --bg-card: rgba(30, 41, 59, 0.7) !important;
+                    --border-color: rgba(255, 255, 255, 0.1) !important;
+                    --text-main: #f8fafc !important;
+                    --text-muted: #cbd5e1 !important;
+                    --accent-color: #38bdf8 !important;
+                    --success-color: #10b981 !important;
+                    --warning-color: #f59e0b !important;
+                    --danger-color: #ef4444 !important;
+                    --highlight-bg: rgba(255, 255, 255, 0.1) !important;
+                    --highlight-text: #fff !important;
+                    --bg-gradient-1: rgba(56, 189, 248, 0.05) !important;
+                    --bg-gradient-2: rgba(16, 185, 129, 0.05) !important;
+                    --table-header-bg: rgba(0, 0, 0, 0.4) !important;
+                    --table-cell-bg: rgba(30, 41, 59, 0.9) !important;
+                }
+                body {
+                    background-color: #0f172a !important;
+                    color: #f8fafc !important;
+                }
+            `;
+        } else {
+            styleTag.innerHTML = `
+                :root, html, body {
+                    --bg-base: #f1f5f9 !important;
+                    --bg-card: rgba(255, 255, 255, 0.8) !important;
+                    --border-color: rgba(0, 0, 0, 0.1) !important;
+                    --text-main: #0f172a !important;
+                    --text-muted: #475569 !important;
+                    --accent-color: #0284c7 !important;
+                    --success-color: #059669 !important;
+                    --warning-color: #b45309 !important;
+                    --danger-color: #dc2626 !important;
+                    --highlight-bg: rgba(0, 0, 0, 0.05) !important;
+                    --highlight-text: #0f172a !important;
+                    --bg-gradient-1: rgba(2, 132, 199, 0.05) !important;
+                    --bg-gradient-2: rgba(5, 150, 105, 0.05) !important;
+                    --table-header-bg: rgba(0, 0, 0, 0.05) !important;
+                    --table-cell-bg: rgba(255, 255, 255, 0.9) !important;
+                }
+                body {
+                    background-color: #f1f5f9 !important;
+                    color: #0f172a !important;
+                }
+            `;
         }
         updateThemeIcon(theme);
     }
