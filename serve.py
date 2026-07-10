@@ -672,7 +672,6 @@ def fetch_and_save_shift_data():
         comm = PLC()
         comm.IPAddress = ip
         comm.ProcessorSlot = 0
-        comm.Timeout = 5000
         try:
             tags_to_read = [f'{base_tag}.{current_shift}_TimerOK', f'{base_tag}.{current_shift}_TimerFault']
             if has_idle:
