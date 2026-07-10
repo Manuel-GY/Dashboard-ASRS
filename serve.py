@@ -154,18 +154,10 @@ def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
                 data[t][est] = mins
                 
         for t in ['T1', 'T2', 'T3']:
-            prev_data = get_previous_odometer(cursor, target_date, t, machine_name)
-            for est in ['run', 'fault', 'auto']:
-                if data[t][est] > 0 and prev_data[est] > 0:
-                    delta = data[t][est] - prev_data[est]
-                    if delta >= 0:
-                        data[t][est] = delta
-                        
-        conn.close()
-                    
-        for t in ['T1', 'T2', 'T3']:
             idle = data[t]['auto'] - data[t]['run'] - data[t]['fault']
             data[t]['idle'] = max(0, idle)
+            
+        conn.close()
             
         return jsonify({"success": True, "data": data, "source": "db"})
     except Exception as e:
@@ -215,13 +207,6 @@ def api_plc_conveyor():
                 elif est == 'auto': data[maq]['AUTO'] = mins
                 
         for maq in machines:
-            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
-            for k_est, db_est in [('RUN', 'run'), ('STOP', 'fault'), ('AUTO', 'auto')]:
-                if data[maq][k_est] > 0 and prev_data[db_est] > 0:
-                    delta = data[maq][k_est] - prev_data[db_est]
-                    if delta >= 0:
-                        data[maq][k_est] = delta
-                        
             idle_val = data[maq]['AUTO'] - data[maq]['RUN'] - data[maq]['STOP']
             data[maq]['IDLE'] = max(0, idle_val)
             del data[maq]['AUTO']
@@ -266,22 +251,8 @@ def api_asrs_engineering():
                 if est == 'run': plummers[maq]['run'] = mins
                 elif est == 'fault': plummers[maq]['stop'] = mins
                 elif est == 'auto': plummers[maq]['auto'] = mins
-                
-        for maq in robots_list:
-            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
-            for est in ['idle', 'working', 'waiting', 'failure']:
-                # Note: original code didn't seem to math robots for asrs engineering, but just in case
-                if robots[maq][est] > 0 and prev_data.get(est, 0) > 0:
-                    delta = robots[maq][est] - prev_data[est]
-                    if delta >= 0: robots[maq][est] = delta
                     
         for maq in plummers_list:
-            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
-            for k_est, db_est in [('run', 'run'), ('stop', 'fault'), ('auto', 'auto')]:
-                if plummers[maq][k_est] > 0 and prev_data[db_est] > 0:
-                    delta = plummers[maq][k_est] - prev_data[db_est]
-                    if delta >= 0: plummers[maq][k_est] = delta
-                    
             idle_val = plummers[maq]['auto'] - plummers[maq]['run'] - plummers[maq]['stop']
             plummers[maq]['idle'] = max(0, idle_val)
             del plummers[maq]['auto']
