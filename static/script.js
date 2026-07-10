@@ -695,15 +695,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-    function fetchLR1Turnos(start) {
-        const eRun = document.getElementById('lr1-run');
-        const eIdle = document.getElementById('lr1-idle');
-        const eStop = document.getElementById('lr1-stop');
-        if (eRun) eRun.textContent = '...';
-        if (eIdle) eIdle.textContent = '...';
-        if (eStop) eStop.textContent = '...';
+    function fetchRobotsTurnos(start) {
+        const robots = ['lr1', 'lr2', 'ulr1', 'ulr2'];
+        
+        robots.forEach(r => {
+            const eRun = document.getElementById(`${r}-run`);
+            const eIdle = document.getElementById(`${r}-idle`);
+            const eStop = document.getElementById(`${r}-stop`);
+            if (eRun) eRun.textContent = '...';
+            if (eIdle) eIdle.textContent = '...';
+            if (eStop) eStop.textContent = '...';
+        });
 
-        fetchWithRetry('/api/lr1-turnos')
+        let url = '/api/robots-turnos';
+        if (start) {
+            url += `?start=${encodeURIComponent(start)}`;
+        }
+
+        fetchWithRetry(url)
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.data) {
@@ -714,105 +723,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (hour >= 6 && hour < 14) targetShift = 'T2';
                         else if (hour >= 14 && hour < 22) targetShift = 'T3';
                     }
-                    if (eRun) eRun.textContent = data.data[targetShift].run;
-                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
-                    if (eStop) eStop.textContent = data.data[targetShift].fault;
-                }
-            })
-            .catch(error => console.error('Error fetching LR1 turnos:', error));
-    }
-
-    function fetchLR2Turnos(start) {
-        const eRun = document.getElementById('lr2-run');
-        const eIdle = document.getElementById('lr2-idle');
-        const eStop = document.getElementById('lr2-stop');
-        if (eRun) eRun.textContent = '...';
-        if (eIdle) eIdle.textContent = '...';
-        if (eStop) eStop.textContent = '...';
-
-        fetchWithRetry('/api/lr2-turnos')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.data) {
-                    let targetShift = 'T1';
-                    if (start) {
-                        const startDt = new Date(start);
-                        const hour = startDt.getHours();
-                        if (hour >= 6 && hour < 14) targetShift = 'T2';
-                        else if (hour >= 14 && hour < 22) targetShift = 'T3';
-                    }
-                    if (eRun) eRun.textContent = data.data[targetShift].run;
-                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
-                    if (eStop) eStop.textContent = data.data[targetShift].fault;
-                }
-            })
-            .catch(error => console.error('Error fetching LR2 turnos:', error));
-    }
-
-    function fetchULR1Turnos(start) {
-        const eRun = document.getElementById('ulr1-run');
-        const eIdle = document.getElementById('ulr1-idle');
-        const eStop = document.getElementById('ulr1-stop');
-        if (eRun) eRun.textContent = '...';
-        if (eIdle) eIdle.textContent = '...';
-        if (eStop) eStop.textContent = '...';
-
-        fetchWithRetry('/api/ulr1-turnos')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.data) {
-                    let targetShift = 'T1'; // Noche por defecto
-                    if (start) {
-                        const startDt = new Date(start);
-                        const hour = startDt.getHours();
-                        if (hour >= 6 && hour < 14) {
-                            targetShift = 'T2'; // Día
-                        } else if (hour >= 14 && hour < 22) {
-                            targetShift = 'T3'; // Tarde
+                    
+                    const mapping = {'lr1': 'LR1', 'lr2': 'LR2', 'ulr1': 'ULR1', 'ulr2': 'ULR2'};
+                    
+                    robots.forEach(r => {
+                        const maqData = data.data[mapping[r]];
+                        if (maqData && maqData[targetShift]) {
+                            const eRun = document.getElementById(`${r}-run`);
+                            const eIdle = document.getElementById(`${r}-idle`);
+                            const eStop = document.getElementById(`${r}-stop`);
+                            if (eRun) eRun.textContent = maqData[targetShift].run;
+                            if (eIdle) eIdle.textContent = maqData[targetShift].idle;
+                            if (eStop) eStop.textContent = maqData[targetShift].fault;
                         }
-                    }
-
-                    if (eRun) eRun.textContent = data.data[targetShift].run;
-                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
-                    if (eStop) eStop.textContent = data.data[targetShift].fault;
+                    });
                 }
             })
-            .catch(error => {
-                console.error('Error fetching ULR1 turnos:', error);
-            });
-    }
-
-    function fetchULR2Turnos(start) {
-        const eRun = document.getElementById('ulr2-run');
-        const eIdle = document.getElementById('ulr2-idle');
-        const eStop = document.getElementById('ulr2-stop');
-        if (eRun) eRun.textContent = '...';
-        if (eIdle) eIdle.textContent = '...';
-        if (eStop) eStop.textContent = '...';
-
-        fetchWithRetry('/api/ulr2-turnos')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.data) {
-                    let targetShift = 'T1'; // Noche por defecto
-                    if (start) {
-                        const startDt = new Date(start);
-                        const hour = startDt.getHours();
-                        if (hour >= 6 && hour < 14) {
-                            targetShift = 'T2'; // Día
-                        } else if (hour >= 14 && hour < 22) {
-                            targetShift = 'T3'; // Tarde
-                        }
-                    }
-
-                    if (eRun) eRun.textContent = data.data[targetShift].run;
-                    if (eIdle) eIdle.textContent = data.data[targetShift].idle;
-                    if (eStop) eStop.textContent = data.data[targetShift].fault;
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching ULR2 turnos:', error);
-            });
+            .catch(error => console.error('Error fetching robots turnos:', error));
     }
 
     function fetchAllData() {
@@ -820,10 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchInputOutputData(getStartDateTime(), getEndDateTime());
         fetchConveyorFullData(getStartDateTime(), getEndDateTime());
         fetchPLCConveyorData(getStartDateTime(), getEndDateTime());
-        fetchLR1Turnos(getStartDateTime());
-        fetchLR2Turnos(getStartDateTime());
-        fetchULR1Turnos(getStartDateTime());
-        fetchULR2Turnos(getStartDateTime());
+        fetchRobotsTurnos(getStartDateTime());
         fetchCranePerformanceData();
         fetchAsrsEngineeringData();
         fetchPressDeliveryData();

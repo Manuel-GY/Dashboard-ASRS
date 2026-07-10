@@ -121,59 +121,49 @@ def api_io_data():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
-def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
+@app.route('/api/robots-turnos')
+def api_robots_turnos():
     start_str = request.args.get('start', '')
     target_date = None
-    target_shift = 'T1'
     
     if start_str:
         try:
             start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-            target_date, target_shift = get_current_shift_info(start_dt)
+            target_date, _ = get_current_shift_info(start_dt)
         except Exception as e: print(f'[WARN] Error parsing start date: {e}')
     
     current_date, _ = get_current_shift_info()
     if not target_date: target_date = current_date
     
-    data = {
+    machines = ['ULR1', 'ULR2', 'LR1', 'LR2']
+    data = {m: {
         "T1": {"run": 0, "fault": 0, "auto": 0, "idle": 0},
         "T2": {"run": 0, "fault": 0, "auto": 0, "idle": 0},
         "T3": {"run": 0, "fault": 0, "auto": 0, "idle": 0}
-    }
+    } for m in machines}
     
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute('SELECT turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina = ?', (target_date, machine_name))
+        cursor.execute(f'SELECT maquina, turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina IN ({",".join(["?"]*len(machines))})', [target_date] + machines)
         rows = cursor.fetchall()
         
         for r in rows:
-            t, est, mins = r
+            maq, t, est, mins = r
             if est == 'idle': est = 'auto'
-            if t in data and est in data[t]:
-                data[t][est] = mins
+            if maq in data and t in data[maq] and est in data[maq][t]:
+                data[maq][t][est] = mins
                 
-        for t in ['T1', 'T2', 'T3']:
-            idle = data[t]['auto'] - data[t]['run'] - data[t]['fault']
-            data[t]['idle'] = max(0, idle)
+        for maq in machines:
+            for t in ['T1', 'T2', 'T3']:
+                idle = data[maq][t]['auto'] - data[maq][t]['run'] - data[maq][t]['fault']
+                data[maq][t]['idle'] = max(0, idle)
             
         conn.close()
             
         return jsonify({"success": True, "data": data, "source": "db"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
-
-@app.route('/api/ulr1-turnos')
-def api_ulr1_turnos(): return fetch_robot_turnos_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1')
-
-@app.route('/api/ulr2-turnos')
-def api_ulr2_turnos(): return fetch_robot_turnos_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2')
-
-@app.route('/api/lr1-turnos')
-def api_lr1_turnos(): return fetch_robot_turnos_data('LR1', '10.107.210.141', 'PickDownTimeLoad1')
-
-@app.route('/api/lr2-turnos')
-def api_lr2_turnos(): return fetch_robot_turnos_data('LR2', '10.107.210.140', 'PickDownTimeLoad2')
 
 @app.route('/api/plc-conveyor')
 def api_plc_conveyor():
