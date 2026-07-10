@@ -15,12 +15,15 @@ from flask import Flask, request, jsonify, send_from_directory, abort
 from bs4 import BeautifulSoup
 from pylogix import PLC
 
+_session = requests.Session()
+_session.proxies.update({"http": None, "https": None})
+
 
 
 
 def get_capped_now():
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=5)
         cursor = conn.cursor()
         cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
         row = cursor.fetchone()
@@ -34,7 +37,6 @@ def get_capped_now():
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 
-import urllib.parse
 from flask import current_app
 
 @app.before_request
@@ -48,7 +50,7 @@ def serve_from_cache():
         sorted_query = urllib.parse.urlencode(sorted(query_dict.items()))
         cache_key = f"{request.path}?{sorted_query}"
         
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=5)
         cursor = conn.cursor()
         cursor.execute("SELECT response_json FROM api_cache WHERE cache_key=?", (cache_key,))
         row = cursor.fetchone()
@@ -67,7 +69,7 @@ def cache_response(response):
             cache_key = f"{request.path}?{sorted_query}"
             
             try:
-                conn = sqlite3.connect(DB_PATH)
+                conn = sqlite3.connect(DB_PATH, timeout=5)
                 cursor = conn.cursor()
                 cursor.execute("SELECT 1 FROM api_cache WHERE cache_key=?", (cache_key,))
                 if not cursor.fetchone():
@@ -97,7 +99,7 @@ def api_io_data():
             print(f'[WARN] Error parsing date params: {e}')
             
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=5)
         cursor = conn.cursor()
         cursor.execute("SELECT entrada, manual, auto, rate_entrada, rate_manual, rate_auto, construido, vulcanizado FROM io_history WHERE fecha = ? AND turno = ?", (target_date, target_shift))
         row = cursor.fetchone()
@@ -143,7 +145,7 @@ def api_robots_turnos():
     } for m in machines}
     
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=5)
         cursor = conn.cursor()
         cursor.execute(f'SELECT maquina, turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina IN ({",".join(["?"]*len(machines))})', [target_date] + machines)
         rows = cursor.fetchall()
@@ -184,7 +186,7 @@ def api_plc_conveyor():
     data = {m: {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0, 'AUTO': 0.0} for m in machines}
     
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=5)
         cursor = conn.cursor()
         cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(machines))), [target_date, target_shift] + machines)
         rows = cursor.fetchall()
@@ -221,7 +223,7 @@ def api_asrs_engineering():
     if not target_date: target_date = current_date
     if not target_shift: target_shift = current_shift
     
-    robots_list = []
+    robots_list = ['ULR1', 'ULR2', 'LR1', 'LR2']
     plummers_list = ['L1', 'L2', 'L3']
     all_mach = robots_list + plummers_list
     
@@ -229,7 +231,7 @@ def api_asrs_engineering():
     plummers = {m: {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'auto': 0.0} for m in plummers_list}
     
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=5)
         cursor = conn.cursor()
         cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(all_mach))), [target_date, target_shift] + all_mach)
         rows = cursor.fetchall()
@@ -271,7 +273,7 @@ def api_crane_performance():
     url = f"http://10.107.194.62/sbs/reports/gtasrs_aisle_history.php?run=1&str_ts={urllib.parse.quote(start_param)}&end_ts={urllib.parse.quote(end_param)}"
     
     try:
-        res = requests.get(url, timeout=10, proxies={"http": None, "https": None})
+        res = _session.get(url, timeout=10)
         res.encoding = 'utf-8' if not res.content.startswith(b'\xff\xfe') else 'utf-16le'
         html_text = res.text
         
@@ -320,7 +322,7 @@ def api_conveyor_full():
     }
 
     try:
-        res = requests.get(url, params=params, headers={"Accept-language": "en"}, timeout=10, proxies={"http": None, "https": None})
+        res = _session.get(url, params=params, headers={"Accept-language": "en"}, timeout=10)
         root = ET.fromstring(res.content)
         total_downtime = 0.0
         frequency = 0
@@ -371,7 +373,7 @@ def api_downtime():
                 "ARG_START_DATE": start_formatted, "ARG_END_DATE": end_formatted,
                 "ARG_LANG": "ENG", "ARG_MACHINE_GROUP_GUID": ""
             }
-            res = requests.get(url, params=params, headers={"Accept-language": "en"}, timeout=8, proxies={"http": None, "https": None})
+            res = _session.get(url, params=params, headers={"Accept-language": "en"}, timeout=8)
             root = ET.fromstring(res.content)
             for row in root.findall('.//Row'):
                 mach_el = row.find('MACH_PART_NAME')
@@ -418,7 +420,7 @@ def api_press_delivery():
     ignored_cavities = {"440", "520", "540", "620", "640"}
 
     try:
-        res = requests.get(url_compliance, timeout=10, proxies={"http": None, "https": None})
+        res = _session.get(url_compliance, timeout=10)
         soup = BeautifulSoup(res.text, "html.parser")
         target_table = next((t for t in soup.find_all("table") if len(t.find_all("tr")) > 10), None)
         if target_table:
@@ -443,7 +445,7 @@ def api_press_delivery():
         "ARG_DATA": "PRODUCT_CNT;", "ARG_LANG": "ENG", "ARG_LANGUAGE_CD": "en", "ARG_USER": ""
     }
     try:
-        res_cross = requests.get(url_cross, params=params_cross, headers={"Accept-language": "en"}, timeout=10, proxies={"http": None, "https": None})
+        res_cross = _session.get(url_cross, params=params_cross, headers={"Accept-language": "en"}, timeout=10)
         root = ET.fromstring(res_cross.content)
         for row in root.findall('.//Row'):
             mach_el = row.find('MACH_PART_NAME')
@@ -474,7 +476,7 @@ def api_press_delivery():
     def fetch_machine_var(m_id, var):
         url = f"http://10.107.194.70/ASRS/press_kpi_data.php?machine={m_id}&variable={var}"
         try:
-            res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
+            res = _session.get(url, timeout=5)
             return m_id, var, res.json()
         except Exception as e:
             print(f'[WARN] Error fetching KPI m={m_id} v={var}: {e}')
@@ -523,7 +525,7 @@ def api_daily_ticket():
         
         url = "http://akrmfgcorp.akr.goodyear.com/mfgcorp/aop/pzkmtsc.jsp?RptView=LA"
         
-        res = requests.get(url, timeout=10, proxies={"http": None, "https": None})
+        res = _session.get(url, timeout=10)
         res.raise_for_status()
         
 
@@ -556,7 +558,9 @@ def api_daily_ticket():
 DB_PATH = 'shift_history.db'
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute('''CREATE TABLE IF NOT EXISTS io_history (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         fecha TEXT,
@@ -601,7 +605,7 @@ def init_db():
     conn.close()
 
 def upsert_shift_data(fecha, turno, maquina, estado, minutos):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     cursor = conn.cursor()
     cursor.execute('''SELECT id FROM shift_summaries 
                       WHERE fecha = ? AND turno = ? AND maquina = ? AND estado = ?''', 
@@ -668,6 +672,7 @@ def fetch_and_save_shift_data():
         comm = PLC()
         comm.IPAddress = ip
         comm.ProcessorSlot = 0
+        comm.Timeout = 5000
         try:
             tags_to_read = [f'{base_tag}.{current_shift}_TimerOK', f'{base_tag}.{current_shift}_TimerFault']
             if has_idle:
@@ -699,9 +704,8 @@ def fetch_and_save_shift_data():
     # Fetch and save IO data to SQLite
     try:
         url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
-        res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
+        res = _session.get(url, timeout=5)
         if res.status_code == 200:
-            import re
             html = res.text
             def extract(id_name):
                 match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
@@ -714,7 +718,7 @@ def fetch_and_save_shift_data():
             rate_manual = extract("s1_manual_rate")
             rate_auto = extract("s1_press_rate")
             
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(DB_PATH, timeout=5)
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM io_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
             row = cursor.fetchone()
@@ -739,14 +743,14 @@ def fetch_and_save_shift_data():
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            res_gy = requests.get(url_gy, timeout=15, proxies={"http": None, "https": None})
+            res_gy = _session.get(url_gy, timeout=15)
             if res_gy.status_code == 200:
                 data_gy = res_gy.json()
                 if data_gy.get("status") == "success":
                     construido = str(data_gy["data"]["total"]["hva"]["prod"])
                     vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
                     
-                    conn = sqlite3.connect(DB_PATH)
+                    conn = sqlite3.connect(DB_PATH, timeout=5)
                     cursor = conn.cursor()
                     cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE fecha=? AND turno=?",
                                    (construido, vulcanizado, date_str, current_shift))
@@ -783,9 +787,8 @@ def fetch_and_save_shift_data():
         for ep in endpoints_to_cache:
             try:
                 full_url = f"http://127.0.0.1:8006{ep}&live=1" if '?' in ep else f"http://127.0.0.1:8006{ep}?live=1"
-                res_ep = requests.get(full_url, timeout=30)
+                res_ep = _session.get(full_url, timeout=30)
                 if res_ep.status_code == 200:
-                    import urllib.parse
                     if '?' in ep:
                         path_part, query_part = ep.split('?')
                         q_dict = dict(urllib.parse.parse_qsl(query_part))
@@ -796,7 +799,7 @@ def fetch_and_save_shift_data():
                         cache_key = ep
 
                     
-                    conn_cache = sqlite3.connect(DB_PATH)
+                    conn_cache = sqlite3.connect(DB_PATH, timeout=5)
                     cursor_cache = conn_cache.cursor()
                     cursor_cache.execute('''INSERT OR REPLACE INTO api_cache (cache_key, response_json, timestamp)
                                       VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, res_ep.text))
