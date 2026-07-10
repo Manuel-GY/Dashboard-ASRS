@@ -52,12 +52,17 @@ def serve_from_cache():
         
         conn = sqlite3.connect(DB_PATH, timeout=5)
         cursor = conn.cursor()
-        cursor.execute("SELECT response_json FROM api_cache WHERE cache_key=?", (cache_key,))
+        cursor.execute("SELECT response_json, timestamp FROM api_cache WHERE cache_key=?", (cache_key,))
         row = cursor.fetchone()
         conn.close()
         
         if row:
-            return current_app.response_class(row[0], mimetype='application/json')
+            try:
+                cache_time = datetime.strptime(row[1], '%Y-%m-%d %H:%M:%S')
+                if (datetime.now() - cache_time).total_seconds() < 300:
+                    return current_app.response_class(row[0], mimetype='application/json')
+            except:
+                pass
 
 @app.after_request
 def cache_response(response):
@@ -71,11 +76,9 @@ def cache_response(response):
             try:
                 conn = sqlite3.connect(DB_PATH, timeout=5)
                 cursor = conn.cursor()
-                cursor.execute("SELECT 1 FROM api_cache WHERE cache_key=?", (cache_key,))
-                if not cursor.fetchone():
-                    cursor.execute('''INSERT INTO api_cache (cache_key, response_json, timestamp)
-                                      VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, response.get_data(as_text=True)))
-                    conn.commit()
+                cursor.execute('''INSERT OR REPLACE INTO api_cache (cache_key, response_json, timestamp)
+                                  VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, response.get_data(as_text=True)))
+                conn.commit()
                 conn.close()
             except Exception as e:
                 print(f"[WARN] Cache insert error: {e}")
