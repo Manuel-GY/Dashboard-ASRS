@@ -96,7 +96,7 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-plummers"></span>
                         <h2>PLUMMERS</h2>
-                        <span class="kpi-bracket">[Total = <span class="highlight" id="plummers-total-tires">-</span> tires - Objetivo: <span class="highlight" id="plummers-target-tires">1800</span> tires]</span>
+                        <span class="kpi-bracket">[Valores en min]</span>
                     </div>
                 </div>
                 <div class="card-content">
@@ -269,7 +269,11 @@
                                     </svg>
                                 </div>
                                 <div class="io-box-data">
-                                    <span class="io-box-label">Construido</span>
+                                    <span class="io-box-label" style="display:flex; align-items:center;">Construido 
+                                        <span class="help-tooltip" data-tooltip="Acreditado desde Hora - Hora Construccion">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                        </span>
+                                    </span>
                                     <span class="io-box-value" id="io-construido-val">- <small>tires</small></span>
                                 </div>
                             </div>
@@ -282,8 +286,23 @@
                                     </svg>
                                 </div>
                                 <div class="io-box-data">
-                                    <span class="io-box-label">Vulcanizado</span>
+                                    <span class="io-box-label" style="display:flex; align-items:center;">Vulcanizado 
+                                        <span class="help-tooltip" data-tooltip="Acreditado desde Hora - Hora Cura">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                        </span>
+                                    </span>
                                     <span class="io-box-value" id="io-vulcanizado-val">- <small>tires</small></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Nueva caja de Total Salida -->
+                            <div class="io-premium-box" style="border-left-color: #6366f1;">
+                                <div class="io-icon-container" style="color: #6366f1; background-color: rgba(99,102,241,0.1);">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5l7 7-7 7"></path></svg>
+                                </div>
+                                <div class="io-box-data">
+                                    <span class="io-box-label">Total Salida ASRS</span>
+                                    <span class="io-box-value" id="io-total-salida-val">- <small>tires</small></span>
                                 </div>
                             </div>
                         </div>
@@ -297,7 +316,11 @@
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                                 </div>
                                 <div class="io-box-data" style="flex:1;">
-                                    <span class="io-box-label">Entrada ASRS</span>
+                                    <span class="io-box-label" style="display:flex; align-items:center;">Entrada ASRS 
+                                        <span class="help-tooltip" data-tooltip="Ingreso en Induct 1-2">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                        </span>
+                                    </span>
                                     <span class="io-box-value" id="io-entrada-val">- <small>tires</small></span>
                                 </div>
                                 <div class="io-box-rate-container">

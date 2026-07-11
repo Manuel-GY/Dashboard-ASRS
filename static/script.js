@@ -55,6 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 document.getElementById('io-auto-val').innerHTML = `${data.auto} <small>tires</small>`;
                 document.getElementById('io-auto-rate').innerHTML = `Rate= ${data.rate_auto} <small>tires/m</small>`;
+                
+                // Nuevo cálculo: Suma consolidada de Salida
+                const totalSalida = parseInt(data.manual) + parseInt(data.auto);
+                const elTotalSalida = document.getElementById('io-total-salida-val');
+                if (elTotalSalida) elTotalSalida.innerHTML = `${totalSalida} <small>tires</small>`;
 
                 // NUEVOS DATOS (Construido y Vulcanizado)
                 if (data.construido !== undefined) {
@@ -284,7 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-conveyor-full', null);
 
         // 2. Plummers
-        document.getElementById('plummers-total-tires').textContent = '-';
         setIndicatorColor('ind-plummers', null);
 
         // 3. Robots Performance
@@ -668,8 +672,6 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => console.error('Error fetching ASRS Engineering data:', error));
 
-        const totalTires = document.getElementById('plummers-total-tires');
-        if (totalTires) totalTires.textContent = "-";
         setIndicatorColor('ind-plummers', null);
     }
 

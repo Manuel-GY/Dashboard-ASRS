@@ -1197,3 +1197,10 @@ button[disabled] {
 
 .orange-theme { border-left: 5px solid var(--warning-color); }
 .orange-theme .io-box-value { color: var(--warning-color); }
+
+/* Tooltips Premium */
+.help-tooltip { position: relative; cursor: help; display: inline-flex; align-items: center; justify-content: center; color: #94a3b8; margin-left: 8px; transition: color 0.2s; pointer-events: auto; }
+.help-tooltip:hover { color: #6366f1; }
+.help-tooltip::after { content: attr(data-tooltip); position: absolute; bottom: 140%; left: 50%; transform: translateX(-50%) translateY(5px); background-color: #1e293b; color: #f8fafc; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; white-space: nowrap; opacity: 0; visibility: hidden; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000; pointer-events: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+.help-tooltip::before { content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(5px); border-width: 6px; border-style: solid; border-color: #1e293b transparent transparent transparent; opacity: 0; visibility: hidden; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000; pointer-events: none; }
+.help-tooltip:hover::after, .help-tooltip:hover::before { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
