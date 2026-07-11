@@ -500,13 +500,28 @@ def api_press_delivery():
             if val_key == 'znl': val_key = 'cortinas'
             if val_key == 'trays': val_key = 'prensa'
             
-            for item in data:
+            # Reconstruct exact datetime for each item by working backwards from now
+            current_date = get_capped_now().replace(minute=0, second=0, microsecond=0)
+            target_start = start_dt.replace(minute=0, second=0, microsecond=0)
+            target_end = end_dt.replace(minute=0, second=0, microsecond=0)
+            
+            for item in reversed(data):
                 hour_str = str(item.get('time'))
-                if hour_str.isdigit() and int(hour_str) in target_hours:
+                if not hour_str.isdigit(): continue
+                hour_int = int(hour_str)
+                
+                # Sync current_date backwards until it matches the item's hour
+                while current_date.hour != hour_int:
+                    current_date -= timedelta(hours=1)
+                
+                if target_start <= current_date <= target_end:
                     val = item.get(var)
                     if val:
                         try: groups[m_name]['times'][val_key] += float(val)
-                        except Exception as e: print(f'[WARN] Error parsing KPI val: {e}')
+                        except Exception as e: pass
+                
+                # Move to the previous hour for the next item in reversed(data)
+                current_date -= timedelta(hours=1)
 
     for m_name in groups:
         t_data = groups[m_name]['times']
