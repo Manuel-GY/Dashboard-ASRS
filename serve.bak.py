@@ -15,15 +15,12 @@ from flask import Flask, request, jsonify, send_from_directory, abort
 from bs4 import BeautifulSoup
 from pylogix import PLC
 
-_session = requests.Session()
-_session.proxies.update({"http": None, "https": None})
-
 
 
 
 def get_capped_now():
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
         row = cursor.fetchone()
@@ -35,55 +32,6 @@ def get_capped_now():
     return datetime.now()
 
 app = Flask(__name__, static_folder='static', static_url_path='')
-
-
-from flask import current_app
-
-@app.before_request
-def serve_from_cache():
-    if request.path.startswith('/api/') and request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
-        if request.args.get('live') == '1':
-            return
-            
-        query_dict = dict(request.args)
-        query_dict.pop('live', None)
-        sorted_query = urllib.parse.urlencode(sorted(query_dict.items()))
-        cache_key = f"{request.path}?{sorted_query}"
-        
-        conn = sqlite3.connect(DB_PATH, timeout=5)
-        cursor = conn.cursor()
-        cursor.execute("SELECT response_json, timestamp FROM api_cache WHERE cache_key=?", (cache_key,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            try:
-                cache_time = datetime.strptime(row[1], '%Y-%m-%d %H:%M:%S')
-                if (datetime.utcnow() - cache_time).total_seconds() < 300:
-                    return current_app.response_class(row[0], mimetype='application/json')
-            except:
-                pass
-
-@app.after_request
-def cache_response(response):
-    if request.path.startswith('/api/') and request.args.get('live') != '1' and response.status_code == 200:
-        if request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
-            query_dict = dict(request.args)
-            query_dict.pop('live', None)
-            sorted_query = urllib.parse.urlencode(sorted(query_dict.items()))
-            cache_key = f"{request.path}?{sorted_query}"
-            
-            try:
-                conn = sqlite3.connect(DB_PATH, timeout=5)
-                cursor = conn.cursor()
-                cursor.execute('''INSERT OR REPLACE INTO api_cache (cache_key, response_json, timestamp)
-                                  VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, response.get_data(as_text=True)))
-                conn.commit()
-                conn.close()
-            except Exception as e:
-                print(f"[WARN] Cache insert error: {e}")
-    return response
-
 
 @app.route('/')
 def index():
@@ -102,7 +50,7 @@ def api_io_data():
             print(f'[WARN] Error parsing date params: {e}')
             
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT entrada, manual, auto, rate_entrada, rate_manual, rate_auto, construido, vulcanizado FROM io_history WHERE fecha = ? AND turno = ?", (target_date, target_shift))
         row = cursor.fetchone()
@@ -126,49 +74,67 @@ def api_io_data():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
-@app.route('/api/robots-turnos')
-def api_robots_turnos():
+def fetch_robot_turnos_data(machine_name, ip_address, base_tag):
     start_str = request.args.get('start', '')
     target_date = None
+    target_shift = 'T1'
     
     if start_str:
         try:
             start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
-            target_date, _ = get_current_shift_info(start_dt)
+            target_date, target_shift = get_current_shift_info(start_dt)
         except Exception as e: print(f'[WARN] Error parsing start date: {e}')
     
     current_date, _ = get_current_shift_info()
     if not target_date: target_date = current_date
     
-    machines = ['ULR1', 'ULR2', 'LR1', 'LR2']
-    data = {m: {
+    data = {
         "T1": {"run": 0, "fault": 0, "auto": 0, "idle": 0},
         "T2": {"run": 0, "fault": 0, "auto": 0, "idle": 0},
         "T3": {"run": 0, "fault": 0, "auto": 0, "idle": 0}
-    } for m in machines}
+    }
     
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute(f'SELECT maquina, turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina IN ({",".join(["?"]*len(machines))})', [target_date] + machines)
+        cursor.execute('SELECT turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina = ?', (target_date, machine_name))
         rows = cursor.fetchall()
         
         for r in rows:
-            maq, t, est, mins = r
+            t, est, mins = r
             if est == 'idle': est = 'auto'
-            if maq in data and t in data[maq] and est in data[maq][t]:
-                data[maq][t][est] = mins
+            if t in data and est in data[t]:
+                data[t][est] = mins
                 
-        for maq in machines:
-            for t in ['T1', 'T2', 'T3']:
-                idle = data[maq][t]['auto'] - data[maq][t]['run'] - data[maq][t]['fault']
-                data[maq][t]['idle'] = max(0, idle)
-            
+        for t in ['T1', 'T2', 'T3']:
+            prev_data = get_previous_odometer(cursor, target_date, t, machine_name)
+            for est in ['run', 'fault', 'auto']:
+                if data[t][est] > 0 and prev_data[est] > 0:
+                    delta = data[t][est] - prev_data[est]
+                    if delta >= 0:
+                        data[t][est] = delta
+                        
         conn.close()
+                    
+        for t in ['T1', 'T2', 'T3']:
+            idle = data[t]['auto'] - data[t]['run'] - data[t]['fault']
+            data[t]['idle'] = max(0, idle)
             
         return jsonify({"success": True, "data": data, "source": "db"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
+
+@app.route('/api/ulr1-turnos')
+def api_ulr1_turnos(): return fetch_robot_turnos_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1')
+
+@app.route('/api/ulr2-turnos')
+def api_ulr2_turnos(): return fetch_robot_turnos_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2')
+
+@app.route('/api/lr1-turnos')
+def api_lr1_turnos(): return fetch_robot_turnos_data('LR1', '10.107.210.141', 'PickDownTimeLoad1')
+
+@app.route('/api/lr2-turnos')
+def api_lr2_turnos(): return fetch_robot_turnos_data('LR2', '10.107.210.140', 'PickDownTimeLoad2')
 
 @app.route('/api/plc-conveyor')
 def api_plc_conveyor():
@@ -189,7 +155,7 @@ def api_plc_conveyor():
     data = {m: {'RUN': 0.0, 'IDLE': 0.0, 'STOP': 0.0, 'AUTO': 0.0} for m in machines}
     
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(machines))), [target_date, target_shift] + machines)
         rows = cursor.fetchall()
@@ -202,6 +168,13 @@ def api_plc_conveyor():
                 elif est == 'auto': data[maq]['AUTO'] = mins
                 
         for maq in machines:
+            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
+            for k_est, db_est in [('RUN', 'run'), ('STOP', 'fault'), ('AUTO', 'auto')]:
+                if data[maq][k_est] > 0 and prev_data[db_est] > 0:
+                    delta = data[maq][k_est] - prev_data[db_est]
+                    if delta >= 0:
+                        data[maq][k_est] = delta
+                        
             idle_val = data[maq]['AUTO'] - data[maq]['RUN'] - data[maq]['STOP']
             data[maq]['IDLE'] = max(0, idle_val)
             del data[maq]['AUTO']
@@ -226,24 +199,42 @@ def api_asrs_engineering():
     if not target_date: target_date = current_date
     if not target_shift: target_shift = current_shift
     
+    robots_list = []
     plummers_list = ['L1', 'L2', 'L3']
+    all_mach = robots_list + plummers_list
     
+    robots = {m: {'idle': 0.0, 'working': 0.0, 'waiting': 0.0, 'failure': 0.0} for m in robots_list}
     plummers = {m: {'run': 0.0, 'idle': 0.0, 'stop': 0.0, 'auto': 0.0} for m in plummers_list}
     
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(plummers_list))), [target_date, target_shift] + plummers_list)
+        cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(all_mach))), [target_date, target_shift] + all_mach)
         rows = cursor.fetchall()
         
         for maq, est, mins in rows:
             if est == 'idle': est = 'auto'
+            if maq in robots: robots[maq][est] = mins
             if maq in plummers:
                 if est == 'run': plummers[maq]['run'] = mins
                 elif est == 'fault': plummers[maq]['stop'] = mins
                 elif est == 'auto': plummers[maq]['auto'] = mins
+                
+        for maq in robots_list:
+            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
+            for est in ['idle', 'working', 'waiting', 'failure']:
+                # Note: original code didn't seem to math robots for asrs engineering, but just in case
+                if robots[maq][est] > 0 and prev_data.get(est, 0) > 0:
+                    delta = robots[maq][est] - prev_data[est]
+                    if delta >= 0: robots[maq][est] = delta
                     
         for maq in plummers_list:
+            prev_data = get_previous_odometer(cursor, target_date, target_shift, maq)
+            for k_est, db_est in [('run', 'run'), ('stop', 'fault'), ('auto', 'auto')]:
+                if plummers[maq][k_est] > 0 and prev_data[db_est] > 0:
+                    delta = plummers[maq][k_est] - prev_data[db_est]
+                    if delta >= 0: plummers[maq][k_est] = delta
+                    
             idle_val = plummers[maq]['auto'] - plummers[maq]['run'] - plummers[maq]['stop']
             plummers[maq]['idle'] = max(0, idle_val)
             del plummers[maq]['auto']
@@ -253,7 +244,7 @@ def api_asrs_engineering():
         last_updated_db = max_ts_row[0] if max_ts_row and max_ts_row[0] else None
             
         conn.close()
-        return jsonify({"success": True, "plummers": plummers, "source": "db", "last_updated": last_updated_db})
+        return jsonify({"success": True, "robots": robots, "plummers": plummers, "source": "db", "last_updated": last_updated_db})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
@@ -272,7 +263,7 @@ def api_crane_performance():
     url = f"http://10.107.194.62/sbs/reports/gtasrs_aisle_history.php?run=1&str_ts={urllib.parse.quote(start_param)}&end_ts={urllib.parse.quote(end_param)}"
     
     try:
-        res = _session.get(url, timeout=10)
+        res = requests.get(url, timeout=10, proxies={"http": None, "https": None})
         res.encoding = 'utf-8' if not res.content.startswith(b'\xff\xfe') else 'utf-16le'
         html_text = res.text
         
@@ -321,7 +312,7 @@ def api_conveyor_full():
     }
 
     try:
-        res = _session.get(url, params=params, headers={"Accept-language": "en"}, timeout=10)
+        res = requests.get(url, params=params, headers={"Accept-language": "en"}, timeout=10, proxies={"http": None, "https": None})
         root = ET.fromstring(res.content)
         total_downtime = 0.0
         frequency = 0
@@ -372,7 +363,7 @@ def api_downtime():
                 "ARG_START_DATE": start_formatted, "ARG_END_DATE": end_formatted,
                 "ARG_LANG": "ENG", "ARG_MACHINE_GROUP_GUID": ""
             }
-            res = _session.get(url, params=params, headers={"Accept-language": "en"}, timeout=8)
+            res = requests.get(url, params=params, headers={"Accept-language": "en"}, timeout=8, proxies={"http": None, "https": None})
             root = ET.fromstring(res.content)
             for row in root.findall('.//Row'):
                 mach_el = row.find('MACH_PART_NAME')
@@ -419,7 +410,7 @@ def api_press_delivery():
     ignored_cavities = {"440", "520", "540", "620", "640"}
 
     try:
-        res = _session.get(url_compliance, timeout=10)
+        res = requests.get(url_compliance, timeout=10, proxies={"http": None, "https": None})
         soup = BeautifulSoup(res.text, "html.parser")
         target_table = next((t for t in soup.find_all("table") if len(t.find_all("tr")) > 10), None)
         if target_table:
@@ -444,7 +435,7 @@ def api_press_delivery():
         "ARG_DATA": "PRODUCT_CNT;", "ARG_LANG": "ENG", "ARG_LANGUAGE_CD": "en", "ARG_USER": ""
     }
     try:
-        res_cross = _session.get(url_cross, params=params_cross, headers={"Accept-language": "en"}, timeout=10)
+        res_cross = requests.get(url_cross, params=params_cross, headers={"Accept-language": "en"}, timeout=10, proxies={"http": None, "https": None})
         root = ET.fromstring(res_cross.content)
         for row in root.findall('.//Row'):
             mach_el = row.find('MACH_PART_NAME')
@@ -475,7 +466,7 @@ def api_press_delivery():
     def fetch_machine_var(m_id, var):
         url = f"http://10.107.194.70/ASRS/press_kpi_data.php?machine={m_id}&variable={var}"
         try:
-            res = _session.get(url, timeout=5)
+            res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
             return m_id, var, res.json()
         except Exception as e:
             print(f'[WARN] Error fetching KPI m={m_id} v={var}: {e}')
@@ -524,7 +515,7 @@ def api_daily_ticket():
         
         url = "http://akrmfgcorp.akr.goodyear.com/mfgcorp/aop/pzkmtsc.jsp?RptView=LA"
         
-        res = _session.get(url, timeout=10)
+        res = requests.get(url, timeout=10, proxies={"http": None, "https": None})
         res.raise_for_status()
         
 
@@ -557,9 +548,7 @@ def api_daily_ticket():
 DB_PATH = 'shift_history.db'
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
+    conn = sqlite3.connect(DB_PATH)
     conn.execute('''CREATE TABLE IF NOT EXISTS io_history (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         fecha TEXT,
@@ -584,13 +573,6 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    
-    conn.execute('''CREATE TABLE IF NOT EXISTS api_cache (
-                        cache_key TEXT PRIMARY KEY,
-                        response_json TEXT,
-                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )''')
-
     conn.execute('''CREATE TABLE IF NOT EXISTS shift_summaries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         fecha TEXT,
@@ -604,7 +586,7 @@ def init_db():
     conn.close()
 
 def upsert_shift_data(fecha, turno, maquina, estado, minutos):
-    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''SELECT id FROM shift_summaries 
                       WHERE fecha = ? AND turno = ? AND maquina = ? AND estado = ?''', 
@@ -651,21 +633,7 @@ def get_previous_odometer(cursor, target_date, turno, maquina):
 
 
 def fetch_and_save_shift_data():
-    # Restamos 10 minutos para que las ejecuciones a las 14:05, 22:05 y 06:05 
-    # sigan evaluando y cerrando el turno anterior correctamente.
-    dt_eval = datetime.now() - timedelta(minutes=10)
-    date_str, current_shift = get_current_shift_info(dt_eval)
-
-    dt_now = datetime.now()
-    if current_shift == 'T1':
-        start_dt = datetime.strptime(date_str + ' 22:00', '%Y-%m-%d %H:%M')
-    elif current_shift == 'T2':
-        start_dt = datetime.strptime(date_str + ' 06:00', '%Y-%m-%d %H:%M')
-    else:
-        start_dt = datetime.strptime(date_str + ' 14:00', '%Y-%m-%d %H:%M')
-    end_dt = start_dt + timedelta(hours=8)
-    dt = dt_now # For date_str_param
-
+    date_str, current_shift = get_current_shift_info(datetime.now())
     
     def save_robot_turn_data(robot_id, ip, base_tag, has_idle=False):
         comm = PLC()
@@ -702,8 +670,9 @@ def fetch_and_save_shift_data():
     # Fetch and save IO data to SQLite
     try:
         url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
-        res = _session.get(url, timeout=5)
+        res = requests.get(url, timeout=5, proxies={"http": None, "https": None})
         if res.status_code == 200:
+            import re
             html = res.text
             def extract(id_name):
                 match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
@@ -716,7 +685,7 @@ def fetch_and_save_shift_data():
             rate_manual = extract("s1_manual_rate")
             rate_auto = extract("s1_press_rate")
             
-            conn = sqlite3.connect(DB_PATH, timeout=5)
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM io_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
             row = cursor.fetchone()
@@ -734,79 +703,25 @@ def fetch_and_save_shift_data():
         print(f"[WARN] Error saving IO data: {e}")
 
     # Fetch Construido and Vulcanizado from Goodyear API
-    shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
-    gy_turno = shift_map.get(current_shift, 'noche')
-    url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
-    
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            res_gy = _session.get(url_gy, timeout=15)
-            if res_gy.status_code == 200:
-                data_gy = res_gy.json()
-                if data_gy.get("status") == "success":
-                    construido = str(data_gy["data"]["total"]["hva"]["prod"])
-                    vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
-                    
-                    conn = sqlite3.connect(DB_PATH, timeout=5)
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE fecha=? AND turno=?",
-                                   (construido, vulcanizado, date_str, current_shift))
-                    conn.commit()
-                    conn.close()
-                    break
-            else:
-                print(f"[WARN] Goodyear API returned status {res_gy.status_code} (attempt {attempt+1}/{max_retries})")
-        except Exception as e:
-            print(f"[WARN] Error fetching Goodyear tires data (attempt {attempt+1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2)
-
-    
-    # === FETCH AND CACHE KPIs FOR CURRENT SHIFT ===
     try:
-        start_str_param = start_dt.strftime('%Y-%m-%dT%H:%M')
-        end_str_param = end_dt.strftime('%Y-%m-%dT%H:%M')
-        date_str_param = dt.strftime('%Y-%m-%d')
-        
-        endpoints_to_cache = [
-            f"/api/conveyor-full?start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=10317&start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=10313&start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=10314&start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=160000,210002&start={start_str_param}&end={end_str_param}",
-            f"/api/plc-conveyor?start={start_str_param}&end={end_str_param}",
-            f"/api/crane-performance?start={start_str_param}&end={end_str_param}",
-            f"/api/press-delivery?start={start_str_param}&end={end_str_param}",
-            f"/api/asrs-engineering-data?start={start_str_param}&end={end_str_param}",
-            "/api/daily-ticket"
-        ]
-        
-        for ep in endpoints_to_cache:
-            try:
-                full_url = f"http://127.0.0.1:8006{ep}&live=1" if '?' in ep else f"http://127.0.0.1:8006{ep}?live=1"
-                res_ep = _session.get(full_url, timeout=30)
-                if res_ep.status_code == 200:
-                    if '?' in ep:
-                        path_part, query_part = ep.split('?')
-                        q_dict = dict(urllib.parse.parse_qsl(query_part))
-                        q_dict.pop('live', None)
-                        sorted_query = urllib.parse.urlencode(sorted(q_dict.items()))
-                        cache_key = f"{path_part}?{sorted_query}" if sorted_query else path_part
-                    else:
-                        cache_key = ep
-
-                    
-                    conn_cache = sqlite3.connect(DB_PATH, timeout=5)
-                    cursor_cache = conn_cache.cursor()
-                    cursor_cache.execute('''INSERT OR REPLACE INTO api_cache (cache_key, response_json, timestamp)
-                                      VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, res_ep.text))
-                    conn_cache.commit()
-                    conn_cache.close()
-            except Exception as e_ep:
-                print(f"[WARN] Failed to cache {ep}: {e_ep}")
-    except Exception as e_kpi:
-        print(f"[WARN] Error in background KPI caching: {e_kpi}")
+        shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
+        gy_turno = shift_map.get(current_shift, 'noche')
+        url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
+        res_gy = requests.get(url_gy, timeout=5, proxies={"http": None, "https": None})
+        if res_gy.status_code == 200:
+            data_gy = res_gy.json()
+            if data_gy.get("status") == "success":
+                construido = str(data_gy["data"]["total"]["hva"]["prod"])
+                vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
+                
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE fecha=? AND turno=?",
+                               (construido, vulcanizado, date_str, current_shift))
+                conn.commit()
+                conn.close()
+    except Exception as e:
+        print(f"[WARN] Error fetching Goodyear tires data: {e}")
 
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 

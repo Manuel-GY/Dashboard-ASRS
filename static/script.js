@@ -314,13 +314,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         setIndicatorColor('ind-downtime-conveyor', null);
 
-        // 4.5 CC02 Turnos
-        const eRun = document.getElementById('cc02-run');
-        const eIdle = document.getElementById('cc02-idle');
-        const eStop = document.getElementById('cc02-stop');
-        if (eRun) eRun.textContent = '-';
-        if (eIdle) eIdle.textContent = '-';
-        if (eStop) eStop.textContent = '-';
 
         // 5. Crane Performance
         document.getElementById('crane-uptime').textContent = '-';
@@ -332,32 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-crane', null);
 
         // 6. Press Delivery Performance
-        document.getElementById('press-delivery-container').innerHTML = `
-            <div class="press-delivery-left">
-                <div class="press-overall-gauge">
-                    <div class="press-overall-val">- %</div>
-                    <div class="press-overall-label">Eficiencia de Despacho</div>
-                </div>
-            </div>
-            <div class="press-delivery-right">
-                ${["400B", "500A", "500B", "600A", "600B"].map(p => `
-                    <div class="press-row-item">
-                        <div class="press-row-header">
-                            <span class="press-row-id">${p}</span>
-                            <span class="press-row-pct">-</span>
-                        </div>
-                        <div class="press-progress-bar-bg">
-                            <div class="press-progress-bar-fill" style="width: 0%;"></div>
-                        </div>
-                        <div class="press-row-stats">
-                            <span>Despacho robots: <strong>-</strong></span>
-                            <span>Carga manual: <strong>-</strong></span>
-                            <span>Vulcanizados total: <strong>-</strong></span>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
+        document.getElementById('press-delivery-container').innerHTML = '';
         setIndicatorColor('ind-press-delivery', null);
     }
 
@@ -622,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (plummersCard && plummersCard.innerHTML.includes('La información no está disponible')) {
             plummersCard.innerHTML = `
                 <table class="data-table">
-                    <thead><tr><th></th><th>Run</th><th>Stop</th></tr></thead>
+                    <thead><tr><th></th><th style="text-align: center;">RUN</th><th style="text-align: center;">IDLE</th><th style="text-align: center;">STOP</th></tr></thead>
                     <tbody id="plummers-tbody">
                         <tr style="height: 33%;"><td style="padding: 15px 10px;">Lubricadora 1</td><td id="l1-run">...</td><td id="l1-idle">...</td><td id="l1-stop">...</td></tr>
                         <tr style="height: 33%;"><td style="padding: 15px 10px;">Lubricadora 2</td><td id="l2-run">...</td><td id="l2-idle">...</td><td id="l2-stop">...</td></tr>
