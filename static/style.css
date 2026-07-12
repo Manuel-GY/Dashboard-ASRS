@@ -1,6 +1,6 @@
 :root {
     --bg-base: #f1f5f9;
-    --bg-card: rgba(255, 255, 255, 0.8);
+    --bg-card: rgba(255, 255, 255, 0.4);
     --border-color: rgba(0, 0, 0, 0.1);
     --text-main: #0f172a;
     --text-muted: #475569;
@@ -9,7 +9,7 @@
     --warning-color: #b45309;
     --danger-color: #dc2626;
     --font-family: 'Inter', sans-serif;
-    --card-radius: 12px;
+    --card-radius: 16px;
     --highlight-bg: rgba(0, 0, 0, 0.05);
     --highlight-text: #0f172a;
     --bg-gradient-1: rgba(2, 132, 199, 0.05);
@@ -139,14 +139,16 @@ body {
     gap: 20px;
 }
 
-/* Cards */
 .card {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
+    border-top: 1px solid rgba(255, 255, 255, 0.6);
+    border-left: 1px solid rgba(255, 255, 255, 0.6);
     border-radius: var(--card-radius);
     padding: 20px;
-    backdrop-filter: blur(10px);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.02), 0 20px 25px -5px rgba(0, 0, 0, 0.01);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     display: flex;
     flex-direction: column;
     gap: 15px;
@@ -154,9 +156,14 @@ body {
 
 .card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 12px 25px -5px rgba(0,0,0,0.08);
+    border-color: rgba(255, 255, 255, 0.4);
 }
+
+td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
+    font-variant-numeric: tabular-nums;
+}
+
 
 .card-header {
     display: flex;
@@ -178,6 +185,7 @@ body {
     font-size: 1.1rem;
     font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .indicator {
@@ -203,19 +211,19 @@ body {
 
 @keyframes indicator-pulse-green {
     0% {
-        box-shadow: 0 0 4px var(--success-color);
+        box-shadow: 0 0 4px var(--success-color), inset 0 0 1px #fff;
     }
     100% {
-        box-shadow: 0 0 12px var(--success-color);
+        box-shadow: 0 0 12px var(--success-color), inset 0 0 3px #fff;
     }
 }
 
 @keyframes indicator-pulse-red {
     0% {
-        box-shadow: 0 0 4px var(--danger-color);
+        box-shadow: 0 0 4px var(--danger-color), inset 0 0 1px #fff;
     }
     100% {
-        box-shadow: 0 0 12px var(--danger-color);
+        box-shadow: 0 0 12px var(--danger-color), inset 0 0 3px #fff;
     }
 }
 
@@ -262,6 +270,7 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
+    justify-content: space-evenly;
 }
 
 .empty-state-msg {
