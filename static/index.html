@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard ASRS</title>
-    <link rel="stylesheet" href="style.css?v=15">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js?v=2"></script>
+    <link rel="stylesheet" href="style.css?v=16">
 
     <!-- Google Fonts for Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -235,7 +234,7 @@
 
 
             <!-- INPUT / OUTPUT -->
-            <section class="card io-premium-card" style="grid-column: span 2;">
+            <section class="card io-premium-card">
                 <div class="card-header io-premium-header">
                     <div class="card-title">
                         <span class="indicator green" id="ind-io"></span>
@@ -287,8 +286,8 @@
                                 </div>
                             </div>
 
-                            <div class="io-premium-box" style="border-left: 5px solid #6366f1;">
-                                <div class="io-icon-container" style="color: #6366f1; background-color: rgba(99,102,241,0.1);">
+                            <div class="io-premium-box purple-theme">
+                                <div class="io-icon-container">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5l7 7-7 7"></path></svg>
                                 </div>
                                 <div class="io-box-data">
@@ -306,7 +305,7 @@
                                 <div class="io-icon-container">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                                 </div>
-                                <div class="io-box-data" style="flex:1;">
+                                <div class="io-box-data io-box-data-grow">
                                     <span class="io-box-label">Entrada ASRS</span>
                                     <span class="io-box-value" id="io-entrada-val">- <small>tires</small></span>
                                 </div>
@@ -334,7 +333,7 @@
                         </div>
 
                     </div>
-                    <div id="io-message" class="downtime-empty-msg" style="display:none; font-size: 0.8rem; margin-top: 12px; width: 100%;"></div>
+                    <div id="io-message" class="downtime-empty-msg io-message"></div>
                 </div>
             </section>
 
@@ -368,12 +367,12 @@
             <!-- PRESS DELIVERY PERFORMANCE -->
             <section class="card press-delivery-card">
                 <div class="card-header">
-                    <div class="card-title" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="card-title press-card-title-row">
+                        <div class="press-card-title-left">
                             <span class="indicator green" id="ind-press-delivery"></span>
                             <h2>PRESS DELIVERY PERFORMANCE</h2>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 14px;">
+                        <div class="press-card-title-right">
                             <div class="press-legend-header">
                                 <div class="press-legend-item"><div class="press-legend-dot" style="background: #22c55e;"></div>Despacho</div>
                                 <div class="press-legend-item"><div class="press-legend-dot" style="background: #eab308;"></div>IDLE</div>
@@ -381,7 +380,7 @@
                                 <div class="press-legend-item"><div class="press-legend-dot" style="background: #c2884d;"></div>Prensa</div>
                                 <div class="press-legend-item"><div class="press-legend-dot" style="background: #ef4444;"></div>E-Stop</div>
                             </div>
-                            <div style="font-size: 1.4rem; color: var(--accent-color); background: rgba(56, 189, 248, 0.1); padding: 4px 12px; border-radius: 8px; font-weight: 800; border: 1px solid rgba(56, 189, 248, 0.2);" id="press-overall-val">- %</div>
+                            <div class="press-overall-badge" id="press-overall-val">- %</div>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,6 @@
 :root {
     --bg-base: #f1f5f9;
-    --bg-card: rgba(255, 255, 255, 0.4);
+    --bg-card: rgba(255, 255, 255, 0.8);
     --border-color: rgba(0, 0, 0, 0.1);
     --text-main: #0f172a;
     --text-muted: #475569;
@@ -129,9 +129,8 @@ body {
 }
 
 .card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 25px -5px rgba(0,0,0,0.08);
-    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 8px 20px -4px rgba(0,0,0,0.08);
+    border-color: rgba(255, 255, 255, 0.5);
 }
 
 td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
@@ -809,7 +808,7 @@ input:checked + .switch-slider:before { transform: translateX(20px); background-
 input[disabled] { opacity: 0.6; cursor: not-allowed; background-color: var(--highlight-bg) !important; }
 button[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
-.io-premium-card { background: #ffffff; border: 1px solid rgba(0,0,0,0.05); }
+.io-premium-card { background: #ffffff; border: 1px solid rgba(0,0,0,0.05); grid-column: span 2; }
 
 .io-premium-header { align-items: center; border-bottom: 1px solid rgba(0,0,0,0.03); padding-bottom: 12px; }
 
@@ -917,6 +916,27 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 .orange-theme { border-left: 5px solid var(--warning-color); }
 .orange-theme .io-box-value { color: var(--warning-color); }
+
+.purple-theme { border-left: 5px solid #6366f1; }
+.purple-theme .io-icon-container { color: #6366f1; background-color: rgba(99,102,241,0.1); }
+
+.io-box-data-grow { flex: 1; }
+
+.io-message { display: none; font-size: 0.8rem; margin-top: 12px; width: 100%; }
+
+.press-card-title-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.press-card-title-left { display: flex; align-items: center; gap: 10px; }
+.press-card-title-right { display: flex; align-items: center; gap: 14px; }
+
+.press-overall-badge {
+    font-size: 1.4rem;
+    color: var(--accent-color);
+    background: rgba(56, 189, 248, 0.1);
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-weight: 800;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+}
 
 .help-tooltip { position: relative; cursor: help; display: inline-flex; align-items: center; justify-content: center; color: #94a3b8; margin-left: 8px; transition: color 0.2s; pointer-events: auto; }
 .help-tooltip:hover { color: #6366f1; }
