@@ -82,6 +82,65 @@ python serve_worker.py
 
 ---
 
+## Despliegue con Crontab (Linux)
+
+Para que ambos servicios se inicien automáticamente al reiniciar el servidor, agregar las siguientes líneas al crontab:
+
+```bash
+crontab -e
+```
+
+Agregar:
+
+```cron
+# Dashboard ASRS — Inicio automático al arrancar el servidor
+@reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_web.py >> logs/web.log 2>&1 &
+@reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_worker.py >> logs/worker.log 2>&1 &
+```
+
+**Antes de aplicar**, crear la carpeta de logs:
+
+```bash
+mkdir -p /ruta/al/proyecto/logs
+```
+
+**Verificar que el crontab quedó correcto:**
+
+```bash
+crontab -l
+```
+
+### Frequency de ejecución
+
+| Servicio | Frecuencia | Detalle |
+|---|---|---|
+| `serve_web.py` | Permanente (daemon) | Escucha en puerto 8006 todo el tiempo |
+| `serve_worker.py` | Permanente (daemon) | Ejecuta recolección cada 2 horas (06:05, 08:05, ..., 22:05) |
+
+> Ambos servicios corren como procesos permanentes. El `@reboot` del crontab se encarga de iniciarlos al arrancar el servidor. Si alguno se detiene, se reinicia automáticamente al próximo reboot.
+
+### Si se necesita reinicio manual
+
+```bash
+# Matar procesos existentes
+pkill -f serve_web.py
+pkill -f serve_worker.py
+
+# Reiniciar
+@reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_web.py >> logs/web.log 2>&1 &
+@reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_worker.py >> logs/worker.log 2>&1 &
+```
+
+O ejecutar directamente:
+
+```bash
+cd /ruta/al/proyecto
+nohup python3 serve_web.py >> logs/web.log 2>&1 &
+nohup python3 serve_worker.py >> logs/worker.log 2>&1 &
+```
+
+---
+
 ## Acceso
 
 ```
