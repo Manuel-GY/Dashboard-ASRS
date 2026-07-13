@@ -1,41 +1,102 @@
-# Dashboard ASRS
+# Dashboard ASRS — Goodyear Chile
 
-Sistema de monitoreo para las grúas ASRS y producción de Planta Goodyear, diseñado para visualizar el desempeño, tiempos de parada (downtime), eficiencias de entrada/salida y tasas de producción de Construcción y Vulcanización.
+Sistema de monitoreo en tiempo real para las grúas ASRS y producción de Planta. Visualiza desempeño, tiempos de parada (downtime), eficiencias de entrada/salida y tasas de producción de Construcción y Vulcanización.
 
-## Requisitos Previos
+---
 
-- Python 3.10 o superior
-- `pip` (gestor de paquetes)
+## Arquitectura
 
-Instalar dependencias:
+El sistema se compone de **2 servicios independientes** que comparten una base de datos SQLite:
 
-```bash
-pip install -r requirements.txt
+```
+┌─────────────────────┐         ┌─────────────────────┐
+│   serve_web.py      │         │  serve_worker.py    │
+│   (Flask/Waitress)  │◄────────│  (Background Task)  │
+│   Puerto 8006       │  cache  │  Sin puerto         │
+└─────────┬───────────┘         └─────────┬───────────┘
+          │                               │
+          ▼                               ▼
+    ┌───────────┐                  ┌───────────────┐
+    │ Usuarios  │                  │  PLCs / APIs  │
+    │ (Browser) │                  │  Goodyear     │
+    └───────────┘                  └───────────────┘
+          │                               │
+          └───────────┬───────────────────┘
+                      ▼
+              ┌──────────────┐
+              │ shift_       │
+              │ history.db   │
+              │ (SQLite WAL) │
+              └──────────────┘
 ```
 
-Dependencias principales:
-- **Flask**: Servidor web local
-- **Waitress**: Servidor WSGI para producción en Windows
-- **pylogix**: Conexión a PLCs y lectura de tags (tiempos de grúas)
-- **requests**: Consultas a API internas Goodyear
-- **beautifulsoup4**: Parseo de HTML en extracciones de datos
+| Servicio | Función | Si se detiene... |
+|---|---|---|
+| `serve_web.py` | Sirve el dashboard y endpoints JSON | Se pierde acceso al dashboard |
+| `serve_worker.py` | Lee PLCs, consulta APIs, guarda en BD | El dashboard muestra últimos datos cacheados |
+
+---
+
+## Requisitos
+
+- Python 3.10+
+- `pip install -r requirements.txt`
+
+### Dependencias principales
+
+| Paquete | Uso |
+|---|---|
+| `Flask` | Servidor web |
+| `Waitress` | WSGI server para producción |
+| `pylogix` | Comunicación con PLCs Allen-Bradley |
+| `requests` | Consultas a APIs internas Goodyear |
+| `beautifulsoup4` | Parseo de HTML |
+
+---
 
 ## Ejecución
 
+### Iniciar ambos servicios
+
 ```bash
-python serve.py
+# Terminal 1 — Servidor Web
+python serve_web.py
+
+# Terminal 2 — Worker de recolección
+python serve_worker.py
 ```
 
-Escucha en el **puerto 5000** por defecto. Accesible en:
+### Solo servidor web (modo lectura)
+
+```bash
+python serve_web.py
+```
+
+> El dashboard funcionará con los últimos datos cacheados en `shift_history.db`.
+
+### Solo worker (recolección sin dashboard)
+
+```bash
+python serve_worker.py
+```
+
+---
+
+## Acceso
 
 ```
-http://<IP_DEL_SERVIDOR>:5000/
+http://<IP_DEL_SERVIDOR>:8006/
 ```
+
+Por defecto escucha en `0.0.0.0:8006`. Para cambiar el puerto, editar la línea `port=8006` al final de `serve_web.py`.
+
+---
 
 ## Estructura del Proyecto
 
 ```
-├── serve.py                  # Backend Flask + background tasks
+├── serve_web.py              # Servidor Flask (endpoints + cache + frontend)
+├── serve_worker.py           # Background task (PLCs + APIs → SQLite)
 ├── requirements.txt          # Dependencias Python
 ├── shift_history.db          # Base de datos SQLite (se crea automáticamente)
 └── static/
@@ -45,59 +106,83 @@ http://<IP_DEL_SERVIDOR>:5000/
     └── logo-goodyear.png     # Logo
 ```
 
+---
+
 ## Tarjetas del Dashboard
 
-| Tarjeta | Descripción |
-|---|---|
-| **CONVEYOR FULL** | Tiempo total de downtime del conveyor (objetivo: 15 min) |
-| **PLUMMERS** | Estado RUN/IDLE/STOP de las 3 lubricadoras |
-| **ROBOTS** | Estado RUN/IDLE/STOP de LR1, LR2, ULR1, ULR2 (valores en min) |
-| **DOWNTIME CONVEYOR** | Estado RUN/IDLE/STOP de CC01, CC02, CC03 (valores en min) |
-| **NO TIRE** | Tiempo perdido por falta de neumático por grupo (100A-600B) |
-| **INPUT / OUTPUT** | Producción (Construido, Vulcanizado, Total Salida ASRS) + Almacenamiento (Entrada ASRS, Manual, Automático) con eficiencia de entrada |
-| **CRANE PERFORMANCE** | Disponibilidad de grúas + Top 3 Downtime y Top 3 Parada Menor |
-| **PRESS DELIVERY** | Eficiencia de despacho por prensa (400B, 500A, 500B, 600A, 600B) con barras de progreso animadas |
+| Tarjeta | Fuente de datos | Descripción |
+|---|---|---|
+| **CONVEYOR FULL** | API OEE (HTTP) | Tiempo total de downtime del conveyor (objetivo: 15 min) |
+| **PLUMMERS** | PLC (pylogix) | Estado RUN/IDLE/STOP de L1, L2, L3 |
+| **ROBOTS** | PLC (pylogix) | Estado de ULR1, ULR2, LR1, LR2 (valores en min) |
+| **DOWNTIME CONVEYOR** | PLC (pylogix) | Estado de CC01, CC02, CC03 (valores en min) |
+| **NO TIRE** | API OEE (HTTP) | Tiempo perdido por falta de neumático por grupo |
+| **INPUT / OUTPUT** | SQLite + API Goodyear | Producción (Construido, Vulcanizado, Salida ASRS) + Almacenamiento |
+| **CRANE PERFORMANCE** | API Goodyear (HTTP) | Disponibilidad de grúas + Top 3 Downtime y Parada Menor |
+| **PRESS DELIVERY** | API compliance + OEE (HTTP) | Eficiencia de despacho por prensa con barras animadas |
+
+---
 
 ## APIs del Backend
 
 | Endpoint | Método | Descripción |
 |---|---|---|
 | `/api/conveyor-full` | GET | Tiempo total downtime conveyor |
-| `/api/plc-conveyor` | GET | Estado RUN/IDLE/STOP de conveyors (CC01-CC03) |
+| `/api/plc-conveyor` | GET | Estado conveyors (CC01-CC03) |
 | `/api/robots-turnos` | GET | Estado de robots por turno |
-| `/api/io-data` | GET | Datos de producción (Construido, Vulcanizado, Entrada/Salida ASRS) |
+| `/api/io-data` | GET | Datos de producción |
 | `/api/crane-performance` | GET | Performance de grúas por pasillo |
 | `/api/downtime` | GET | Tiempo perdido por motivo y grupo |
 | `/api/press-delivery` | GET | Eficiencia de despacho por prensa |
 | `/api/asrs-engineering-data` | GET | Datos de lubricadoras (Plummers) |
 | `/api/daily-ticket` | GET | Ticket diario de producción |
 
-Parámetros comunes: `?start=YYYY-MM-DDTHH:MM&end=YYYY-MM-DDTHH:MM` (rango de turno).
+**Parámetros comunes:** `?start=YYYY-MM-DDTHH:MM&end=YYYY-MM-DDTHH:MM`
+
+**Cache:** Las respuestas se cachean 5 minutos en `api_cache`. Agregar `?live=1` fuerza consulta en vivo.
+
+---
 
 ## Base de Datos (SQLite)
 
-Archivo: `shift_history.db` (se crea automáticamente).
+Archivo: `shift_history.db` (se crea automáticamente, modo WAL).
 
-- **io_history**: Datos de producción de Construcción y Vulcanizado, entradas/salidas de turnos.
-- **shift_summaries**: Tiempos de funcionamiento y error de cada máquina (run, fault, auto).
-- **api_cache**: Cache de respuestas API (TTL: 5 minutos).
+| Tabla | Propósito |
+|---|---|
+| `io_history` | Producción Construcción/Vulcanizado + Entrada/Salida ASRS |
+| `shift_summaries` | Tiempos de run/fault/auto por máquina y turno |
+| `api_cache` | Cache de respuestas API (TTL: 5 min) |
 
-**Mantenimiento**: Para reiniciar la BD, eliminar `shift_history.db` y reiniciar `serve.py`.
+**Reiniciar BD:** Eliminar `shift_history.db` y reiniciar los servicios.
 
-## Funcionalidades
+---
+
+## Turnos
+
+| Turno | Horario | Nombre API Goodyear |
+|---|---|---|
+| T1 | 22:00 - 06:00 | noche |
+| T2 | 06:00 - 14:00 | manana |
+| T3 | 14:00 - 22:00 | tarde |
+
+---
+
+## Funcionalidades del Frontend
 
 - Selector de turno (Actual, Anterior, Hace 2/3 Turnos)
-- Auto-actualización sincronizada con cron del backend (cada 2 horas)
-- Tooltips de ayuda explicativos en tarjetas IO y última actualización
-- Indicadores de estado con animación de pulsación (verde/roje)
-- Barras de progreso animadas en Press Delivery con tooltips por segmento
+- Auto-actualización sincronizada con cron del worker (cada 2 horas)
+- Tooltips de ayuda explicativos
+- Indicadores de estado con animación de pulsación
+- Barras de progreso animadas en Press Delivery
 - Flash animation en datos al actualizarse
-- Tabular nums para alineación de números
-- Tema light con glassmorphism y backdrop-filter
+- Tema light con glassmorphism
+
+---
 
 ## Notas IT
 
 - Los archivos `.bat` y `.exe` están en `.gitignore`
-- Las variables CSS están en `:root` al inicio de `static/style.css`
-- El servidor usa `waitress` en producción (no el servidor de desarrollo de Flask)
-- Los `.exe` y `.bat` no se incluyen en el repositorio
+- Variables CSS en `:root` al inicio de `static/style.css`
+- El worker se comunica con el web vía `http://127.0.0.1:8006` para poblar el cache
+- SQLite WAL permite concurrencia lectura/escritura entre ambos servicios
+- Los PLCs están en la red interna Goodyear (10.107.210.x)
