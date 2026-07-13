@@ -66,6 +66,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const elTotalSalida = document.getElementById('io-total-salida-val');
                 if (elTotalSalida) elTotalSalida.innerHTML = `${totalSalida} <small>tires</small>`;
 
+                // Rate Salida ASRS (manual + auto)
+                const rateManual = parseFloat(data.rate_manual) || 0;
+                const rateAuto = parseFloat(data.rate_auto) || 0;
+                const rateSalida = rateManual + rateAuto;
+                const elSalidaRate = document.getElementById('io-salida-rate');
+                if (elSalidaRate) elSalidaRate.innerHTML = `Rate= ${rateSalida.toFixed(2)} <small>tires/m</small>`;
+
                 // NUEVOS DATOS (Construido y Vulcanizado)
                 if (data.construido !== undefined) {
                     document.getElementById('io-construido-val').innerHTML = `${data.construido} <small style="font-size: 1rem;">tires</small>`;
@@ -75,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Flash on updated values
-                ['io-entrada-val', 'io-manual-val', 'io-auto-val', 'io-construido-val', 'io-vulcanizado-val', 'io-total-salida-val'].forEach(id => flashElement(document.getElementById(id)));
+                ['io-entrada-val', 'io-manual-val', 'io-auto-val', 'io-construido-val', 'io-vulcanizado-val', 'io-total-salida-val', 'io-salida-rate'].forEach(id => flashElement(document.getElementById(id)));
 
                 // NUEVA FÓRMULA DE EFICIENCIA: Entrada ASRS / Construido
                 const entradaASRS = parseFloat(data.entrada);
