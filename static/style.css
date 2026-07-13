@@ -698,7 +698,7 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
 .shift-label-display {
     font-weight: 700;
     font-size: 1.05rem;
-    color: var(--accent-color);
+    color: var(--text-main);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -727,13 +727,13 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
     transition: all 0.2s ease;
 }
 
-.btn-preset:hover { background: rgba(0, 0, 0, 0.06); color: var(--accent-color); }
+.btn-preset:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-main); }
 
 .btn-preset.active {
-    background: var(--accent-color);
+    background: #334155;
     color: #fff;
-    border-color: var(--accent-color);
-    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+    border-color: #334155;
+    box-shadow: 0 2px 8px rgba(51, 65, 85, 0.25);
 }
 
 .btn-preset:active { transform: translateY(0); }
