@@ -84,59 +84,50 @@ python serve_worker.py
 
 ## Despliegue con Crontab (Linux)
 
-Para que ambos servicios se inicien automáticamente al reiniciar el servidor, agregar las siguientes líneas al crontab:
-
-```bash
-crontab -e
-```
-
-Agregar:
+### Servidor Web (daemon permanente)
 
 ```cron
-# Dashboard ASRS — Inicio automático al arrancar el servidor
 @reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_web.py >> logs/web.log 2>&1 &
-@reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_worker.py >> logs/worker.log 2>&1 &
 ```
 
-**Antes de aplicar**, crear la carpeta de logs:
+### Worker de recolección (one-shot, cada 2 horas)
+
+```cron
+*/2 * * * * cd /ruta/al/proyecto && /usr/bin/python3 serve_worker.py >> logs/worker.log 2>&1
+```
+
+> El worker corre una vez, guarda datos en SQLite, y se cierra. Crontab lo ejecuta cada 2 horas.
+
+### Frequency de ejecución
+
+| Servicio | Tipo | Frecuencia |
+|---|---|---|
+| `serve_web.py` | Daemon (permanente) | Todo el tiempo, puerto 8006 |
+| `serve_worker.py` | One-shot (cron) | Cada 2 horas |
+
+### Antes de aplicar
 
 ```bash
 mkdir -p /ruta/al/proyecto/logs
 ```
 
-**Verificar que el crontab quedó correcto:**
+### Verificar crontab
 
 ```bash
 crontab -l
 ```
 
-### Frequency de ejecución
-
-| Servicio | Frecuencia | Detalle |
-|---|---|---|
-| `serve_web.py` | Permanente (daemon) | Escucha en puerto 8006 todo el tiempo |
-| `serve_worker.py` | Permanente (daemon) | Ejecuta recolección cada 2 horas (06:05, 08:05, ..., 22:05) |
-
-> Ambos servicios corren como procesos permanentes. El `@reboot` del crontab se encarga de iniciarlos al arrancar el servidor. Si alguno se detiene, se reinicia automáticamente al próximo reboot.
-
-### Si se necesita reinicio manual
+### Reinicio manual
 
 ```bash
-# Matar procesos existentes
+# Matar web server
 pkill -f serve_web.py
-pkill -f serve_worker.py
 
-# Reiniciar
-@reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_web.py >> logs/web.log 2>&1 &
-@reboot cd /ruta/al/proyecto && /usr/bin/python3 serve_worker.py >> logs/worker.log 2>&1 &
-```
+# Ejecutar worker una vez
+python3 serve_worker.py
 
-O ejecutar directamente:
-
-```bash
-cd /ruta/al/proyecto
+# Reiniciar web server
 nohup python3 serve_web.py >> logs/web.log 2>&1 &
-nohup python3 serve_worker.py >> logs/worker.log 2>&1 &
 ```
 
 ---

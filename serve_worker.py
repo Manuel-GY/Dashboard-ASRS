@@ -228,34 +228,9 @@ def fetch_and_save_shift_data():
 
 
 # ============================================================================
-# BACKGROUND TASK
-# ============================================================================
-
-def background_polling_task():
-    """Ejecuta fetch_and_save cada 2 horas (06:05, 08:05, ..., 22:05). Primer arranque inmediato."""
-    init_db()
-
-    try:
-        fetch_and_save_shift_data()
-    except Exception as e:
-        print(f"Error in background polling init: {e}")
-
-    while True:
-        now = datetime.now()
-        if now.hour % 2 == 0 and now.minute == 5:
-            try:
-                fetch_and_save_shift_data()
-            except Exception as e:
-                print(f"Error in background polling: {e}")
-            time.sleep(60)
-        else:
-            time.sleep(25)
-
-
-# ============================================================================
 # MAIN
 # ============================================================================
 
 if __name__ == '__main__':
-    print("Worker de recoleccion de datos iniciado...")
-    background_polling_task()
+    init_db()
+    fetch_and_save_shift_data()
