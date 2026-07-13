@@ -804,7 +804,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .io-eff-percent { font-size: 0.9rem; font-weight: 700; color: var(--success-color); }
 .io-eff-target { font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; }
 
-.io-premium-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 10px; }
+.io-premium-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }
 
 .io-column-title {
     font-size: 0.8rem;
