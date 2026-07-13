@@ -300,6 +300,13 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
 .data-table th { color: var(--text-muted); font-weight: 500; }
 .data-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 
+@keyframes data-flash {
+    0% { background: rgba(2, 132, 199, 0.15); }
+    100% { background: transparent; }
+}
+
+.data-flash { animation: data-flash 0.6s ease-out; }
+
 .downtime-dynamic-grid { display: flex; flex-wrap: wrap; gap: 12px; width: 100%; }
 
 .downtime-group-box {
@@ -483,6 +490,21 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
     padding-top: 10px;
     border-top: 1px solid var(--border-color);
     margin-top: 4px;
+}
+
+.press-legend-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.press-legend-header .press-legend-item {
+    font-size: 0.65rem;
+    gap: 4px;
+    padding: 3px 8px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 20px;
 }
 
 .press-legend-item {
@@ -801,7 +823,7 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
     display: flex;
     align-items: center;
     gap: 15px;
-    padding: 16px 20px;
+    padding: 12px 16px;
     border-radius: 14px;
     background: linear-gradient(135deg, rgba(255,255,255,1), rgba(248,250,252,1));
     border: 1px solid rgba(0,0,0,0.04);

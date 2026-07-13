@@ -12,6 +12,13 @@ async function fetchWithRetry(url, options = {}, retries = 2, backoff = 1000) {
         }
     }
 }
+
+function flashElement(el) {
+    if (!el) return;
+    el.classList.remove('data-flash');
+    void el.offsetWidth;
+    el.classList.add('data-flash');
+}
 document.addEventListener('DOMContentLoaded', () => {
     // Clock functionality
     const clockElement = document.getElementById('clock');
@@ -61,6 +68,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.vulcanizado !== undefined) {
                     document.getElementById('io-vulcanizado-val').innerHTML = `${data.vulcanizado} <small style="font-size: 1rem;">tires</small>`;
                 }
+
+                // Flash on updated values
+                ['io-entrada-val', 'io-manual-val', 'io-auto-val', 'io-construido-val', 'io-vulcanizado-val'].forEach(id => flashElement(document.getElementById(id)));
 
                 // NUEVA FÓRMULA DE EFICIENCIA: Entrada ASRS / Construido
                 const entradaASRS = parseFloat(data.entrada);
@@ -327,13 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 6. Press Delivery Performance
         document.getElementById('press-delivery-container').innerHTML = `
-            <div class="press-delivery-left">
-                <div class="press-overall-gauge">
-                    <div class="press-overall-val">- %</div>
-                    <div class="press-overall-label">Eficiencia de Despacho</div>
-                </div>
-            </div>
-            <div class="press-delivery-right">
+            <div class="press-delivery-right" style="width: 100%;">
                 ${["400B", "500A", "500B", "600A", "600B"].map(p => `
                     <div class="press-row-item">
                         <div class="press-row-header">
@@ -354,13 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                 `).join('')}
-                <div class="press-legend">
-                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #22c55e;"></div>Despacho</div>
-                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #eab308;"></div>IDLE</div>
-                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #38bdf8;"></div>Cortinas</div>
-                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #c2884d;"></div>Prensa</div>
-                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #ef4444;"></div>E-Stop</div>
-                </div>
             </div>
         `;
         setIndicatorColor('ind-press-delivery', null);
@@ -383,6 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.success) {
                     const total = data.total_downtime;
                     document.getElementById('conv-total-display').textContent = `${total.toFixed(2)} min`;
+                    flashElement(document.getElementById('conv-total-display'));
                     setIndicatorColor('ind-conveyor-full', data.is_ok);
                 } else {
                     document.getElementById('conv-total-display').textContent = 'Error';
@@ -416,9 +414,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     machines.forEach(m => {
                         const mId = m.toLowerCase();
                         if (data.data[m]) {
-                            if (document.getElementById(`${mId}-run`)) document.getElementById(`${mId}-run`).textContent = data.data[m].RUN !== undefined ? data.data[m].RUN : '-';
-                            if (document.getElementById(`${mId}-idle`)) document.getElementById(`${mId}-idle`).textContent = data.data[m].IDLE !== undefined ? data.data[m].IDLE : '-';
-                            if (document.getElementById(`${mId}-stop`)) document.getElementById(`${mId}-stop`).textContent = data.data[m].STOP !== undefined ? data.data[m].STOP : '-';
+                            const runEl = document.getElementById(`${mId}-run`);
+                            const idleEl = document.getElementById(`${mId}-idle`);
+                            const stopEl = document.getElementById(`${mId}-stop`);
+                            if (runEl) { runEl.textContent = data.data[m].RUN !== undefined ? data.data[m].RUN : '-'; flashElement(runEl); }
+                            if (idleEl) { idleEl.textContent = data.data[m].IDLE !== undefined ? data.data[m].IDLE : '-'; flashElement(idleEl); }
+                            if (stopEl) { stopEl.textContent = data.data[m].STOP !== undefined ? data.data[m].STOP : '-'; flashElement(stopEl); }
                         }
                     });
                 }
@@ -604,15 +605,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     setIndicatorColor('ind-press-delivery', overallCompliance >= 98.00);
 
                     container.innerHTML = `
-                        <div class="press-delivery-right" style="width: 100%; border-left: none; padding-left: 0;">
+                        <div class="press-delivery-right" style="width: 100%;">
                             ${pressesHtml}
-                            <div class="press-legend">
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #22c55e;"></div>Despacho</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #eab308;"></div>IDLE</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #38bdf8;"></div>Cortinas</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #c2884d;"></div>Prensa</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #ef4444;"></div>E-Stop</div>
-                            </div>
                         </div>
                     `;
 
@@ -670,9 +664,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     ['L1', 'L2', 'L3'].forEach(m => {
                         const mId = m.toLowerCase();
                         if (data.plummers[m]) {
-                            if (document.getElementById(`${mId}-run`)) document.getElementById(`${mId}-run`).textContent = data.plummers[m].run !== undefined ? data.plummers[m].run : '-';
-                            if (document.getElementById(`${mId}-idle`)) document.getElementById(`${mId}-idle`).textContent = data.plummers[m].idle !== undefined ? data.plummers[m].idle : '-';
-                            if (document.getElementById(`${mId}-stop`)) document.getElementById(`${mId}-stop`).textContent = data.plummers[m].stop !== undefined ? data.plummers[m].stop : '-';
+                            const rEl = document.getElementById(`${mId}-run`);
+                            const iEl = document.getElementById(`${mId}-idle`);
+                            const sEl = document.getElementById(`${mId}-stop`);
+                            if (rEl) { rEl.textContent = data.plummers[m].run !== undefined ? data.plummers[m].run : '-'; flashElement(rEl); }
+                            if (iEl) { iEl.textContent = data.plummers[m].idle !== undefined ? data.plummers[m].idle : '-'; flashElement(iEl); }
+                            if (sEl) { sEl.textContent = data.plummers[m].stop !== undefined ? data.plummers[m].stop : '-'; flashElement(sEl); }
                         }
                     });
 
@@ -762,9 +759,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             const eRun = document.getElementById(`${r}-run`);
                             const eIdle = document.getElementById(`${r}-idle`);
                             const eStop = document.getElementById(`${r}-stop`);
-                            if (eRun) eRun.textContent = maqData[targetShift].run;
-                            if (eIdle) eIdle.textContent = maqData[targetShift].idle;
-                            if (eStop) eStop.textContent = maqData[targetShift].fault;
+                            if (eRun) { eRun.textContent = maqData[targetShift].run; flashElement(eRun); }
+                            if (eIdle) { eIdle.textContent = maqData[targetShift].idle; flashElement(eIdle); }
+                            if (eStop) { eStop.textContent = maqData[targetShift].fault; flashElement(eStop); }
                         }
                     });
                 }
