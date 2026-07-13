@@ -660,13 +660,13 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 20px;
-    padding: 15px 20px;
+    gap: 15px;
+    padding: 12px 20px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: var(--card-radius);
+    border-radius: 12px;
     backdrop-filter: blur(10px);
-    margin-bottom: 5px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
 }
 
 .range-inputs { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; }
@@ -695,16 +695,24 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
 
 .preset-container { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
-.preset-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+.shift-label-display {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 12px;
+}
 
 .preset-buttons {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    background: rgba(0, 0, 0, 0.1);
+    background: rgba(0, 0, 0, 0.04);
     padding: 6px;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .btn-preset {
@@ -714,18 +722,18 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
     padding: 8px 16px;
     font-size: 0.85rem;
     font-weight: 600;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s ease;
 }
 
-.btn-preset:hover { background: rgba(255, 255, 255, 0.05); color: var(--accent-color); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+.btn-preset:hover { background: rgba(0, 0, 0, 0.06); color: var(--accent-color); }
 
 .btn-preset.active {
     background: var(--accent-color);
     color: #fff;
     border-color: var(--accent-color);
-    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
 }
 
 .btn-preset:active { transform: translateY(0); }
@@ -744,6 +752,25 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
 
 .btn-primary:hover { background: #0274b3; transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(0); }
+
+.update-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.03);
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.update-time-value {
+    font-weight: 700;
+    color: var(--text-main);
+}
 
 @media (max-width: 768px) {
     .controls-bar { flex-direction: column; align-items: stretch; gap: 15px; }
