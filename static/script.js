@@ -297,7 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-conveyor-full', null);
 
         // 2. Plummers
-        document.getElementById('plummers-total-tires').textContent = '-';
         setIndicatorColor('ind-plummers', null);
 
         // 3. Robots Performance
@@ -702,8 +701,6 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => console.error('Error fetching ASRS Engineering data:', error));
 
-        const totalTires = document.getElementById('plummers-total-tires');
-        if (totalTires) totalTires.textContent = "-";
         setIndicatorColor('ind-plummers', null);
     }
 
