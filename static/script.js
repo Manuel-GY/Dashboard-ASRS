@@ -689,11 +689,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const dateStr = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
                                     const timeStr = `${timeParts[0]}:${timeParts[1]}`;
                                     const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>`;
-                                    updateLbl.innerHTML = `${svgIcon} Última actualización: <span class="update-time-value">${dateStr} ${timeStr}</span>`;
+                                    const helpIcon = `<span class="help-tooltip" data-tooltip="Actualización cada 2 horas"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>`;
+                                    updateLbl.innerHTML = `${svgIcon} Última actualización: <span class="update-time-value">${dateStr} ${timeStr}</span> ${helpIcon}`;
                                 }
                             } else {
                                 const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>`;
-                                updateLbl.innerHTML = `${svgIcon} Última actualización: <span class="update-time-value">${data.last_updated}</span>`;
+                                const helpIcon = `<span class="help-tooltip" data-tooltip="Actualización cada 2 horas"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>`;
+                                updateLbl.innerHTML = `${svgIcon} Última actualización: <span class="update-time-value">${data.last_updated}</span> ${helpIcon}`;
                             }
                         }
                     }
