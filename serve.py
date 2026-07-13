@@ -26,6 +26,7 @@ DB_PATH = 'shift_history.db'
 # ============================================================================
 
 def get_db():
+    """Retorna una conexión SQLite con WAL mode y busy timeout."""
     conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
@@ -33,6 +34,7 @@ def get_db():
 
 
 def get_capped_now():
+    """Retorna la última timestamp registrada en shift_summaries (para sincronizar reloj del dashboard)."""
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -47,6 +49,7 @@ def get_capped_now():
 
 
 def get_current_shift_info(dt=None):
+    """Determina fecha y turno (T1/T2/T3) según la hora del sistema. T1: 22:00-06:00, T2: 06:00-14:00, T3: 14:00-22:00."""
     if dt is None:
         dt = get_capped_now()
     hour = dt.hour
@@ -66,6 +69,7 @@ def get_current_shift_info(dt=None):
 
 
 def get_shift_from_start(start_str):
+    """Parsea parámetro start del request y retorna (fecha, turno). Fallback al turno actual."""
     if start_str:
         try:
             start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M')
@@ -76,6 +80,7 @@ def get_shift_from_start(start_str):
 
 
 def parse_start_end(default_hours=24):
+    """Parsea parámetros start/end del request. Retorna (start_dt, end_dt, start_fmt, end_fmt) para uso en endpoints."""
     start_str = request.args.get('start', '')
     end_str = request.args.get('end', '')
     start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M') if start_str else get_capped_now() - timedelta(hours=default_hours)
@@ -84,16 +89,19 @@ def parse_start_end(default_hours=24):
 
 
 def calc_idle(auto, run, fault):
+    """Calcula tiempo idle: auto - run - fault (mínimo 0)."""
     return max(0, auto - run - fault)
 
 
 def build_cache_key(path, params):
+    """Genera cache key excluyendo el parámetro 'live'."""
     filtered = {k: v for k, v in params.items() if k != 'live'}
     sorted_query = urllib.parse.urlencode(sorted(filtered.items()))
     return f"{path}?{sorted_query}" if sorted_query else path
 
 
 def upsert_shift_data(cursor, fecha, turno, maquina, estado, minutos):
+    """Inserta o actualiza registros de turnos en shift_summaries."""
     cursor.execute('''SELECT id FROM shift_summaries
                       WHERE fecha = ? AND turno = ? AND maquina = ? AND estado = ?''',
                    (fecha, turno, maquina, estado))
@@ -108,7 +116,7 @@ def upsert_shift_data(cursor, fecha, turno, maquina, estado, minutos):
 
 
 # ============================================================================
-# FLASK APP
+# FLASK APP + CACHE MIDDLEWARE
 # ============================================================================
 
 app = Flask(__name__, static_folder='static', static_url_path='')
@@ -117,6 +125,7 @@ from flask import current_app
 
 @app.before_request
 def serve_from_cache():
+    """Intercepta requests a /api/ y retorna respuesta cacheada si es válida (<5 min). Excluye io-data y robots-turnos (datos en vivo)."""
     if request.path.startswith('/api/') and request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
         if request.args.get('live') == '1':
             return
@@ -139,6 +148,7 @@ def serve_from_cache():
 
 @app.after_request
 def cache_response(response):
+    """Almacena respuesta exitosa en api_cache para servir desde cache en requests futuros."""
     if request.path.startswith('/api/') and request.args.get('live') != '1' and response.status_code == 200:
         if request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
             cache_key = build_cache_key(request.path, dict(request.args))
@@ -165,6 +175,7 @@ def index():
 
 @app.route('/api/io-data')
 def api_io_data():
+    """Retorna datos de producción (Construido, Vulcanizado, Entrada/Salida ASRS) desde io_history."""
     start_str = request.args.get('start', '')
 
     target_date, target_shift = get_current_shift_info()
@@ -202,6 +213,7 @@ def api_io_data():
 
 @app.route('/api/robots-turnos')
 def api_robots_turnos():
+    """Retorna estados RUN/FAULT/AUTO de robots (ULR1, ULR2, LR1, LR2) por turno desde shift_summaries."""
     start_str = request.args.get('start', '')
     target_date, _ = get_shift_from_start(start_str)
 
@@ -236,6 +248,7 @@ def api_robots_turnos():
 
 @app.route('/api/plc-conveyor')
 def api_plc_conveyor():
+    """Retorna estados RUN/IDLE/STOP de conveyors (CC01, CC02, CC03) por turno desde shift_summaries."""
     start_str = request.args.get('start', '')
     target_date, target_shift = get_shift_from_start(start_str)
     machines = ['CC01', 'CC02', 'CC03']
@@ -266,6 +279,7 @@ def api_plc_conveyor():
 
 @app.route('/api/asrs-engineering-data')
 def api_asrs_engineering():
+    """Retorna estados de lubricadoras Plummers (L1, L2, L3) + timestamp de última actualización."""
     start_str = request.args.get('start', '')
     target_date, target_shift = get_shift_from_start(start_str)
 
@@ -301,6 +315,7 @@ def api_asrs_engineering():
 
 @app.route('/api/crane-performance')
 def api_crane_performance():
+    """Consulta API de Goodyear para performance de grúas por pasillo (disponibilidad, downtime %)."""
     try:
         start_dt, end_dt, start_fmt, end_fmt = parse_start_end(8)
     except ValueError as e:
@@ -337,6 +352,7 @@ def api_crane_performance():
 
 @app.route('/api/conveyor-full')
 def api_conveyor_full():
+    """Consulta API OEE para tiempo total de downtime del conveyor (reason 10315). Objetivo: 15 min."""
     try:
         start_dt, end_dt, start_fmt, end_fmt = parse_start_end(24)
     except ValueError as e:
@@ -373,6 +389,7 @@ def api_conveyor_full():
 
 @app.route('/api/downtime')
 def api_downtime():
+    """Consulta API OEE para downtime por reason code, agrupado por prensa (100A-600B). Paraleliza requests por reason."""
     reason = request.args.get('reason', '')
     if not all(r.strip().isdigit() for r in reason.split(',') if r.strip()):
         return jsonify({"error": "Parámetro inválido"}), 400
@@ -435,6 +452,7 @@ def api_downtime():
 
 @app.route('/api/press-delivery')
 def api_press_delivery():
+    """Eficiencia de despacho por prensa (400B-600B). Combina: compliance API + vulcanización + KPIs horarios (paralelo)."""
     try:
         start_dt, end_dt, start_fmt, end_fmt = parse_start_end(8)
     except ValueError as e:
@@ -557,6 +575,7 @@ def api_press_delivery():
 
 @app.route('/api/daily-ticket')
 def api_daily_ticket():
+    """Consulta AOP para obtener target diario de producción (Chile FCST)."""
     try:
         now = get_capped_now()
         date_str = now.strftime('%m/%d')
@@ -594,6 +613,7 @@ def api_daily_ticket():
 # ============================================================================
 
 def init_db():
+    """Crea tablas io_history, api_cache y shift_summaries si no existen. Ejecuta migraciones de columnas."""
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
@@ -652,6 +672,7 @@ def get_previous_odometer(cursor, target_date, turno, maquina):
 
 
 def fetch_and_save_shift_data():
+    """Tarea principal del background task: lee PLCs, APIs Goodyear/OEE y guarda todo en SQLite. Una sola conexión DB."""
     dt_eval = datetime.now() - timedelta(minutes=10)
     date_str, current_shift = get_current_shift_info(dt_eval)
 
@@ -667,6 +688,7 @@ def fetch_and_save_shift_data():
     conn = get_db()
     cursor = conn.cursor()
 
+    # --- LECTURA DE PLCs: Robots (ULR1, ULR2, LR1, LR2), Conveyors (CC01-CC03), Lubricadoras (L1-L3) ---
     def save_robot_turn_data(robot_id, ip, base_tag, has_idle=False):
         comm = PLC()
         comm.IPAddress = ip
@@ -701,8 +723,8 @@ def fetch_and_save_shift_data():
     save_robot_turn_data('L2', '10.107.210.52', 'DownTimePlummer2', has_idle=True)
     save_robot_turn_data('L3', '10.107.210.53', 'DownTimePlummer3', has_idle=True)
 
+    # --- IO DATA: Scraping de dashboard Goodyear para entrada/salida ASRS ---
     try:
-        url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
         res = _session.get(url, timeout=5)
         if res.status_code == 200:
             html = res.text
@@ -730,6 +752,7 @@ def fetch_and_save_shift_data():
     except Exception as e:
         print(f"[WARN] Error saving IO data: {e}")
 
+    # --- GOODYEAR API: Construido (HVA) y Vulcanizado (Cura) con retry ---
     shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
     gy_turno = shift_map.get(current_shift, 'noche')
     url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
@@ -801,6 +824,7 @@ def fetch_and_save_shift_data():
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 
 def background_polling_task():
+    """Hilo daemon: ejecuta fetch_and_save cada 2 horas (06:05, 08:05, ..., 22:05). Primer arranque inmediato."""
     init_db()
 
     try:
