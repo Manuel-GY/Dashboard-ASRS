@@ -36,8 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 1000);
 
-    // (Tema oscuro eliminado por petición del usuario - Dashboard permanece en modo claro)
-
     // Input/Output Data
     function fetchInputOutputData(start = '', end = '') {
         let url = '/api/io-data';
@@ -55,11 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 document.getElementById('io-auto-val').innerHTML = `${data.auto} <small>tires</small>`;
                 document.getElementById('io-auto-rate').innerHTML = `Rate= ${data.rate_auto} <small>tires/m</small>`;
-                
-                // Nuevo cálculo: Suma consolidada de Salida
-                const totalSalida = parseInt(data.manual) + parseInt(data.auto);
-                const elTotalSalida = document.getElementById('io-total-salida-val');
-                if (elTotalSalida) elTotalSalida.innerHTML = `${totalSalida} <small>tires</small>`;
 
                 // NUEVOS DATOS (Construido y Vulcanizado)
                 if (data.construido !== undefined) {
@@ -289,6 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-conveyor-full', null);
 
         // 2. Plummers
+        document.getElementById('plummers-total-tires').textContent = '-';
         setIndicatorColor('ind-plummers', null);
 
         // 3. Robots Performance
@@ -314,6 +308,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         setIndicatorColor('ind-downtime-conveyor', null);
 
+        // 4.5 CC02 Turnos
+        const eRun = document.getElementById('cc02-run');
+        const eIdle = document.getElementById('cc02-idle');
+        const eStop = document.getElementById('cc02-stop');
+        if (eRun) eRun.textContent = '-';
+        if (eIdle) eIdle.textContent = '-';
+        if (eStop) eStop.textContent = '-';
 
         // 5. Crane Performance
         document.getElementById('crane-uptime').textContent = '-';
@@ -325,7 +326,43 @@ document.addEventListener('DOMContentLoaded', () => {
         setIndicatorColor('ind-crane', null);
 
         // 6. Press Delivery Performance
-        document.getElementById('press-delivery-container').innerHTML = '';
+        document.getElementById('press-delivery-container').innerHTML = `
+            <div class="press-delivery-left">
+                <div class="press-overall-gauge">
+                    <div class="press-overall-val">- %</div>
+                    <div class="press-overall-label">Eficiencia de Despacho</div>
+                </div>
+            </div>
+            <div class="press-delivery-right">
+                ${["400B", "500A", "500B", "600A", "600B"].map(p => `
+                    <div class="press-row-item">
+                        <div class="press-row-header">
+                            <span class="press-row-id">${p}</span>
+                            <span class="press-row-pct">-</span>
+                        </div>
+                        <div class="press-progress-bar-bg press-bar-animated">
+                            <div class="press-segment" style="width: 0%; background-color: #22c55e;"></div>
+                            <div class="press-segment" style="width: 0%; background-color: #eab308;"></div>
+                            <div class="press-segment" style="width: 0%; background-color: #38bdf8;"></div>
+                            <div class="press-segment" style="width: 0%; background-color: #c2884d;"></div>
+                            <div class="press-segment" style="width: 0%; background-color: #ef4444;"></div>
+                        </div>
+                        <div class="press-row-stats">
+                            <span>Despacho robots: <strong>-</strong></span>
+                            <span>Carga manual: <strong>-</strong></span>
+                            <span>Vulcanizados total: <strong>-</strong></span>
+                        </div>
+                    </div>
+                `).join('')}
+                <div class="press-legend">
+                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #22c55e;"></div>Despacho</div>
+                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #eab308;"></div>IDLE</div>
+                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #38bdf8;"></div>Cortinas</div>
+                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #c2884d;"></div>Prensa</div>
+                    <div class="press-legend-item"><div class="press-legend-dot" style="background: #ef4444;"></div>E-Stop</div>
+                </div>
+            </div>
+        `;
         setIndicatorColor('ind-press-delivery', null);
     }
 
@@ -513,6 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let globalDelivered = 0;
                     let globalVulcanized = 0;
                     const order = ["400B", "500A", "500B", "600A", "600B"];
+                    const allWidths = [];
                     
                     order.forEach(p => {
                         const stats = data.presses[p] || { delivered: 0, cancelled: 0, total: 0, vulcanized: 0 };
@@ -525,9 +563,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const prensaPct = (t.prensa / totalTime) * 100;
                         const despPct = (t.despachando / totalTime) * 100;
 
+                        allWidths.push(despPct.toFixed(1), idlePct.toFixed(1), cortinasPct.toFixed(1), prensaPct.toFixed(1), estopPct.toFixed(1));
+
                         const vulcanized = stats.vulcanized || 0;
                         const delivered = stats.delivered || 0;
-                        const manual = Math.max(0, vulcanized - delivered); // Prevent negative just in case
+                        const manual = Math.max(0, vulcanized - delivered);
                         
                         globalDelivered += delivered;
                         globalVulcanized += vulcanized;
@@ -539,14 +579,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="press-row-item">
                                 <div class="press-row-header">
                                     <span class="press-row-id">${p}</span>
-                                    <span class="press-row-pct" style="color: ${complianceColor};">${compliance.toFixed(1)}%</span>
+                                    <span class="press-row-pct" style="color: ${complianceColor}; font-size: 0.85rem; font-weight: 800;">${compliance.toFixed(1)}%</span>
                                 </div>
-                                <div class="press-progress-bar-bg" style="display: flex;">
-                                    <div title="Despachando: ${t.despachando.toFixed(0)}m" style="width: ${despPct}%; background-color: #84FF63; height: 100%;"></div>
-                                    <div title="IDLE: ${t.idle.toFixed(0)}m" style="width: ${idlePct}%; background-color: #F3F30F; height: 100%;"></div>
-                                    <div title="Cortinas: ${t.cortinas.toFixed(0)}m" style="width: ${cortinasPct}%; background-color: #49E2FF; height: 100%;"></div>
-                                    <div title="Prensa: ${t.prensa.toFixed(0)}m" style="width: ${prensaPct}%; background-color: #C8783C; height: 100%;"></div>
-                                    <div title="E-Stop: ${t.estop.toFixed(0)}m" style="width: ${estopPct}%; background-color: #FF0000; height: 100%;"></div>
+                                <div class="press-progress-bar-bg press-bar-animated">
+                                    <div class="press-segment" data-tooltip="Despacho robots: ${t.despachando.toFixed(0)}m (${despPct.toFixed(1)}%)" style="width: 0%; background-color: #22c55e;"></div>
+                                    <div class="press-segment" data-tooltip="IDLE: ${t.idle.toFixed(0)}m (${idlePct.toFixed(1)}%)" style="width: 0%; background-color: #eab308;"></div>
+                                    <div class="press-segment" data-tooltip="Cortinas: ${t.cortinas.toFixed(0)}m (${cortinasPct.toFixed(1)}%)" style="width: 0%; background-color: #38bdf8;"></div>
+                                    <div class="press-segment" data-tooltip="Prensa: ${t.prensa.toFixed(0)}m (${prensaPct.toFixed(1)}%)" style="width: 0%; background-color: #c2884d;"></div>
+                                    <div class="press-segment" data-tooltip="E-Stop: ${t.estop.toFixed(0)}m (${estopPct.toFixed(1)}%)" style="width: 0%; background-color: #ef4444;"></div>
                                 </div>
                                 <div class="press-row-stats" style="justify-content: space-between; display: flex;">
                                     <span>Despacho robots: <strong>${delivered}</strong></span>
@@ -566,8 +606,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     container.innerHTML = `
                         <div class="press-delivery-right" style="width: 100%; border-left: none; padding-left: 0;">
                             ${pressesHtml}
+                            <div class="press-legend">
+                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #22c55e;"></div>Despacho</div>
+                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #eab308;"></div>IDLE</div>
+                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #38bdf8;"></div>Cortinas</div>
+                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #c2884d;"></div>Prensa</div>
+                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #ef4444;"></div>E-Stop</div>
+                            </div>
                         </div>
                     `;
+
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            const segments = container.querySelectorAll('.press-segment');
+                            segments.forEach((seg, i) => {
+                                if (allWidths[i] !== undefined) {
+                                    seg.style.width = allWidths[i] + '%';
+                                }
+                            });
+                        });
+                    });
                 } else {
                     throw new Error('API returned failure');
                 }
@@ -590,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (plummersCard && plummersCard.innerHTML.includes('La información no está disponible')) {
             plummersCard.innerHTML = `
                 <table class="data-table">
-                    <thead><tr><th></th><th style="text-align: center;">RUN</th><th style="text-align: center;">IDLE</th><th style="text-align: center;">STOP</th></tr></thead>
+                    <thead><tr><th></th><th>Run</th><th>Stop</th></tr></thead>
                     <tbody id="plummers-tbody">
                         <tr style="height: 33%;"><td style="padding: 15px 10px;">Lubricadora 1</td><td id="l1-run">...</td><td id="l1-idle">...</td><td id="l1-stop">...</td></tr>
                         <tr style="height: 33%;"><td style="padding: 15px 10px;">Lubricadora 2</td><td id="l2-run">...</td><td id="l2-idle">...</td><td id="l2-stop">...</td></tr>
@@ -629,12 +687,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if(dateParts.length === 3 && timeParts.length >= 2) {
                                     const dateStr = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
                                     const timeStr = `${timeParts[0]}:${timeParts[1]}`;
-                                    const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>`;
-                                    updateLbl.innerHTML = `${svgIcon} Última actualización: <span style="font-weight: 700; color: #1e293b;">${dateStr} ${timeStr}</span>`;
+                                    updateLbl.textContent = `Última actualización: ${dateStr} ${timeStr} (DB)`;
                                 }
                             } else {
-                                const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>`;
-                                updateLbl.innerHTML = `${svgIcon} Última actualización: <span style="font-weight: 700; color: #1e293b;">${data.last_updated}</span>`;
+                                updateLbl.textContent = `Última actualización: ${data.last_updated}`;
                             }
                         }
                     }
@@ -642,6 +698,8 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => console.error('Error fetching ASRS Engineering data:', error));
 
+        const totalTires = document.getElementById('plummers-total-tires');
+        if (totalTires) totalTires.textContent = "-";
         setIndicatorColor('ind-plummers', null);
     }
 
