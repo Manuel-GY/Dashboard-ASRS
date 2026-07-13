@@ -2,8 +2,6 @@ import os
 import re
 import time
 import sqlite3
-import urllib.parse
-import concurrent.futures
 from datetime import datetime, timedelta
 
 import requests
@@ -76,17 +74,6 @@ def upsert_shift_data(cursor, fecha, turno, maquina, estado, minutos):
         cursor.execute('''INSERT INTO shift_summaries (fecha, turno, maquina, estado, minutos)
                           VALUES (?, ?, ?, ?, ?)''', (fecha, turno, maquina, estado, minutos))
 
-
-def build_cache_key(path, params):
-    """Genera cache key excluyendo el parámetro 'live'."""
-    filtered = {k: v for k, v in params.items() if k != 'live'}
-    sorted_query = urllib.parse.urlencode(sorted(filtered.items()))
-    return f"{path}?{sorted_query}" if sorted_query else path
-
-
-# ============================================================================
-# DATABASE INIT
-# ============================================================================
 
 def init_db():
     """Crea tablas si no existen. Ejecuta migraciones de columnas."""
@@ -236,48 +223,6 @@ def fetch_and_save_shift_data():
                 time.sleep(2)
 
     conn.commit()
-
-    # --- CACHE: Poblar cache del servidor web vía HTTP ---
-    try:
-        start_str_param = start_dt.strftime('%Y-%m-%dT%H:%M')
-        end_str_param = end_dt.strftime('%Y-%m-%dT%H:%M')
-
-        endpoints_to_cache = [
-            f"/api/conveyor-full?start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=10317&start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=10313&start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=10314&start={start_str_param}&end={end_str_param}",
-            f"/api/downtime?reason=160000,210002&start={start_str_param}&end={end_str_param}",
-            f"/api/plc-conveyor?start={start_str_param}&end={end_str_param}",
-            f"/api/crane-performance?start={start_str_param}&end={end_str_param}",
-            f"/api/press-delivery?start={start_str_param}&end={end_str_param}",
-            f"/api/asrs-engineering-data?start={start_str_param}&end={end_str_param}",
-            "/api/daily-ticket"
-        ]
-
-        def _cache_one_endpoint(ep):
-            full_url = f"http://127.0.0.1:8006{ep}&live=1" if '?' in ep else f"http://127.0.0.1:8006{ep}?live=1"
-            res_ep = _session.get(full_url, timeout=30)
-            if res_ep.status_code == 200:
-                cache_key = build_cache_key(ep.split('?')[0], dict(urllib.parse.parse_qsl(ep.split('?')[1])) if '?' in ep else {})
-                conn_cache = get_db()
-                cursor_cache = conn_cache.cursor()
-                cursor_cache.execute('''INSERT OR REPLACE INTO api_cache (cache_key, response_json, timestamp)
-                                  VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, res_ep.text))
-                conn_cache.commit()
-                conn_cache.close()
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {executor.submit(_cache_one_endpoint, ep): ep for ep in endpoints_to_cache}
-            for f in concurrent.futures.as_completed(futures):
-                try:
-                    f.result()
-                except Exception as e_ep:
-                    print(f"[WARN] Failed to cache {futures[f]}: {e_ep}")
-
-    except Exception as e_kpi:
-        print(f"[WARN] Error in background KPI caching: {e_kpi}")
-
     conn.close()
     print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
 
