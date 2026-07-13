@@ -61,6 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('io-auto-val').innerHTML = `${data.auto} <small>tires</small>`;
                 document.getElementById('io-auto-rate').innerHTML = `Rate= ${data.rate_auto} <small>tires/m</small>`;
 
+                // Total Salida ASRS
+                const totalSalida = parseInt(data.manual) + parseInt(data.auto);
+                const elTotalSalida = document.getElementById('io-total-salida-val');
+                if (elTotalSalida) elTotalSalida.innerHTML = `${totalSalida} <small>tires</small>`;
+
                 // NUEVOS DATOS (Construido y Vulcanizado)
                 if (data.construido !== undefined) {
                     document.getElementById('io-construido-val').innerHTML = `${data.construido} <small style="font-size: 1rem;">tires</small>`;
@@ -70,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Flash on updated values
-                ['io-entrada-val', 'io-manual-val', 'io-auto-val', 'io-construido-val', 'io-vulcanizado-val'].forEach(id => flashElement(document.getElementById(id)));
+                ['io-entrada-val', 'io-manual-val', 'io-auto-val', 'io-construido-val', 'io-vulcanizado-val', 'io-total-salida-val'].forEach(id => flashElement(document.getElementById(id)));
 
                 // NUEVA FÓRMULA DE EFICIENCIA: Entrada ASRS / Construido
                 const entradaASRS = parseFloat(data.entrada);
@@ -684,10 +689,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if(dateParts.length === 3 && timeParts.length >= 2) {
                                     const dateStr = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
                                     const timeStr = `${timeParts[0]}:${timeParts[1]}`;
-                                    updateLbl.textContent = `Última actualización: ${dateStr} ${timeStr} (DB)`;
+                                    const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>`;
+                                    updateLbl.innerHTML = `${svgIcon} Última actualización: <span style="color: #00d4ff; font-weight: 700; text-shadow: 0 0 8px rgba(0,212,255,0.3);">${dateStr} ${timeStr}</span>`;
                                 }
                             } else {
-                                updateLbl.textContent = `Última actualización: ${data.last_updated}`;
+                                const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>`;
+                                updateLbl.innerHTML = `${svgIcon} Última actualización: <span style="color: #00d4ff; font-weight: 700; text-shadow: 0 0 8px rgba(0,212,255,0.3);">${data.last_updated}</span>`;
                             }
                         }
                     }
