@@ -2,16 +2,9 @@ import os
 import re
 import sqlite3
 import urllib.parse
-import concurrent.futures
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 
-import requests
 from flask import Flask, request, jsonify
-from bs4 import BeautifulSoup
-
-_session = requests.Session()
-_session.proxies.update({"http": None, "https": None})
 
 DB_PATH = 'shift_history.db'
 
@@ -74,25 +67,9 @@ def get_shift_from_start(start_str):
     return get_current_shift_info()
 
 
-def parse_start_end(default_hours=24):
-    """Parsea parámetros start/end del request. Retorna (start_dt, end_dt, start_fmt, end_fmt)."""
-    start_str = request.args.get('start', '')
-    end_str = request.args.get('end', '')
-    start_dt = datetime.strptime(start_str.replace('T', ' '), '%Y-%m-%d %H:%M') if start_str else get_capped_now() - timedelta(hours=default_hours)
-    end_dt = datetime.strptime(end_str.replace('T', ' '), '%Y-%m-%d %H:%M') if end_str else get_capped_now()
-    return start_dt, end_dt, start_dt.strftime('%Y/%m/%d %H:%M:%S'), end_dt.strftime('%Y/%m/%d %H:%M:%S')
-
-
 def calc_idle(auto, run, fault):
     """Calcula tiempo idle: auto - run - fault (mínimo 0)."""
     return max(0, auto - run - fault)
-
-
-def build_cache_key(path, params):
-    """Genera cache key excluyendo el parámetro 'live'."""
-    filtered = {k: v for k, v in params.items() if k != 'live'}
-    sorted_query = urllib.parse.urlencode(sorted(filtered.items()))
-    return f"{path}?{sorted_query}" if sorted_query else path
 
 
 # ============================================================================
@@ -129,57 +106,71 @@ def init_db():
                         fecha TEXT, turno TEXT, maquina TEXT, estado TEXT, minutos REAL,
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                     )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS crane_aisle_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT NOT NULL,
+                        turno TEXT,
+                        aisle INTEGER NOT NULL,
+                        downtime_percent REAL,
+                        downtime_minutes REAL,
+                        query_start TEXT,
+                        query_end TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS conveyor_full_downtime (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT NOT NULL,
+                        turno TEXT,
+                        total_downtime_minutes REAL,
+                        frequency INTEGER,
+                        objective_minutes REAL DEFAULT 15.0,
+                        query_start TEXT,
+                        query_end TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS press_downtime_by_reason (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT NOT NULL,
+                        turno TEXT,
+                        reason_code TEXT NOT NULL,
+                        press_group TEXT NOT NULL,
+                        downtime_minutes REAL,
+                        query_start TEXT,
+                        query_end TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS press_delivery_data (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT NOT NULL,
+                        turno TEXT,
+                        press_group TEXT NOT NULL,
+                        delivered INTEGER DEFAULT 0,
+                        cancelled INTEGER DEFAULT 0,
+                        total_orders INTEGER DEFAULT 0,
+                        vulcanized INTEGER DEFAULT 0,
+                        t_idle REAL DEFAULT 0,
+                        t_estop REAL DEFAULT 0,
+                        t_cortinas REAL DEFAULT 0,
+                        t_prensa REAL DEFAULT 0,
+                        query_start TEXT,
+                        query_end TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS daily_ticket_target (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        fecha TEXT NOT NULL UNIQUE,
+                        target INTEGER,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )''')
     conn.commit()
     conn.close()
 
 
 # ============================================================================
-# FLASK APP + CACHE MIDDLEWARE
+# FLASK APP
 # ============================================================================
 
 app = Flask(__name__, static_folder='static', static_url_path='')
-
-from flask import current_app
-
-@app.before_request
-def serve_from_cache():
-    """Intercepta requests a /api/ y retorna respuesta cacheada si es válida (<5 min)."""
-    if request.path.startswith('/api/') and request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
-        if request.args.get('live') == '1':
-            return
-
-        cache_key = build_cache_key(request.path, dict(request.args))
-
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT response_json, timestamp FROM api_cache WHERE cache_key=?", (cache_key,))
-        row = cursor.fetchone()
-        conn.close()
-
-        if row:
-            try:
-                cache_time = datetime.strptime(row[1], '%Y-%m-%d %H:%M:%S')
-                if (datetime.utcnow() - cache_time).total_seconds() < 300:
-                    return current_app.response_class(row[0], mimetype='application/json')
-            except Exception as e:
-                pass
-
-@app.after_request
-def cache_response(response):
-    """Almacena respuesta exitosa en api_cache para servir desde cache en requests futuros."""
-    if request.path.startswith('/api/') and request.args.get('live') != '1' and response.status_code == 200:
-        if request.path not in ['/api/io-data', '/api/ulr1-turnos', '/api/ulr2-turnos', '/api/lr1-turnos', '/api/lr2-turnos']:
-            cache_key = build_cache_key(request.path, dict(request.args))
-            try:
-                conn = get_db()
-                cursor = conn.cursor()
-                cursor.execute('''INSERT OR REPLACE INTO api_cache (cache_key, response_json, timestamp)
-                                  VALUES (?, ?, CURRENT_TIMESTAMP)''', (cache_key, response.get_data(as_text=True)))
-                conn.commit()
-                conn.close()
-            except Exception as e:
-                print(f"[WARN] Cache insert error: {e}")
-    return response
 
 
 # ============================================================================
@@ -329,285 +320,177 @@ def api_asrs_engineering():
 
 @app.route('/api/crane-performance')
 def api_crane_performance():
-    """Consulta API de Goodyear para performance de grúas por pasillo (disponibilidad, downtime %)."""
-    try:
-        start_dt, end_dt, start_fmt, end_fmt = parse_start_end(8)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-
-    url = f"http://10.107.194.62/sbs/reports/gtasrs_aisle_history.php?run=1&str_ts={urllib.parse.quote(start_fmt)}&end_ts={urllib.parse.quote(end_fmt)}"
+    """Retorna performance de grúas por pasillo desde crane_aisle_history."""
+    start_str = request.args.get('start', '')
+    target_date, target_shift = get_shift_from_start(start_str)
 
     try:
-        res = _session.get(url, timeout=10)
-        res.encoding = 'utf-8' if not res.content.startswith(b'\xff\xfe') else 'utf-16le'
-        html_text = res.text
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''SELECT aisle, downtime_percent, downtime_minutes
+                          FROM crane_aisle_history
+                          WHERE fecha = ? AND turno = ?
+                          ORDER BY aisle''', (target_date, target_shift))
+        rows = cursor.fetchall()
+        conn.close()
 
-        aisle_data = []
-        matches = re.finditer(r'value=[\'"]Aisle\s+(\d+)\s+([\d\.]+)%\s+(\d+)\s+min[\'"]', html_text, re.IGNORECASE)
-        for m in matches:
-            aisle_data.append({"aisle": int(m.group(1)), "downtime_percent": float(m.group(2)), "downtime_minutes": int(m.group(3))})
-
-        if not aisle_data:
-            matches = re.finditer(r'<input[^>]+value=[\'"]([^\'"]+)[\'"]', html_text, re.IGNORECASE)
-            for m in matches:
-                val_str = m.group(1)
-                if "Aisle" in val_str and "%" in val_str and "min" in val_str:
-                    parts = re.split(r'\s+', val_str.replace('\n', ' ').replace('\r', '').strip())
-                    if len(parts) >= 5:
-                        try:
-                            aisle_data.append({"aisle": int(parts[1]), "downtime_percent": float(parts[2].replace('%', '')), "downtime_minutes": int(parts[3])})
-                        except Exception as e:
-                            print(f'[WARN] Error parsing aisle data: {e}')
-
-        return jsonify({"success": True, "url_queried": url, "data": aisle_data})
+        aisle_data = [{"aisle": r[0], "downtime_percent": r[1], "downtime_minutes": r[2]} for r in rows]
+        return jsonify({"success": True, "data": aisle_data, "source": "db"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
 @app.route('/api/conveyor-full')
 def api_conveyor_full():
-    """Consulta API OEE para tiempo total de downtime del conveyor (reason 10315). Objetivo: 15 min."""
-    try:
-        start_dt, end_dt, start_fmt, end_fmt = parse_start_end(24)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-
-    url = "http://10.107.194.114:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/SummaryDataByReason/SummaryDataByReason.EditGrid/EditGrid/DataSource/loadId"
-    params = {
-        "ARG_MACH_TYPE": "HFPLT4", "ARG_MACH_PART_NAME": "",
-        "ARG_START_DATE": start_fmt, "ARG_END_DATE": end_fmt,
-        "ARG_OEE_GROUP_SET_ID": "1", "ARG_MACHINE_GROUP_GUID": "6012295917FD36E2E05373C26B0A2E11",
-        "ARG_LANG": "ENG", "ARG_OEE_GROUP_UID": "5826BFF57FA71BBCE05373C26B0A0752"
-    }
+    """Retorna tiempo total de downtime del conveyor (reason 10315) desde conveyor_full_downtime."""
+    start_str = request.args.get('start', '')
+    target_date, target_shift = get_shift_from_start(start_str)
 
     try:
-        res = _session.get(url, params=params, headers={"Accept-language": "en"}, timeout=10)
-        root = ET.fromstring(res.content)
-        total_downtime = 0.0
-        frequency = 0
-        for row in root.findall('.//Row'):
-            reason_el = row.find('DOWNTIME_REASON')
-            if reason_el is not None and (reason_el.text or '').strip() == "10315":
-                min_el = row.find('DOWNTIME_MINUTES')
-                freq_el = row.find('FREQUENCY')
-                if min_el is not None: total_downtime += float(min_el.text or "0")
-                if freq_el is not None: frequency += int(float(freq_el.text or "0"))
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''SELECT total_downtime_minutes, frequency, objective_minutes, query_start, query_end
+                          FROM conveyor_full_downtime
+                          WHERE fecha = ? AND turno = ?
+                          LIMIT 1''', (target_date, target_shift))
+        row = cursor.fetchone()
+        conn.close()
 
-        return jsonify({
-            "success": True, "query_start": start_fmt, "query_end": end_fmt,
-            "total_downtime": round(total_downtime, 2), "frequency": frequency,
-            "objective_minutes": 15.0, "is_ok": round(total_downtime, 2) <= 15.0, "mock": False
-        })
+        if row:
+            total_downtime = row[0] or 0.0
+            frequency = row[1] or 0
+            objective = row[2] or 15.0
+            return jsonify({
+                "success": True, "query_start": row[3], "query_end": row[4],
+                "total_downtime": round(total_downtime, 2), "frequency": frequency,
+                "objective_minutes": objective, "is_ok": round(total_downtime, 2) <= objective, "mock": False, "source": "db"
+            })
+        else:
+            return jsonify({
+                "success": True, "total_downtime": 0.0, "frequency": 0,
+                "objective_minutes": 15.0, "is_ok": True, "mock": False, "source": "db"
+            })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
 @app.route('/api/downtime')
 def api_downtime():
-    """Consulta API OEE para downtime por reason code, agrupado por prensa (100A-600B). Paraleliza requests."""
+    """Retorna downtime por reason code agrupado por prensa (100A-600B) desde press_downtime_by_reason."""
     reason = request.args.get('reason', '')
     if not all(r.strip().isdigit() for r in reason.split(',') if r.strip()):
         return jsonify({"error": "Parámetro inválido"}), 400
 
-    try:
-        start_dt, end_dt, start_fmt, end_fmt = parse_start_end(24)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-
-    url = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/SummaryDataByReason/SingleDowntimeReason.EditGrid/EditGrid/DataSource/loadId"
+    start_str = request.args.get('start', '')
+    target_date, target_shift = get_shift_from_start(start_str)
     reasons = [r.strip() for r in reason.split(",") if r.strip()]
 
-    def _fetch_reason_downtime(reason_code):
-        params = {
-            "ARG_MACH_TYPE": "PRS", "ARG_MACH_PART_NAME": "", "ARG_DOWNTIME_REASON": reason_code,
-            "ARG_START_DATE": start_fmt, "ARG_END_DATE": end_fmt,
-            "ARG_LANG": "ENG", "ARG_MACHINE_GROUP_GUID": ""
-        }
-        res = _session.get(url, params=params, headers={"Accept-language": "en"}, timeout=8)
-        root = ET.fromstring(res.content)
-        results = []
-        for row in root.findall('.//Row'):
-            mach_el = row.find('MACH_PART_NAME')
-            down_el = row.find('DOWN_TIME')
-            if mach_el is not None and down_el is not None:
-                mach = (mach_el.text or "").strip()
-                match = re.match(r'^([1-6])(\d+)$', mach)
-                if match:
-                    group = match.group(1) + '00' + ('A' if int(match.group(2)) % 2 != 0 else 'B')
-                    results.append((group, float(down_el.text or "0")))
-        return results
-
     try:
+        conn = get_db()
+        cursor = conn.cursor()
+
         downtime_by_group = {f"{r}00{s}": 0.0 for r in range(1,7) for s in ["A","B"]}
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(reasons)) as executor:
-            futures = {executor.submit(_fetch_reason_downtime, r): r for r in reasons}
-            for f in concurrent.futures.as_completed(futures):
-                try:
-                    for group, val in f.result():
-                        if group in downtime_by_group:
-                            downtime_by_group[group] += val
-                except Exception as e:
-                    print(f'[WARN] Error fetching downtime reason {futures[f]}: {e}')
+        placeholders = ','.join(['?'] * len(reasons))
+        cursor.execute(f'''SELECT press_group, SUM(downtime_minutes)
+                           FROM press_downtime_by_reason
+                           WHERE fecha = ? AND turno = ? AND reason_code IN ({placeholders})
+                           GROUP BY press_group''',
+                       [target_date, target_shift] + reasons)
+        rows = cursor.fetchall()
 
+        for press_group, total_mins in rows:
+            if press_group in downtime_by_group:
+                downtime_by_group[press_group] = round(total_mins, 2)
+
+        conn.close()
+
+        start_dt = datetime.strptime(target_date + ' 06:00', '%Y-%m-%d %H:%M') if target_shift == 'T2' else \
+                   (datetime.strptime(target_date + ' 14:00', '%Y-%m-%d %H:%M') if target_shift == 'T3' else \
+                    datetime.strptime(target_date + ' 22:00', '%Y-%m-%d %H:%M'))
+        end_dt = start_dt + timedelta(hours=8)
         duration_minutes = max(1, round((end_dt - start_dt).total_seconds() / 60))
         total_downtime = sum(downtime_by_group.values())
         downtime_percent = (total_downtime / (duration_minutes * 48)) * 100
 
-        for k in downtime_by_group:
-            downtime_by_group[k] = round(downtime_by_group[k], 2)
-
         return jsonify({
             "success": True, "duration_minutes": duration_minutes,
             "downtime_by_group": downtime_by_group, "total_downtime": round(total_downtime, 2),
-            "downtime_percent": round(downtime_percent, 2), "mock": False
+            "downtime_percent": round(downtime_percent, 2), "mock": False, "source": "db"
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
 @app.route('/api/press-delivery')
 def api_press_delivery():
-    """Eficiencia de despacho por prensa (400B-600B). Combina: compliance API + vulcanización + KPIs horarios."""
-    try:
-        start_dt, end_dt, start_fmt, end_fmt = parse_start_end(8)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-
-    url_compliance = f"http://10.107.194.62/sbs/reports/auto_order_compliance.php?byheader=0&sortby=order_num&sortorder=ASC&str_ts={urllib.parse.quote(start_fmt)}&end_ts={urllib.parse.quote(end_fmt)}&prszone=&prsrow=all_rows&prscav=all_cavs"
-    groups = {f"{r}00{s}": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0} for r in range(4,7) for s in ["A","B"] if f"{r}00{s}" != "400A"}
-    ignored_cavities = {"440", "520", "540", "620", "640"}
+    """Retorna eficiencia de despacho por prensa (400B-600B) desde press_delivery_data."""
+    start_str = request.args.get('start', '')
+    target_date, target_shift = get_shift_from_start(start_str)
 
     try:
-        res = _session.get(url_compliance, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-        target_table = next((t for t in soup.find_all("table") if len(t.find_all("tr")) > 10), None)
-        if target_table:
-            for r in target_table.find_all("tr")[1:]:
-                cells = [td.get_text(strip=True) for td in r.find_all("td")]
-                if len(cells) > 7:
-                    status, dest = cells[1], cells[7]
-                    if dest in ignored_cavities: continue
-                    group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
-                    if group in groups:
-                        groups[group]["total"] += 1
-                        if status == "Fulfilled": groups[group]["delivered"] += 1
-                        elif status == "Cancelled": groups[group]["cancelled"] += 1
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''SELECT press_group, delivered, cancelled, total_orders, vulcanized,
+                                 t_idle, t_estop, t_cortinas, t_prensa, query_start, query_end
+                          FROM press_delivery_data
+                          WHERE fecha = ? AND turno = ?
+                          ORDER BY press_group''', (target_date, target_shift))
+        rows = cursor.fetchall()
+        conn.close()
+
+        groups = {}
+        global_delivered = 0
+        global_vulcanized = 0
+
+        for r in rows:
+            press_group = r[0]
+            delivered = r[1] or 0
+            cancelled = r[2] or 0
+            total_orders = r[3] or 0
+            vulcanized = r[4] or 0
+            t_idle = r[5] or 0.0
+            t_estop = r[6] or 0.0
+            t_cortinas = r[7] or 0.0
+            t_prensa = r[8] or 0.0
+
+            start_dt = datetime.strptime(r[9], '%Y/%m/%d %H:%M:%S') if r[9] else get_capped_now() - timedelta(hours=8)
+            end_dt = datetime.strptime(r[10], '%Y/%m/%d %H:%M:%S') if r[10] else get_capped_now()
+            total_minutes = max(0, (end_dt - start_dt).total_seconds() / 60.0)
+            despachando = max(0, total_minutes - (t_idle + t_estop + t_cortinas + t_prensa))
+
+            groups[press_group] = {
+                "delivered": delivered,
+                "cancelled": cancelled,
+                "total": total_orders,
+                "vulcanized": vulcanized,
+                "times": {
+                    "idle": round(t_idle, 2),
+                    "estop": round(t_estop, 2),
+                    "cortinas": round(t_cortinas, 2),
+                    "prensa": round(t_prensa, 2),
+                    "despachando": round(despachando, 2)
+                }
+            }
+
+            global_delivered += delivered
+            global_vulcanized += vulcanized
+
+        return jsonify({"success": True, "presses": groups, "uptime": 99.40, "source": "db"})
     except Exception as e:
-        print(f'[WARN] Error fetching press compliance: {e}')
-
-    url_cross = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/Production_Counts_Crosstab/Production_Counts_Crosstab.CrossTab/CrossTab/DataSource/DS1"
-    params_cross = {
-        "ARG_TRANS_START_DATE": start_fmt, "ARG_TRANS_END_DATE": end_fmt,
-        "ARG_MACHINE_GROUP_GUID": "9A98FF823A234EEDE05356C26B0A13F5", "ARG_TIME_SUMMARY": "DD",
-        "ARG_MACH_TYPE": "", "ARG_COLUMN": "MACH_PART_NAME;", "ARG_ROW": "PRODUCTION_HOUR;",
-        "ARG_DATA": "PRODUCT_CNT;", "ARG_LANG": "ENG", "ARG_LANGUAGE_CD": "en", "ARG_USER": ""
-    }
-    try:
-        res_cross = _session.get(url_cross, params=params_cross, headers={"Accept-language": "en"}, timeout=10)
-        root = ET.fromstring(res_cross.content)
-        for row in root.findall('.//Row'):
-            mach_el = row.find('MACH_PART_NAME')
-            cnt_el = row.find('PRODUCT_CNT')
-            if mach_el is not None and cnt_el is not None:
-                dest = (mach_el.text or "").strip()
-                try:
-                    product_cnt = int(float(cnt_el.text or "0"))
-                except Exception as e:
-                    product_cnt = 0
-                if dest in ignored_cavities: continue
-                group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
-                if group in groups:
-                    groups[group]["vulcanized"] += product_cnt
-    except Exception as e:
-        print(f'[WARN] Error fetching vulcanization: {e}')
-
-    machines_map = {0: '400B', 1: '500A', 2: '500B', 3: '600A', 4: '600B'}
-    variables = ['t_idle', 't_estop', 't_znl', 't_trays']
-    total_minutes = max(0, (end_dt - start_dt).total_seconds() / 60.0)
-
-    def fetch_machine_var(m_id, var):
-        url = f"http://10.107.194.70/ASRS/press_kpi_data.php?machine={m_id}&variable={var}"
-        try:
-            res = _session.get(url, timeout=5)
-            return m_id, var, res.json()
-        except Exception as e:
-            print(f'[WARN] Error fetching KPI m={m_id} v={var}: {e}')
-            return m_id, var, []
-
-    for m in groups:
-        groups[m]['times'] = {'idle': 0.0, 'estop': 0.0, 'cortinas': 0.0, 'prensa': 0.0, 'despachando': 0.0}
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = []
-        for m_id in machines_map:
-            for var in variables:
-                futures.append(executor.submit(fetch_machine_var, m_id, var))
-
-        for f in concurrent.futures.as_completed(futures):
-            m_id, var, data = f.result()
-            m_name = machines_map.get(m_id)
-            if m_name not in groups: continue
-
-            val_key = var.replace('t_', '')
-            if val_key == 'znl': val_key = 'cortinas'
-            if val_key == 'trays': val_key = 'prensa'
-
-            current_date = get_capped_now().replace(minute=0, second=0, microsecond=0)
-            target_start = start_dt.replace(minute=0, second=0, microsecond=0)
-            target_end = end_dt.replace(minute=0, second=0, microsecond=0)
-
-            for item in reversed(data):
-                hour_str = str(item.get('time'))
-                if not hour_str.isdigit(): continue
-                hour_int = int(hour_str)
-
-                while current_date.hour != hour_int:
-                    current_date -= timedelta(hours=1)
-
-                if target_start <= current_date <= target_end:
-                    val = item.get(var)
-                    if val:
-                        try:
-                            groups[m_name]['times'][val_key] += float(val)
-                        except Exception as e:
-                            pass
-
-                current_date -= timedelta(hours=1)
-
-    for m_name in groups:
-        t_data = groups[m_name]['times']
-        sum_down = t_data['idle'] + t_data['estop'] + t_data['cortinas'] + t_data['prensa']
-        t_data['despachando'] = max(0, total_minutes - sum_down)
-
-    return jsonify({"success": True, "presses": groups, "uptime": 99.40})
+        return jsonify({"success": False, "error": str(e)}), 503
 
 @app.route('/api/daily-ticket')
 def api_daily_ticket():
-    """Consulta AOP para obtener target diario de producción (Chile FCST)."""
+    """Retorna target diario de producción desde daily_ticket_target."""
     try:
-        now = get_capped_now()
-        date_str = now.strftime('%m/%d')
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT fecha, target FROM daily_ticket_target ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
 
-        url = "http://akrmfgcorp.akr.goodyear.com/mfgcorp/aop/pzkmtsc.jsp?RptView=LA"
-        res = _session.get(url, timeout=10)
-        res.raise_for_status()
-
-        soup = BeautifulSoup(res.text, 'html.parser')
-        target = 0
-        for tr in soup.find_all('tr'):
-            tds = tr.find_all(['td', 'th'])
-            if tds and tds[0].get_text(strip=True) == date_str:
-                if len(tds) > 3:
-                    chile_fcst_str = tds[3].get_text(strip=True)
-                    try:
-                        target = int(float(chile_fcst_str) * 1000)
-                        break
-                    except ValueError:
-                        pass
-
-        if target > 0:
-            return jsonify({"success": True, "total": target, "formatted": f"{target:,}"})
+        if row and row[1] and row[1] > 0:
+            return jsonify({"success": True, "total": row[1], "formatted": f"{row[1]:,}", "source": "db"})
         else:
-            return jsonify({"success": False, "error": "Target no encontrado para hoy en AOP"}), 503
-
+            return jsonify({"success": False, "error": "Target no encontrado"}), 503
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 

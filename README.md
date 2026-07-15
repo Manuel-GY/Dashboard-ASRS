@@ -12,7 +12,7 @@ El sistema se compone de **2 servicios independientes** que comparten una base d
 ┌─────────────────────┐         ┌─────────────────────┐
 │   serve_web.py      │         │  serve_worker.py    │
 │   (Flask/Waitress)  │◄────────│  (Background Task)  │
-│   Puerto 8006       │  cache  │  Sin puerto         │
+│   Puerto 8006       │  DB     │  Sin puerto         │
 └─────────┬───────────┘         └─────────┬───────────┘
           │                               │
           ▼                               ▼
@@ -32,8 +32,10 @@ El sistema se compone de **2 servicios independientes** que comparten una base d
 
 | Servicio | Función | Si se detiene... |
 |---|---|---|
-| `serve_web.py` | Sirve el dashboard y endpoints JSON | Se pierde acceso al dashboard |
-| `serve_worker.py` | Lee PLCs, consulta APIs, guarda en BD | El dashboard muestra últimos datos cacheados |
+| `serve_web.py` | Sirve el dashboard y endpoints JSON (solo lee de BD) | Se pierde acceso al dashboard |
+| `serve_worker.py` | Lee PLCs, consulta APIs, guarda todo en BD | El dashboard muestra últimos datos guardados |
+
+**Diseño:** Todos los datos pasan por SQLite. El web server **nunca** consulta APIs externas directamente.
 
 ---
 
@@ -49,8 +51,8 @@ El sistema se compone de **2 servicios independientes** que comparten una base d
 | `Flask` | Servidor web |
 | `Waitress` | WSGI server para producción |
 | `pylogix` | Comunicación con PLCs Allen-Bradley |
-| `requests` | Consultas a APIs internas Goodyear |
-| `beautifulsoup4` | Parseo de HTML |
+| `requests` | Consultas a APIs internas Goodyear (solo worker) |
+| `beautifulsoup4` | Parseo de HTML (solo worker) |
 
 ---
 
@@ -72,7 +74,7 @@ python serve_worker.py
 python serve_web.py
 ```
 
-> El dashboard funcionará con los últimos datos cacheados en `shift_history.db`.
+> El dashboard funcionará con los últimos datos guardados en `shift_history.db`.
 
 ### Solo worker (recolección sin dashboard)
 
@@ -93,10 +95,10 @@ python serve_worker.py
 ### Worker de recolección (one-shot, cada 2 horas)
 
 ```cron
-*/2 * * * * cd /ruta/al/proyecto && /usr/bin/python3 serve_worker.py >> logs/worker.log 2>&1
+0 */2 * * * cd /ruta/al/proyecto && /usr/bin/python3 serve_worker.py >> logs/worker.log 2>&1
 ```
 
-> El worker corre una vez, guarda datos en SQLite, y se cierra. Crontab lo ejecuta cada 2 horas.
+> El worker corre una vez, recolecta **todos** los datos (PLCs + APIs), guarda en SQLite, y se cierra. Crontab lo ejecuta cada 2 horas.
 
 ### Frequency de ejecución
 
@@ -145,7 +147,7 @@ Por defecto escucha en `0.0.0.0:8006`. Para cambiar el puerto, editar la línea 
 ## Estructura del Proyecto
 
 ```
-├── serve_web.py              # Servidor Flask (endpoints + cache + frontend)
+├── serve_web.py              # Servidor Flask (solo endpoints + frontend, lee de BD)
 ├── serve_worker.py           # Background task (PLCs + APIs → SQLite)
 ├── requirements.txt          # Dependencias Python
 ├── shift_history.db          # Base de datos SQLite (se crea automáticamente)
@@ -162,34 +164,34 @@ Por defecto escucha en `0.0.0.0:8006`. Para cambiar el puerto, editar la línea 
 
 | Tarjeta | Fuente de datos | Descripción |
 |---|---|---|
-| **CONVEYOR FULL** | API OEE (HTTP) | Tiempo total de downtime del conveyor (objetivo: 15 min) |
-| **PLUMMERS** | PLC (pylogix) | Estado RUN/IDLE/STOP de L1, L2, L3 |
-| **ROBOTS** | PLC (pylogix) | Estado de ULR1, ULR2, LR1, LR2 (valores en min) |
-| **DOWNTIME CONVEYOR** | PLC (pylogix) | Estado de CC01, CC02, CC03 (valores en min) |
-| **NO TIRE** | API OEE (HTTP) | Tiempo perdido por falta de neumático por grupo |
-| **INPUT / OUTPUT** | SQLite + API Goodyear | Producción (Construido, Vulcanizado, Salida ASRS) + Almacenamiento |
-| **CRANE PERFORMANCE** | API Goodyear (HTTP) | Disponibilidad de grúas + Top 3 Downtime y Parada Menor |
-| **PRESS DELIVERY** | API compliance + OEE (HTTP) | Eficiencia de despacho por prensa con barras animadas |
+| **CONVEYOR FULL** | SQLite (worker → OEE) | Tiempo total de downtime del conveyor (objetivo: 15 min) |
+| **PLUMMERS** | SQLite (worker → PLC) | Estado RUN/IDLE/STOP de L1, L2, L3 |
+| **ROBOTS** | SQLite (worker → PLC) | Estado de ULR1, ULR2, LR1, LR2 (valores en min) |
+| **DOWNTIME CONVEYOR** | SQLite (worker → PLC) | Estado de CC01, CC02, CC03 (valores en min) |
+| **NO TIRE** | SQLite (worker → OEE) | Tiempo perdido por falta de neumático por grupo |
+| **INPUT / OUTPUT** | SQLite (worker → Goodyear) | Producción (Construido, Vulcanizado, Salida ASRS) + Almacenamiento |
+| **CRANE PERFORMANCE** | SQLite (worker → Goodyear) | Disponibilidad de grúas + Top 3 Downtime y Parada Menor |
+| **PRESS DELIVERY** | SQLite (worker → compliance + OEE) | Eficiencia de despacho por prensa con barras animadas |
 
 ---
 
 ## APIs del Backend
 
-| Endpoint | Método | Descripción |
-|---|---|---|
-| `/api/conveyor-full` | GET | Tiempo total downtime conveyor |
-| `/api/plc-conveyor` | GET | Estado conveyors (CC01-CC03) |
-| `/api/robots-turnos` | GET | Estado de robots por turno |
-| `/api/io-data` | GET | Datos de producción |
-| `/api/crane-performance` | GET | Performance de grúas por pasillo |
-| `/api/downtime` | GET | Tiempo perdido por motivo y grupo |
-| `/api/press-delivery` | GET | Eficiencia de despacho por prensa |
-| `/api/asrs-engineering-data` | GET | Datos de lubricadoras (Plummers) |
-| `/api/daily-ticket` | GET | Ticket diario de producción |
+| Endpoint | Método | Descripción | Fuente |
+|---|---|---|---|
+| `/api/conveyor-full` | GET | Tiempo total downtime conveyor | `conveyor_full_downtime` |
+| `/api/plc-conveyor` | GET | Estado conveyors (CC01-CC03) | `shift_summaries` |
+| `/api/robots-turnos` | GET | Estado de robots por turno | `shift_summaries` |
+| `/api/io-data` | GET | Datos de producción | `io_history` |
+| `/api/crane-performance` | GET | Performance de grúas por pasillo | `crane_aisle_history` |
+| `/api/downtime` | GET | Tiempo perdido por motivo y grupo | `press_downtime_by_reason` |
+| `/api/press-delivery` | GET | Eficiencia de despacho por prensa | `press_delivery_data` |
+| `/api/asrs-engineering-data` | GET | Datos de lubricadoras (Plummers) | `shift_summaries` |
+| `/api/daily-ticket` | GET | Ticket diario de producción | `daily_ticket_target` |
 
 **Parámetros comunes:** `?start=YYYY-MM-DDTHH:MM&end=YYYY-MM-DDTHH:MM`
 
-**Cache:** Las respuestas se cachean 5 minutos en `api_cache`. Agregar `?live=1` fuerza consulta en vivo.
+**Fuente de datos:** Todos los endpoints leen directamente de SQLite. No hay consultas HTTP en vivo.
 
 ---
 
@@ -201,7 +203,11 @@ Archivo: `shift_history.db` (se crea automáticamente, modo WAL).
 |---|---|
 | `io_history` | Producción Construcción/Vulcanizado + Entrada/Salida ASRS |
 | `shift_summaries` | Tiempos de run/fault/auto por máquina y turno |
-| `api_cache` | Cache de respuestas API (TTL: 5 min) |
+| `crane_aisle_history` | Performance de grúas por pasillo (downtime %, minutos) |
+| `conveyor_full_downtime` | Downtime total del conveyor (reason 10315) |
+| `press_downtime_by_reason` | Downtime por reason code agrupado por prensa |
+| `press_delivery_data` | Eficiencia de despacho por prensa (compliance + KPIs) |
+| `daily_ticket_target` | Target diario de producción (AOP Chile FCST) |
 
 **Reiniciar BD:** Eliminar `shift_history.db` y reiniciar los servicios.
 
@@ -233,6 +239,7 @@ Archivo: `shift_history.db` (se crea automáticamente, modo WAL).
 
 - Los archivos `.bat` y `.exe` están en `.gitignore`
 - Variables CSS en `:root` al inicio de `static/style.css`
-- El worker se comunica con el web vía `http://127.0.0.1:8006` para poblar el cache
 - SQLite WAL permite concurrencia lectura/escritura entre ambos servicios
 - Los PLCs están en la red interna Goodyear (10.107.210.x)
+- El web server **no** hace consultas HTTP externas, solo lee de la BD
+- El worker es el único que se comunica con PLCs y APIs externas
