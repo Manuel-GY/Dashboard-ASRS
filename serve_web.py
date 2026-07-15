@@ -1,7 +1,6 @@
 import os
 import re
 import sqlite3
-import urllib.parse
 from datetime import datetime, timedelta
 
 from flask import Flask, request, jsonify
@@ -25,13 +24,15 @@ def get_capped_now():
     """Retorna la última timestamp registrada en shift_summaries (para sincronizar reloj del dashboard)."""
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
-        row = cursor.fetchone()
-        conn.close()
-        if row and row[0]:
-            return datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
-    except Exception as e:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
+            row = cursor.fetchone()
+            if row and row[0]:
+                return datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
+        finally:
+            conn.close()
+    except Exception:
         pass
     return datetime.now()
 
@@ -195,26 +196,28 @@ def api_io_data():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT entrada, manual, auto, rate_entrada, rate_manual, rate_auto, construido, vulcanizado FROM io_history WHERE fecha = ? AND turno = ?", (target_date, target_shift))
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT entrada, manual, auto, rate_entrada, rate_manual, rate_auto, construido, vulcanizado FROM io_history WHERE fecha = ? AND turno = ?", (target_date, target_shift))
+            row = cursor.fetchone()
 
-        if row:
-            return jsonify({
-                "entrada": row[0], "manual": row[1], "auto": row[2],
-                "rate_entrada": row[3], "rate_manual": row[4], "rate_auto": row[5],
-                "construido": row[6] if row[6] is not None else "-",
-                "vulcanizado": row[7] if row[7] is not None else "-",
-                "mock": False
-            })
-        else:
-            return jsonify({
-                "entrada": "-", "manual": "-", "auto": "-",
-                "rate_entrada": "-", "rate_manual": "-", "rate_auto": "-",
-                "construido": "-", "vulcanizado": "-",
-                "mock": False, "message": "Sin información guardada para este turno"
-            })
+            if row:
+                return jsonify({
+                    "entrada": row[0], "manual": row[1], "auto": row[2],
+                    "rate_entrada": row[3], "rate_manual": row[4], "rate_auto": row[5],
+                    "construido": row[6] if row[6] is not None else "-",
+                    "vulcanizado": row[7] if row[7] is not None else "-",
+                    "mock": False
+                })
+            else:
+                return jsonify({
+                    "entrada": "-", "manual": "-", "auto": "-",
+                    "rate_entrada": "-", "rate_manual": "-", "rate_auto": "-",
+                    "construido": "-", "vulcanizado": "-",
+                    "mock": False, "message": "Sin información guardada para este turno"
+                })
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
@@ -233,22 +236,24 @@ def api_robots_turnos():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute(f'SELECT maquina, turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina IN ({",".join(["?"]*len(machines))})', [target_date] + machines)
-        rows = cursor.fetchall()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f'SELECT maquina, turno, estado, minutos FROM shift_summaries WHERE fecha = ? AND maquina IN ({",".join(["?"]*len(machines))})', [target_date] + machines)
+            rows = cursor.fetchall()
 
-        for r in rows:
-            maq, t, est, mins = r
-            if est == 'idle': est = 'auto'
-            if maq in data and t in data[maq] and est in data[maq][t]:
-                data[maq][t][est] = mins
+            for r in rows:
+                maq, t, est, mins = r
+                if est == 'idle': est = 'auto'
+                if maq in data and t in data[maq] and est in data[maq][t]:
+                    data[maq][t][est] = mins
 
-        for maq in machines:
-            for t in ['T1', 'T2', 'T3']:
-                data[maq][t]['idle'] = calc_idle(data[maq][t]['auto'], data[maq][t]['run'], data[maq][t]['fault'])
+            for maq in machines:
+                for t in ['T1', 'T2', 'T3']:
+                    data[maq][t]['idle'] = calc_idle(data[maq][t]['auto'], data[maq][t]['run'], data[maq][t]['fault'])
 
-        conn.close()
-        return jsonify({"success": True, "data": data, "source": "db"})
+            return jsonify({"success": True, "data": data, "source": "db"})
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
@@ -263,23 +268,25 @@ def api_plc_conveyor():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(machines))), [target_date, target_shift] + machines)
-        rows = cursor.fetchall()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(machines))), [target_date, target_shift] + machines)
+            rows = cursor.fetchall()
 
-        for maq, est, mins in rows:
-            if maq in data:
-                if est == 'idle': est = 'auto'
-                if est == 'run': data[maq]['RUN'] = mins
-                elif est == 'fault': data[maq]['STOP'] = mins
-                elif est == 'auto': data[maq]['AUTO'] = mins
+            for maq, est, mins in rows:
+                if maq in data:
+                    if est == 'idle': est = 'auto'
+                    if est == 'run': data[maq]['RUN'] = mins
+                    elif est == 'fault': data[maq]['STOP'] = mins
+                    elif est == 'auto': data[maq]['AUTO'] = mins
 
-        for maq in machines:
-            data[maq]['IDLE'] = calc_idle(data[maq]['AUTO'], data[maq]['RUN'], data[maq]['STOP'])
-            del data[maq]['AUTO']
+            for maq in machines:
+                data[maq]['IDLE'] = calc_idle(data[maq]['AUTO'], data[maq]['RUN'], data[maq]['STOP'])
+                del data[maq]['AUTO']
 
-        conn.close()
-        return jsonify({"success": True, "data": data, "source": "db"})
+            return jsonify({"success": True, "data": data, "source": "db"})
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
@@ -294,27 +301,29 @@ def api_asrs_engineering():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(plummers_list))), [target_date, target_shift] + plummers_list)
-        rows = cursor.fetchall()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT maquina, estado, minutos FROM shift_summaries WHERE fecha = ? AND turno = ? AND maquina IN ({seq})'.format(seq=','.join(['?']*len(plummers_list))), [target_date, target_shift] + plummers_list)
+            rows = cursor.fetchall()
 
-        for maq, est, mins in rows:
-            if est == 'idle': est = 'auto'
-            if maq in plummers:
-                if est == 'run': plummers[maq]['run'] = mins
-                elif est == 'fault': plummers[maq]['stop'] = mins
-                elif est == 'auto': plummers[maq]['auto'] = mins
+            for maq, est, mins in rows:
+                if est == 'idle': est = 'auto'
+                if maq in plummers:
+                    if est == 'run': plummers[maq]['run'] = mins
+                    elif est == 'fault': plummers[maq]['stop'] = mins
+                    elif est == 'auto': plummers[maq]['auto'] = mins
 
-        for maq in plummers_list:
-            plummers[maq]['idle'] = calc_idle(plummers[maq]['auto'], plummers[maq]['run'], plummers[maq]['stop'])
-            del plummers[maq]['auto']
+            for maq in plummers_list:
+                plummers[maq]['idle'] = calc_idle(plummers[maq]['auto'], plummers[maq]['run'], plummers[maq]['stop'])
+                del plummers[maq]['auto']
 
-        cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
-        max_ts_row = cursor.fetchone()
-        last_updated_db = max_ts_row[0] if max_ts_row and max_ts_row[0] else None
+            cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
+            max_ts_row = cursor.fetchone()
+            last_updated_db = max_ts_row[0] if max_ts_row and max_ts_row[0] else None
 
-        conn.close()
-        return jsonify({"success": True, "plummers": plummers, "source": "db", "last_updated": last_updated_db})
+            return jsonify({"success": True, "plummers": plummers, "source": "db", "last_updated": last_updated_db})
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
@@ -326,16 +335,18 @@ def api_crane_performance():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''SELECT aisle, downtime_percent, downtime_minutes
-                          FROM crane_aisle_history
-                          WHERE fecha = ? AND turno = ?
-                          ORDER BY aisle''', (target_date, target_shift))
-        rows = cursor.fetchall()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''SELECT aisle, downtime_percent, downtime_minutes
+                              FROM crane_aisle_history
+                              WHERE fecha = ? AND turno = ?
+                              ORDER BY aisle''', (target_date, target_shift))
+            rows = cursor.fetchall()
 
-        aisle_data = [{"aisle": r[0], "downtime_percent": r[1], "downtime_minutes": r[2]} for r in rows]
-        return jsonify({"success": True, "data": aisle_data, "source": "db"})
+            aisle_data = [{"aisle": r[0], "downtime_percent": r[1], "downtime_minutes": r[2]} for r in rows]
+            return jsonify({"success": True, "data": aisle_data, "source": "db"})
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
@@ -347,28 +358,30 @@ def api_conveyor_full():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''SELECT total_downtime_minutes, frequency, objective_minutes, query_start, query_end
-                          FROM conveyor_full_downtime
-                          WHERE fecha = ? AND turno = ?
-                          LIMIT 1''', (target_date, target_shift))
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''SELECT total_downtime_minutes, frequency, objective_minutes, query_start, query_end
+                              FROM conveyor_full_downtime
+                              WHERE fecha = ? AND turno = ?
+                              LIMIT 1''', (target_date, target_shift))
+            row = cursor.fetchone()
 
-        if row:
-            total_downtime = row[0] or 0.0
-            frequency = row[1] or 0
-            objective = row[2] or 15.0
-            return jsonify({
-                "success": True, "query_start": row[3], "query_end": row[4],
-                "total_downtime": round(total_downtime, 2), "frequency": frequency,
-                "objective_minutes": objective, "is_ok": round(total_downtime, 2) <= objective, "mock": False, "source": "db"
-            })
-        else:
-            return jsonify({
-                "success": True, "total_downtime": 0.0, "frequency": 0,
-                "objective_minutes": 15.0, "is_ok": True, "mock": False, "source": "db"
-            })
+            if row:
+                total_downtime = row[0] or 0.0
+                frequency = row[1] or 0
+                objective = row[2] or 15.0
+                return jsonify({
+                    "success": True, "query_start": row[3], "query_end": row[4],
+                    "total_downtime": round(total_downtime, 2), "frequency": frequency,
+                    "objective_minutes": objective, "is_ok": round(total_downtime, 2) <= objective, "mock": False, "source": "db"
+                })
+            else:
+                return jsonify({
+                    "success": True, "total_downtime": 0.0, "frequency": 0,
+                    "objective_minutes": 15.0, "is_ok": True, "mock": False, "source": "db"
+                })
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 
@@ -385,23 +398,24 @@ def api_downtime():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        downtime_by_group = {f"{r}00{s}": 0.0 for r in range(1,7) for s in ["A","B"]}
+            downtime_by_group = {f"{r}00{s}": 0.0 for r in range(1,7) for s in ["A","B"]}
 
-        placeholders = ','.join(['?'] * len(reasons))
-        cursor.execute(f'''SELECT press_group, SUM(downtime_minutes)
-                           FROM press_downtime_by_reason
-                           WHERE fecha = ? AND turno = ? AND reason_code IN ({placeholders})
-                           GROUP BY press_group''',
-                       [target_date, target_shift] + reasons)
-        rows = cursor.fetchall()
+            placeholders = ','.join(['?'] * len(reasons))
+            cursor.execute(f'''SELECT press_group, SUM(downtime_minutes)
+                               FROM press_downtime_by_reason
+                               WHERE fecha = ? AND turno = ? AND reason_code IN ({placeholders})
+                               GROUP BY press_group''',
+                           [target_date, target_shift] + reasons)
+            rows = cursor.fetchall()
 
-        for press_group, total_mins in rows:
-            if press_group in downtime_by_group:
-                downtime_by_group[press_group] = round(total_mins, 2)
-
-        conn.close()
+            for press_group, total_mins in rows:
+                if press_group in downtime_by_group:
+                    downtime_by_group[press_group] = round(total_mins, 2)
+        finally:
+            conn.close()
 
         start_dt = datetime.strptime(target_date + ' 06:00', '%Y-%m-%d %H:%M') if target_shift == 'T2' else \
                    (datetime.strptime(target_date + ' 14:00', '%Y-%m-%d %H:%M') if target_shift == 'T3' else \
@@ -427,14 +441,16 @@ def api_press_delivery():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''SELECT press_group, delivered, cancelled, total_orders, vulcanized,
-                                 t_idle, t_estop, t_cortinas, t_prensa, query_start, query_end
-                          FROM press_delivery_data
-                          WHERE fecha = ? AND turno = ?
-                          ORDER BY press_group''', (target_date, target_shift))
-        rows = cursor.fetchall()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''SELECT press_group, delivered, cancelled, total_orders, vulcanized,
+                                     t_idle, t_estop, t_cortinas, t_prensa, query_start, query_end
+                              FROM press_delivery_data
+                              WHERE fecha = ? AND turno = ?
+                              ORDER BY press_group''', (target_date, target_shift))
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
 
         groups = {}
         global_delivered = 0
@@ -451,8 +467,12 @@ def api_press_delivery():
             t_cortinas = r[7] or 0.0
             t_prensa = r[8] or 0.0
 
-            start_dt = datetime.strptime(r[9], '%Y/%m/%d %H:%M:%S') if r[9] else get_capped_now() - timedelta(hours=8)
-            end_dt = datetime.strptime(r[10], '%Y/%m/%d %H:%M:%S') if r[10] else get_capped_now()
+            try:
+                start_dt = datetime.strptime(r[9], '%Y/%m/%d %H:%M:%S') if r[9] else get_capped_now() - timedelta(hours=8)
+                end_dt = datetime.strptime(r[10], '%Y/%m/%d %H:%M:%S') if r[10] else get_capped_now()
+            except (ValueError, TypeError):
+                start_dt = get_capped_now() - timedelta(hours=8)
+                end_dt = get_capped_now()
             total_minutes = max(0, (end_dt - start_dt).total_seconds() / 60.0)
             despachando = max(0, total_minutes - (t_idle + t_estop + t_cortinas + t_prensa))
 
@@ -482,15 +502,17 @@ def api_daily_ticket():
     """Retorna target diario de producción desde daily_ticket_target."""
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT fecha, target FROM daily_ticket_target ORDER BY id DESC LIMIT 1")
-        row = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT fecha, target FROM daily_ticket_target ORDER BY id DESC LIMIT 1")
+            row = cursor.fetchone()
 
-        if row and row[1] and row[1] > 0:
-            return jsonify({"success": True, "total": row[1], "formatted": f"{row[1]:,}", "source": "db"})
-        else:
-            return jsonify({"success": False, "error": "Target no encontrado"}), 503
+            if row and row[1] and row[1] > 0:
+                return jsonify({"success": True, "total": row[1], "formatted": f"{row[1]:,}", "source": "db"})
+            else:
+                return jsonify({"success": False, "error": "Target no encontrado"}), 503
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 503
 

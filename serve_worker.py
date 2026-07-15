@@ -11,7 +11,7 @@ from pylogix import PLC
 from bs4 import BeautifulSoup
 
 _session = requests.Session()
-_session.proxies.update({"http": None, "https": None})
+_session.trust_env = False
 
 DB_PATH = 'shift_history.db'
 
@@ -32,13 +32,15 @@ def get_capped_now():
     """Retorna la última timestamp registrada en shift_summaries."""
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
-        row = cursor.fetchone()
-        conn.close()
-        if row and row[0]:
-            return datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
-    except Exception as e:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT datetime(MAX(timestamp), 'localtime') FROM shift_summaries")
+            row = cursor.fetchone()
+            if row and row[0]:
+                return datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
+        finally:
+            conn.close()
+    except Exception:
         pass
     return datetime.now()
 
@@ -201,104 +203,112 @@ def fetch_and_save_shift_data():
     start_dt, end_dt = get_shift_times(date_str, current_shift)
 
     conn = get_db()
-    cursor = conn.cursor()
-
-    # --- LECTURA DE PLCs: Robots, Conveyors, Lubricadoras ---
-    def save_robot_turn_data(robot_id, ip, base_tag, has_idle=False):
-        comm = PLC()
-        comm.IPAddress = ip
-        comm.ProcessorSlot = 0
-        try:
-            tags_to_read = [f'{base_tag}.{current_shift}_TimerOK', f'{base_tag}.{current_shift}_TimerFault']
-            if has_idle:
-                tags_to_read.append(f'{base_tag}.{current_shift}_TimerAuto')
-
-            results = comm.Read(tags_to_read)
-            for r in results:
-                if r.Status == 'Success':
-                    tag = r.TagName
-                    val = round(float(r.Value), 2)
-                    estado = 'run' if 'TimerOK' in tag else ('auto' if 'TimerAuto' in tag else 'fault')
-                    upsert_shift_data(cursor, date_str, current_shift, robot_id, estado, val)
-        except Exception as e:
-            print(f'[WARN] Error saving shift data for {robot_id}: {e}')
-        finally:
-            comm.Close()
-
-    # Robots
-    save_robot_turn_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1', has_idle=True)
-    save_robot_turn_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2', has_idle=True)
-    save_robot_turn_data('LR1', '10.107.210.141', 'PickDownTimeLoad1', has_idle=True)
-    save_robot_turn_data('LR2', '10.107.210.140', 'PickDownTimeLoad2', has_idle=True)
-
-    # Conveyors
-    save_robot_turn_data('CC01', '10.107.210.111', 'DowntimeCC01', has_idle=True)
-    save_robot_turn_data('CC02', '10.107.210.121', 'DowntimeCC02', has_idle=True)
-    save_robot_turn_data('CC03', '10.107.210.131', 'DowntimeCC03', has_idle=True)
-
-    # Lubricadoras
-    save_robot_turn_data('L1', '10.107.210.51', 'DownTimePlummer1', has_idle=True)
-    save_robot_turn_data('L2', '10.107.210.52', 'DownTimePlummer2', has_idle=True)
-    save_robot_turn_data('L3', '10.107.210.53', 'DownTimePlummer3', has_idle=True)
-
-    # --- IO DATA: Scraping de dashboard Goodyear ---
     try:
-        url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
-        res = _session.get(url, timeout=5)
-        if res.status_code == 200:
-            html = res.text
-            def extract(id_name):
-                match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
-                return match.group(1) if match else "0"
+        cursor = conn.cursor()
 
-            entrada = extract("s1_inbound_total")
-            manual = extract("s1_outbound_cv31_actual")
-            auto = extract("s1_press_total")
-            rate_entrada = extract("s1_inbound_avg")
-            rate_manual = extract("s1_manual_rate")
-            rate_auto = extract("s1_press_rate")
+        # --- LECTURA DE PLCs: Robots, Conveyors, Lubricadoras ---
+        def save_robot_turn_data(robot_id, ip, base_tag, has_idle=False):
+            comm = PLC()
+            comm.IPAddress = ip
+            comm.ProcessorSlot = 0
+            try:
+                tags_to_read = [f'{base_tag}.{current_shift}_TimerOK', f'{base_tag}.{current_shift}_TimerFault']
+                if has_idle:
+                    tags_to_read.append(f'{base_tag}.{current_shift}_TimerAuto')
 
-            cursor.execute("SELECT id FROM io_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
-            row = cursor.fetchone()
-            if row:
-                cursor.execute('''UPDATE io_history
-                                  SET entrada=?, manual=?, auto=?, rate_entrada=?, rate_manual=?, rate_auto=?, timestamp=CURRENT_TIMESTAMP
-                                  WHERE id=?''', (entrada, manual, auto, rate_entrada, rate_manual, rate_auto, row[0]))
-            else:
-                cursor.execute('''INSERT INTO io_history (fecha, turno, entrada, manual, auto, rate_entrada, rate_manual, rate_auto)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                               (date_str, current_shift, entrada, manual, auto, rate_entrada, rate_manual, rate_auto))
-    except Exception as e:
-        print(f"[WARN] Error saving IO data: {e}")
+                results = comm.Read(tags_to_read)
+                for r in results:
+                    if r.Status == 'Success':
+                        tag = r.TagName
+                        val = round(float(r.Value), 2)
+                        estado = 'run' if 'TimerOK' in tag else ('auto' if 'TimerAuto' in tag else 'fault')
+                        upsert_shift_data(cursor, date_str, current_shift, robot_id, estado, val)
+            except Exception as e:
+                print(f'[WARN] Error saving shift data for {robot_id}: {e}')
+            finally:
+                comm.Close()
 
-    # --- GOODYEAR API: Construido (HVA) y Vulcanizado (Cura) ---
-    shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
-    gy_turno = shift_map.get(current_shift, 'noche')
-    url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
+        # Robots
+        save_robot_turn_data('ULR1', '10.107.210.151', 'PickDownTimeUnload1', has_idle=True)
+        save_robot_turn_data('ULR2', '10.107.210.150', 'PickDownTimeUnload2', has_idle=True)
+        save_robot_turn_data('LR1', '10.107.210.141', 'PickDownTimeLoad1', has_idle=True)
+        save_robot_turn_data('LR2', '10.107.210.140', 'PickDownTimeLoad2', has_idle=True)
 
-    max_retries = 3
-    for attempt in range(max_retries):
+        # Conveyors
+        save_robot_turn_data('CC01', '10.107.210.111', 'DowntimeCC01', has_idle=True)
+        save_robot_turn_data('CC02', '10.107.210.121', 'DowntimeCC02', has_idle=True)
+        save_robot_turn_data('CC03', '10.107.210.131', 'DowntimeCC03', has_idle=True)
+
+        # Lubricadoras
+        save_robot_turn_data('L1', '10.107.210.51', 'DownTimePlummer1', has_idle=True)
+        save_robot_turn_data('L2', '10.107.210.52', 'DownTimePlummer2', has_idle=True)
+        save_robot_turn_data('L3', '10.107.210.53', 'DownTimePlummer3', has_idle=True)
+
+        # --- IO DATA: Scraping de dashboard Goodyear ---
         try:
-            res_gy = _session.get(url_gy, timeout=15)
-            if res_gy.status_code == 200:
-                data_gy = res_gy.json()
-                if data_gy.get("status") == "success":
-                    construido = str(data_gy["data"]["total"]["hva"]["prod"])
-                    vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
+            url = "http://10.107.194.62/sbs/gtasrs_dashboard/gtasrs_dashboard_ctrl.php"
+            res = _session.get(url, timeout=5)
+            if res.status_code == 200:
+                html = res.text
+                def extract(id_name):
+                    match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
+                    return match.group(1) if match else "0"
 
-                    cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE fecha=? AND turno=?",
-                                   (construido, vulcanizado, date_str, current_shift))
-                    break
-            else:
-                print(f"[WARN] Goodyear API status {res_gy.status_code} (attempt {attempt+1}/{max_retries})")
+                entrada = extract("s1_inbound_total")
+                manual = extract("s1_outbound_cv31_actual")
+                auto = extract("s1_press_total")
+                rate_entrada = extract("s1_inbound_avg")
+                rate_manual = extract("s1_manual_rate")
+                rate_auto = extract("s1_press_rate")
+
+                cursor.execute("SELECT id FROM io_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
+                row = cursor.fetchone()
+                if row:
+                    cursor.execute('''UPDATE io_history
+                                      SET entrada=?, manual=?, auto=?, rate_entrada=?, rate_manual=?, rate_auto=?, timestamp=CURRENT_TIMESTAMP
+                                      WHERE id=?''', (entrada, manual, auto, rate_entrada, rate_manual, rate_auto, row[0]))
+                else:
+                    cursor.execute('''INSERT INTO io_history (fecha, turno, entrada, manual, auto, rate_entrada, rate_manual, rate_auto)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                                   (date_str, current_shift, entrada, manual, auto, rate_entrada, rate_manual, rate_auto))
         except Exception as e:
-            print(f"[WARN] Error fetching Goodyear tires (attempt {attempt+1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2)
+            print(f"[WARN] Error saving IO data: {e}")
 
-    conn.commit()
-    conn.close()
-    print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
+        # --- GOODYEAR API: Construido (HVA) y Vulcanizado (Cura) ---
+        shift_map = {'T1': 'noche', 'T2': 'manana', 'T3': 'tarde'}
+        gy_turno = shift_map.get(current_shift, 'noche')
+        url_gy = f"http://10.107.194.110/hora/get_tires/?dia={date_str}&turno={gy_turno}"
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                res_gy = _session.get(url_gy, timeout=15)
+                if res_gy.status_code == 200:
+                    data_gy = res_gy.json()
+                    if data_gy.get("status") == "success":
+                        construido = str(data_gy["data"]["total"]["hva"]["prod"])
+                        vulcanizado = str(data_gy["data"]["total"]["cura"]["prod"])
+
+                        cursor.execute("SELECT id FROM io_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
+                        io_row = cursor.fetchone()
+                        if io_row:
+                            cursor.execute("UPDATE io_history SET construido=?, vulcanizado=? WHERE id=?",
+                                           (construido, vulcanizado, io_row[0]))
+                        else:
+                            cursor.execute("INSERT INTO io_history (fecha, turno, construido, vulcanizado) VALUES (?, ?, ?, ?)",
+                                           (date_str, current_shift, construido, vulcanizado))
+                        break
+                else:
+                    print(f"[WARN] Goodyear API status {res_gy.status_code} (attempt {attempt+1}/{max_retries})")
+            except Exception as e:
+                print(f"[WARN] Error fetching Goodyear tires (attempt {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+
+        conn.commit()
+        print(f"[{datetime.now()}] Shift data saved successfully for {date_str} {current_shift}")
+    finally:
+        conn.close()
 
 
 # ============================================================================
@@ -338,19 +348,18 @@ def fetch_and_save_crane_data():
                             print(f'[WARN] Error parsing aisle data: {e}')
 
         conn = get_db()
-        cursor = conn.cursor()
-
-        cursor.execute("DELETE FROM crane_aisle_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
-
-        for item in aisle_data:
-            cursor.execute('''INSERT INTO crane_aisle_history
-                              (fecha, turno, aisle, downtime_percent, downtime_minutes, query_start, query_end)
-                              VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                           (date_str, current_shift, item['aisle'], item['downtime_percent'],
-                            item['downtime_minutes'], start_fmt, end_fmt))
-
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM crane_aisle_history WHERE fecha = ? AND turno = ?", (date_str, current_shift))
+            for item in aisle_data:
+                cursor.execute('''INSERT INTO crane_aisle_history
+                                  (fecha, turno, aisle, downtime_percent, downtime_minutes, query_start, query_end)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                               (date_str, current_shift, item['aisle'], item['downtime_percent'],
+                                item['downtime_minutes'], start_fmt, end_fmt))
+            conn.commit()
+        finally:
+            conn.close()
         print(f"[{datetime.now()}] Crane data saved: {len(aisle_data)} aisles for {date_str} {current_shift}")
     except Exception as e:
         print(f"[WARN] Error saving crane data: {e}")
@@ -390,17 +399,16 @@ def fetch_and_save_conveyor_full():
                 if freq_el is not None: frequency += int(float(freq_el.text or "0"))
 
         conn = get_db()
-        cursor = conn.cursor()
-
-        cursor.execute("DELETE FROM conveyor_full_downtime WHERE fecha = ? AND turno = ?", (date_str, current_shift))
-
-        cursor.execute('''INSERT INTO conveyor_full_downtime
-                          (fecha, turno, total_downtime_minutes, frequency, objective_minutes, query_start, query_end)
-                          VALUES (?, ?, ?, ?, 15.0, ?, ?)''',
-                       (date_str, current_shift, round(total_downtime, 2), frequency, start_fmt, end_fmt))
-
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM conveyor_full_downtime WHERE fecha = ? AND turno = ?", (date_str, current_shift))
+            cursor.execute('''INSERT INTO conveyor_full_downtime
+                              (fecha, turno, total_downtime_minutes, frequency, objective_minutes, query_start, query_end)
+                              VALUES (?, ?, ?, ?, 15.0, ?, ?)''',
+                           (date_str, current_shift, round(total_downtime, 2), frequency, start_fmt, end_fmt))
+            conn.commit()
+        finally:
+            conn.close()
         print(f"[{datetime.now()}] Conveyor full data saved: {total_downtime:.2f} min for {date_str} {current_shift}")
     except Exception as e:
         print(f"[WARN] Error saving conveyor full data: {e}")
@@ -443,25 +451,26 @@ def fetch_and_save_press_downtime():
 
     try:
         conn = get_db()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM press_downtime_by_reason WHERE fecha = ? AND turno = ?", (date_str, current_shift))
 
-        cursor.execute("DELETE FROM press_downtime_by_reason WHERE fecha = ? AND turno = ?", (date_str, current_shift))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(reasons)) as executor:
+                futures = {executor.submit(_fetch_reason_downtime, r): r for r in reasons}
+                for f in concurrent.futures.as_completed(futures):
+                    reason_code = futures[f]
+                    try:
+                        for group, val in f.result():
+                            cursor.execute('''INSERT INTO press_downtime_by_reason
+                                              (fecha, turno, reason_code, press_group, downtime_minutes, query_start, query_end)
+                                              VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                                           (date_str, current_shift, reason_code, group, round(val, 2), start_fmt, end_fmt))
+                    except Exception as e:
+                        print(f'[WARN] Error saving downtime reason {reason_code}: {e}')
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(reasons)) as executor:
-            futures = {executor.submit(_fetch_reason_downtime, r): r for r in reasons}
-            for f in concurrent.futures.as_completed(futures):
-                reason_code = futures[f]
-                try:
-                    for group, val in f.result():
-                        cursor.execute('''INSERT INTO press_downtime_by_reason
-                                          (fecha, turno, reason_code, press_group, downtime_minutes, query_start, query_end)
-                                          VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                                       (date_str, current_shift, reason_code, group, round(val, 2), start_fmt, end_fmt))
-                except Exception as e:
-                    print(f'[WARN] Error saving downtime reason {reason_code}: {e}')
-
-        conn.commit()
-        conn.close()
+            conn.commit()
+        finally:
+            conn.close()
         print(f"[{datetime.now()}] Press downtime data saved for {date_str} {current_shift}")
     except Exception as e:
         print(f"[WARN] Error saving press downtime data: {e}")
@@ -494,7 +503,10 @@ def fetch_and_save_press_delivery():
                 if len(cells) > 7:
                     status, dest = cells[1], cells[7]
                     if dest in ignored_cavities: continue
-                    group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
+                    try:
+                        group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
+                    except ValueError:
+                        continue
                     if group in groups:
                         groups[group]["total"] += 1
                         if status == "Fulfilled": groups[group]["delivered"] += 1
@@ -520,10 +532,13 @@ def fetch_and_save_press_delivery():
                 dest = (mach_el.text or "").strip()
                 try:
                     product_cnt = int(float(cnt_el.text or "0"))
-                except Exception as e:
+                except Exception:
                     product_cnt = 0
                 if dest in ignored_cavities: continue
-                group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
+                try:
+                    group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
+                except ValueError:
+                    continue
                 if group in groups:
                     groups[group]["vulcanized"] += product_cnt
     except Exception as e:
@@ -568,16 +583,21 @@ def fetch_and_save_press_delivery():
                 hour_str = str(item.get('time'))
                 if not hour_str.isdigit(): continue
                 hour_int = int(hour_str)
+                if hour_int < 0 or hour_int > 23: continue
 
-                while current_date.hour != hour_int:
+                attempts = 0
+                while current_date.hour != hour_int and attempts < 24:
                     current_date -= timedelta(hours=1)
+                    attempts += 1
+
+                if current_date.hour != hour_int: continue
 
                 if target_start <= current_date <= target_end:
                     val = item.get(var)
                     if val:
                         try:
                             groups[m_name]['times'][val_key] += float(val)
-                        except Exception as e:
+                        except Exception:
                             pass
 
                 current_date -= timedelta(hours=1)
@@ -590,23 +610,24 @@ def fetch_and_save_press_delivery():
     # Save to DB
     try:
         conn = get_db()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM press_delivery_data WHERE fecha = ? AND turno = ?", (date_str, current_shift))
 
-        cursor.execute("DELETE FROM press_delivery_data WHERE fecha = ? AND turno = ?", (date_str, current_shift))
+            for m_name, m_data in groups.items():
+                t = m_data['times']
+                cursor.execute('''INSERT INTO press_delivery_data
+                                  (fecha, turno, press_group, delivered, cancelled, total_orders, vulcanized,
+                                   t_idle, t_estop, t_cortinas, t_prensa, query_start, query_end)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                               (date_str, current_shift, m_name, m_data['delivered'], m_data['cancelled'],
+                                m_data['total'], m_data['vulcanized'],
+                                round(t['idle'], 2), round(t['estop'], 2), round(t['cortinas'], 2), round(t['prensa'], 2),
+                                start_fmt, end_fmt))
 
-        for m_name, m_data in groups.items():
-            t = m_data['times']
-            cursor.execute('''INSERT INTO press_delivery_data
-                              (fecha, turno, press_group, delivered, cancelled, total_orders, vulcanized,
-                               t_idle, t_estop, t_cortinas, t_prensa, query_start, query_end)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                           (date_str, current_shift, m_name, m_data['delivered'], m_data['cancelled'],
-                            m_data['total'], m_data['vulcanized'],
-                            round(t['idle'], 2), round(t['estop'], 2), round(t['cortinas'], 2), round(t['prensa'], 2),
-                            start_fmt, end_fmt))
-
-        conn.commit()
-        conn.close()
+            conn.commit()
+        finally:
+            conn.close()
         print(f"[{datetime.now()}] Press delivery data saved for {date_str} {current_shift}")
     except Exception as e:
         print(f"[WARN] Error saving press delivery data: {e}")
@@ -641,17 +662,17 @@ def fetch_and_save_daily_ticket():
                         pass
 
         conn = get_db()
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT id FROM daily_ticket_target WHERE fecha = ?", (date_str,))
-        row = cursor.fetchone()
-        if row:
-            cursor.execute("UPDATE daily_ticket_target SET target = ?, timestamp = CURRENT_TIMESTAMP WHERE id = ?", (target, row[0]))
-        else:
-            cursor.execute("INSERT INTO daily_ticket_target (fecha, target) VALUES (?, ?)", (date_str, target))
-
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM daily_ticket_target WHERE fecha = ?", (date_str,))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("UPDATE daily_ticket_target SET target = ?, timestamp = CURRENT_TIMESTAMP WHERE id = ?", (target, row[0]))
+            else:
+                cursor.execute("INSERT INTO daily_ticket_target (fecha, target) VALUES (?, ?)", (date_str, target))
+            conn.commit()
+        finally:
+            conn.close()
         print(f"[{datetime.now()}] Daily ticket saved: {target} for {date_str}")
     except Exception as e:
         print(f"[WARN] Error saving daily ticket: {e}")
