@@ -491,58 +491,76 @@ def fetch_and_save_press_delivery():
     groups = {f"{r}00{s}": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0} for r in range(4,7) for s in ["A","B"] if f"{r}00{s}" != "400A"}
     ignored_cavities = {"440", "520", "540", "620", "640"}
 
-    # Call 1: Compliance data
-    url_compliance = f"http://10.107.194.62/sbs/reports/auto_order_compliance.php?byheader=0&sortby=order_num&sortorder=ASC&str_ts={requests.utils.quote(start_fmt)}&end_ts={requests.utils.quote(end_fmt)}&prszone=&prsrow=all_rows&prscav=all_cavs"
+    # Call 1: Physical Robot Load & KPI data from press_kpi_all.php on 10.107.194.70
+    url_kpi_all = "http://10.107.194.70/ASRS/press_kpi_all.php"
     try:
-        res = _session.get(url_compliance, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-        target_table = next((t for t in soup.find_all("table") if len(t.find_all("tr")) > 10), None)
-        if target_table:
-            for r in target_table.find_all("tr")[1:]:
+        res = _session.get(url_kpi_all, timeout=10)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            for r in soup.find_all("tr"):
                 cells = [td.get_text(strip=True) for td in r.find_all("td")]
-                if len(cells) > 7:
-                    status, dest = cells[1], cells[7]
+                if len(cells) >= 2:
+                    row_text = " ".join(cells)
+                    for g in groups:
+                        if g in row_text or g in cells[0]:
+                            digits = [int(re.sub(r'[^\d]', '', c)) for c in cells if re.sub(r'[^\d]', '', c).isdigit()]
+                            if len(digits) >= 2:
+                                groups[g]["delivered"] = digits[0]
+                                if groups[g]["vulcanized"] == 0:
+                                    groups[g]["vulcanized"] = digits[1]
+                            elif len(digits) == 1:
+                                groups[g]["delivered"] = digits[0]
+    except Exception as e:
+        print(f'[WARN] Error fetching press_kpi_all: {e}')
+
+    # Fallback: Individual press KPI pages (e.g. press_kpi_500A.php)
+    for g in groups:
+        if groups[g]["delivered"] == 0:
+            try:
+                url_single = f"http://10.107.194.70/ASRS/press_kpi_{g}.php"
+                res_s = _session.get(url_single, timeout=5)
+                if res_s.status_code == 200:
+                    soup_s = BeautifulSoup(res_s.text, "html.parser")
+                    text_s = soup_s.get_text()
+                    m_del = re.search(r'(?:Despacho\s*robots?|Robot[a-z]*)\s*:\s*(\d+)', text_s, re.IGNORECASE)
+                    if m_del:
+                        groups[g]["delivered"] = int(m_del.group(1))
+                    m_vulc = re.search(r'(?:Vulcanizados?\s*total|Vulcanizados?)\s*:\s*(\d+)', text_s, re.IGNORECASE)
+                    if m_vulc and groups[g]["vulcanized"] == 0:
+                        groups[g]["vulcanized"] = int(m_vulc.group(1))
+            except Exception as e:
+                print(f'[WARN] Error fetching press_kpi_{g}: {e}')
+
+    # Call 2: Vulcanization crosstab (fallback for vulcanized count if not obtained from .70)
+    if any(groups[g]["vulcanized"] == 0 for g in groups):
+        url_cross = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/Production_Counts_Crosstab/Production_Counts_Crosstab.CrossTab/CrossTab/DataSource/DS1"
+        params_cross = {
+            "ARG_TRANS_START_DATE": start_fmt, "ARG_TRANS_END_DATE": end_fmt,
+            "ARG_MACHINE_GROUP_GUID": "9A98FF823A234EEDE05356C26B0A13F5", "ARG_TIME_SUMMARY": "DD",
+            "ARG_MACH_TYPE": "", "ARG_COLUMN": "MACH_PART_NAME;", "ARG_ROW": "PRODUCTION_HOUR;",
+            "ARG_DATA": "PRODUCT_CNT;", "ARG_LANG": "ENG", "ARG_LANGUAGE_CD": "en", "ARG_USER": ""
+        }
+        try:
+            res_cross = _session.get(url_cross, params=params_cross, headers={"Accept-language": "en"}, timeout=10)
+            root = ET.fromstring(res_cross.content)
+            for row in root.findall('.//Row'):
+                mach_el = row.find('MACH_PART_NAME')
+                cnt_el = row.find('PRODUCT_CNT')
+                if mach_el is not None and cnt_el is not None:
+                    dest = (mach_el.text or "").strip()
+                    try:
+                        product_cnt = int(float(cnt_el.text or "0"))
+                    except Exception:
+                        product_cnt = 0
                     if dest in ignored_cavities: continue
                     try:
                         group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
                     except ValueError:
                         continue
-                    if group in groups:
-                        groups[group]["total"] += 1
-                        if status == "Fulfilled": groups[group]["delivered"] += 1
-                        elif status == "Cancelled": groups[group]["cancelled"] += 1
-    except Exception as e:
-        print(f'[WARN] Error fetching press compliance: {e}')
-
-    # Call 2: Vulcanization crosstab
-    url_cross = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/Production_Counts_Crosstab/Production_Counts_Crosstab.CrossTab/CrossTab/DataSource/DS1"
-    params_cross = {
-        "ARG_TRANS_START_DATE": start_fmt, "ARG_TRANS_END_DATE": end_fmt,
-        "ARG_MACHINE_GROUP_GUID": "9A98FF823A234EEDE05356C26B0A13F5", "ARG_TIME_SUMMARY": "DD",
-        "ARG_MACH_TYPE": "", "ARG_COLUMN": "MACH_PART_NAME;", "ARG_ROW": "PRODUCTION_HOUR;",
-        "ARG_DATA": "PRODUCT_CNT;", "ARG_LANG": "ENG", "ARG_LANGUAGE_CD": "en", "ARG_USER": ""
-    }
-    try:
-        res_cross = _session.get(url_cross, params=params_cross, headers={"Accept-language": "en"}, timeout=10)
-        root = ET.fromstring(res_cross.content)
-        for row in root.findall('.//Row'):
-            mach_el = row.find('MACH_PART_NAME')
-            cnt_el = row.find('PRODUCT_CNT')
-            if mach_el is not None and cnt_el is not None:
-                dest = (mach_el.text or "").strip()
-                try:
-                    product_cnt = int(float(cnt_el.text or "0"))
-                except Exception:
-                    product_cnt = 0
-                if dest in ignored_cavities: continue
-                try:
-                    group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
-                except ValueError:
-                    continue
-                if group in groups:
-                    groups[group]["vulcanized"] += product_cnt
-    except Exception as e:
-        print(f'[WARN] Error fetching vulcanization: {e}')
+                    if group in groups and groups[group]["vulcanized"] == 0:
+                        groups[group]["vulcanized"] += product_cnt
+        except Exception as e:
+            print(f'[WARN] Error fetching vulcanization fallback: {e}')
 
     # Call 3: Press KPI data (hourly time breakdowns)
     machines_map = {0: '400B', 1: '500A', 2: '500B', 3: '600A', 4: '600B'}
