@@ -575,7 +575,7 @@ def fetch_and_save_press_delivery():
 
                 if current_date.hour != hour_int: continue
 
-                if target_start <= current_date <= target_end:
+                if target_start <= current_date < target_end:
                     val = item.get(var)
                     if val:
                         try:
