@@ -520,7 +520,7 @@ def fetch_and_save_press_delivery():
                         group = "400B" if dest.startswith("4") else (f"{dest[0]}00A" if int(dest) % 2 != 0 else f"{dest[0]}00B")
                     except ValueError:
                         continue
-                    if group in groups and groups[group]["vulcanized"] == 0:
+                    if group in groups:
                         groups[group]["vulcanized"] += product_cnt
         except Exception as e:
             print(f'[WARN] Error fetching vulcanization fallback: {e}')
