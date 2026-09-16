@@ -491,47 +491,10 @@ def fetch_and_save_press_delivery():
     groups = {f"{r}00{s}": {"delivered": 0, "cancelled": 0, "total": 0, "vulcanized": 0} for r in range(4,7) for s in ["A","B"] if f"{r}00{s}" != "400A"}
     ignored_cavities = {"440", "520", "540", "620", "640"}
 
-    # Call 1: Physical Robot Load & KPI data from press_kpi_all.php on 10.107.194.70
-    url_kpi_all = "http://10.107.194.70/ASRS/press_kpi_all.php"
-    try:
-        res = _session.get(url_kpi_all, timeout=10)
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, "html.parser")
-            for r in soup.find_all("tr"):
-                cells = [td.get_text(strip=True) for td in r.find_all("td")]
-                if len(cells) >= 2:
-                    row_text = " ".join(cells)
-                    for g in groups:
-                        if g in row_text or g in cells[0]:
-                            digits = [int(re.sub(r'[^\d]', '', c)) for c in cells if re.sub(r'[^\d]', '', c).isdigit()]
-                            if len(digits) >= 2:
-                                groups[g]["delivered"] = digits[0]
-                                if groups[g]["vulcanized"] == 0:
-                                    groups[g]["vulcanized"] = digits[1]
-                            elif len(digits) == 1:
-                                groups[g]["delivered"] = digits[0]
-    except Exception as e:
-        print(f'[WARN] Error fetching press_kpi_all: {e}')
+    # Call 1: Despachos completados (n_tires) via JSON API press_kpi_data.php.
+    # n_tires se suma por turno usando el mismo filtro horario que los tiempos (ver Call 2).
 
-    # Fallback: Individual press KPI pages (e.g. press_kpi_500A.php)
-    for g in groups:
-        if groups[g]["delivered"] == 0:
-            try:
-                url_single = f"http://10.107.194.70/ASRS/press_kpi_{g}.php"
-                res_s = _session.get(url_single, timeout=5)
-                if res_s.status_code == 200:
-                    soup_s = BeautifulSoup(res_s.text, "html.parser")
-                    text_s = soup_s.get_text()
-                    m_del = re.search(r'(?:Despacho\s*robots?|Robot[a-z]*)\s*:\s*(\d+)', text_s, re.IGNORECASE)
-                    if m_del:
-                        groups[g]["delivered"] = int(m_del.group(1))
-                    m_vulc = re.search(r'(?:Vulcanizados?\s*total|Vulcanizados?)\s*:\s*(\d+)', text_s, re.IGNORECASE)
-                    if m_vulc and groups[g]["vulcanized"] == 0:
-                        groups[g]["vulcanized"] = int(m_vulc.group(1))
-            except Exception as e:
-                print(f'[WARN] Error fetching press_kpi_{g}: {e}')
-
-    # Call 2: Vulcanization crosstab (fallback for vulcanized count if not obtained from .70)
+    # Call: Vulcanization crosstab (source: OEE endpoint, único origen de vulcanizados)
     if any(groups[g]["vulcanized"] == 0 for g in groups):
         url_cross = "http://10.107.194.85:8080/ProductionWebEditServerRS/ReportService/all_areas/counts/Reports/Production_Counts_Crosstab/Production_Counts_Crosstab.CrossTab/CrossTab/DataSource/DS1"
         params_cross = {
@@ -562,9 +525,13 @@ def fetch_and_save_press_delivery():
         except Exception as e:
             print(f'[WARN] Error fetching vulcanization fallback: {e}')
 
-    # Call 3: Press KPI data (hourly time breakdowns)
+    # Call 2: Press KPI data (hourly time breakdowns + n_tires despachados)
     machines_map = {0: '400B', 1: '500A', 2: '500B', 3: '600A', 4: '600B'}
-    variables = ['t_idle', 't_estop', 't_znl', 't_trays']
+    variables = ['t_idle', 't_estop', 't_znl', 't_trays', 'n_tires']
+    VAL_KEY_MAP = {
+        't_idle': 'idle', 't_estop': 'estop', 't_znl': 'cortinas',
+        't_trays': 'prensa', 'n_tires': None
+    }
 
     def fetch_machine_var(m_id, var):
         url = f"http://10.107.194.70/ASRS/press_kpi_data.php?machine={m_id}&variable={var}"
@@ -589,9 +556,7 @@ def fetch_and_save_press_delivery():
             m_name = machines_map.get(m_id)
             if m_name not in groups: continue
 
-            val_key = var.replace('t_', '')
-            if val_key == 'znl': val_key = 'cortinas'
-            if val_key == 'trays': val_key = 'prensa'
+            val_key = VAL_KEY_MAP.get(var)
 
             current_date = get_capped_now().replace(minute=0, second=0, microsecond=0)
             target_start = start_dt.replace(minute=0, second=0, microsecond=0)
@@ -614,7 +579,10 @@ def fetch_and_save_press_delivery():
                     val = item.get(var)
                     if val:
                         try:
-                            groups[m_name]['times'][val_key] += float(val)
+                            if var == 'n_tires':
+                                groups[m_name]['delivered'] += int(float(val))
+                            else:
+                                groups[m_name]['times'][val_key] += float(val)
                         except Exception:
                             pass
 
