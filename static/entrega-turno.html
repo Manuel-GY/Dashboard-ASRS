@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrega de turno ASRS - CONSOLIDADO ENTREGA DE TURNO - ASRS</title>
+    <!-- Goodyear Brand Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=EB+Garamond:ital,wght@1,600;1,700&family=Jost:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Roboto+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Flatpickr & html2canvas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        :root {
+            /* Goodyear Primary Brand Palette */
+            --goodyear-racing-navy: #0B1D45;
+            --goodyear-trophy-gold: #FBBD00;
+            --goodyear-light-gray: #D2D2D2;
+            --goodyear-dark-gray: #707379;
+            --goodyear-white: #FFFFFF;
+            --goodyear-black: #1E293B;
+
+            /* Desaturated, harmonious functional status colors */
+            --status-green: #15803D;
+            --status-green-bg: #DCFCE7;
+            --status-red: #B91C1C;
+            --status-red-bg: #FEE2E2;
+            --status-amber: #B45309;
+            --status-amber-bg: #FEF3C7;
+
+            /* Page & Card tokens */
+            --page-bg: #EDF2F7;
+            --card-border: #E2E8F0;
+            --section-bg: #F8FAFC;
+
+            /* Typography */
+            --font-headline: 'Anton', 'Futura PT Cond', Impact, sans-serif;
+            --font-body: 'Jost', 'PT Sans', 'Segoe UI', sans-serif;
+            --font-caption: 'EB Garamond', 'Livory', 'Palatino Linotype', serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--page-bg);
+            color: var(--goodyear-black);
+            min-height: 100vh;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Top Action Bar */
+        .action-toolbar {
+            width: 1200px;
+            max-width: 100%;
+            background: var(--goodyear-white);
+            border-radius: 6px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border: 1px solid var(--card-border);
+            gap: 16px;
+            flex-wrap: wrap;
+            box-shadow: 0 4px 12px rgba(11, 29, 69, 0.05);
+        }
+
+        .controls-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .input-group-custom {
+            display: flex;
+            align-items: center;
+            background: #F8FAFC;
+            border-radius: 4px;
+            padding: 6px 12px;
+            border: 1px solid var(--card-border);
+            gap: 8px;
+        }
+
+        .input-group-custom label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--goodyear-dark-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-group-custom input, .input-group-custom select {
+            border: none;
+            background: transparent;
+            font-family: var(--font-body);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--goodyear-racing-navy);
+            outline: none;
+            padding: 2px;
+            cursor: pointer;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 18px;
+            border-radius: 4px;
+            font-size: 12.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+
+        .btn-gold {
+            background: var(--goodyear-trophy-gold);
+            color: var(--goodyear-racing-navy);
+            border: 1px solid #E5AA00;
+            box-shadow: 0 2px 6px rgba(251, 189, 0, 0.25);
+        }
+        .btn-gold:hover {
+            background: #E5AA00;
+        }
+
+        .btn-navy {
+            background: var(--goodyear-racing-navy);
+            color: var(--goodyear-white);
+        }
+        .btn-navy:hover {
+            background: #132E6B;
+        }
+
+        .btn-outline {
+            background: var(--goodyear-white);
+            border: 1px solid var(--card-border);
+            color: var(--goodyear-racing-navy);
+        }
+        .btn-outline:hover {
+            background: #F1F5F9;
+        }
+
+        /* ================= REPORT CARD CONTAINER ================= */
+        #report-card {
+            width: 1180px;
+            background: var(--goodyear-white);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 12px 30px rgba(11, 29, 69, 0.08);
+        }
+
+        /* Header Banner with Racing Navy Background & Clean Proportions */
+        .report-header-banner {
+            background-color: var(--goodyear-racing-navy);
+            color: var(--goodyear-white);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            border-bottom: 4px solid var(--goodyear-trophy-gold);
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .header-brand img {
+            height: 40px;
+            width: auto;
+            object-fit: contain;
+            filter: none;
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .main-headline {
+            font-family: var(--font-body);
+            font-weight: 800;
+            font-size: 24px;
+            color: #FFFFFF;
+            letter-spacing: 0.5px;
+            line-height: 1.1;
+            text-transform: uppercase;
+            white-space: nowrap;
+            margin: 0;
+        }
+
+        .subheadline-caption {
+            font-family: var(--font-body);
+            font-size: 13px;
+            color: #94A3B8;
+            font-weight: 500;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .badge-shift {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--goodyear-trophy-gold);
+            border: 1px solid rgba(251, 189, 0, 0.4);
+            padding: 0 16px;
+            border-radius: 4px;
+            font-size: 13.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            height: 38px;
+            white-space: nowrap;
+        }
+
+        .badge-time {
+            background: #FFFFFF;
+            color: var(--goodyear-racing-navy);
+            border: 1px solid #CBD5E1;
+            padding: 0 16px;
+            border-radius: 4px;
+            font-size: 13.5px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            height: 38px;
+            white-space: nowrap;
+        }
+
+        /* Inner Content Body */
+        .card-body-content {
+            padding: 14px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: #FAFAFA;
+        }
+
+        /* 3-Column Metrics Grid */
+        .metrics-row {
+            display: grid;
+            grid-template-columns: 1.15fr 0.9fr 0.95fr;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .metric-card {
+            background: var(--goodyear-white);
+            border: 1px solid var(--card-border);
+            border-top: 3px solid #64748B;
+            border-radius: 4px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .card-header-custom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-header-custom h2 {
+            font-family: var(--font-body);
+            font-size: 15px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #1E293B;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-header-custom h2 i {
+            color: #64748B;
+            font-size: 15px;
+        }
+
+        .card-header-custom .badge-kpi {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 3px;
+            background: #F1F5F9;
+            color: #1E293B;
+            border: 1px solid #CBD5E1;
+        }
+
+        /* Section 1: Input / Output */
+        .io-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .io-subcard {
+            background: #F8FAFC;
+            padding: 8px 12px;
+            border: 1px solid var(--card-border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .io-subcard.highlight {
+            border-left: 3px solid #64748B;
+        }
+        .io-subcard.success {
+            border-left: 3px solid var(--status-green);
+        }
+        .io-subcard.amber {
+            border-left: 3px solid var(--status-amber);
+        }
+
+        .subcard-label {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .subcard-val {
+            font-size: 26px;
+            font-weight: 800;
+            color: #0B1D45;
+            font-family: var(--font-mono);
+            line-height: 1.1;
+        }
+
+        .subcard-sub {
+            font-size: 12px;
+            color: var(--goodyear-dark-gray);
+            font-weight: 600;
+        }
+
+        .io-output-split {
+            background: #F8FAFC;
+            padding: 8px 12px;
+            border: 1px solid var(--card-border);
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Section 2: Cranes */
+        .crane-box {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .crane-avail-badge {
+            background: var(--goodyear-racing-navy);
+            color: var(--goodyear-white);
+            padding: 8px 14px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .crane-avail-val {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--goodyear-trophy-gold);
+            font-family: var(--font-mono);
+        }
+
+        .top-crane-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .crane-item {
+            background: #F8FAFC;
+            padding: 7px 12px;
+            border: 1px solid var(--card-border);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .crane-name {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .crane-dt {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--status-red);
+            font-family: var(--font-mono);
+        }
+
+        /* Section 3: Press Delivery */
+        .press-summary-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .press-item {
+            background: #F8FAFC;
+            padding: 6px 10px;
+            border: 1px solid var(--card-border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .press-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13.5px;
+        }
+
+        .press-group-name {
+            font-weight: 800;
+            color: #334155;
+        }
+
+        .press-pct {
+            font-weight: 800;
+            font-family: var(--font-mono);
+            font-size: 13.5px;
+        }
+
+        .progress-bar-bg {
+            height: 6px;
+            background: #E2E8F0;
+            border-radius: 3px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #475569;
+            border-radius: 3px;
+        }
+
+        .press-meta-counts {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11.5px;
+            color: var(--goodyear-dark-gray);
+            font-weight: 600;
+        }
+
+        /* ================= SECTION 4: ORDERS TABLE ================= */
+        .orders-section {
+            background: var(--goodyear-white);
+            padding: 12px 14px;
+            border: 1px solid var(--card-border);
+            border-top: 3px solid #64748B;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .orders-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: var(--goodyear-white);
+            border: 1px solid var(--card-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .orders-table th {
+            background: #F8FAFC;
+            color: #334155;
+            text-transform: uppercase;
+            font-size: 11.5px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 2px solid #E2E8F0;
+        }
+
+        .orders-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #F1F5F9;
+            color: var(--goodyear-black);
+            vertical-align: middle;
+        }
+
+        .orders-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge-ot {
+            background: #334155;
+            color: var(--goodyear-white);
+            font-family: var(--font-mono);
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+        }
+
+        .badge-bd-yes {
+            background: var(--status-red-bg);
+            color: var(--status-red);
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid #FECACA;
+        }
+
+        .badge-bd-no {
+            background: var(--status-green-bg);
+            color: var(--status-green);
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid #BBF7D0;
+        }
+
+        /* Toast notification */
+        #toast {
+            position: fixed;
+            bottom: 30px;
+            background: var(--goodyear-racing-navy);
+            color: var(--goodyear-white);
+            border-left: 4px solid var(--goodyear-trophy-gold);
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 9999;
+        }
+
+        #toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* ================= MODAL CONFIGURACIÓN HORARIOS ================= */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(11, 29, 69, 0.65);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.25s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-card {
+            background: var(--goodyear-white);
+            border-radius: 8px;
+            width: 520px;
+            max-width: 95vw;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            border: 2px solid var(--goodyear-racing-navy);
+            overflow: hidden;
+            transform: scale(0.95);
+            transition: transform 0.25s ease;
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            background: var(--goodyear-racing-navy);
+            color: var(--goodyear-white);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px solid var(--goodyear-trophy-gold);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-header .btn-close-modal {
+            background: none;
+            border: none;
+            color: var(--goodyear-white);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .modal-header .btn-close-modal:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .modal-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .config-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 8px 12px;
+            background: #F8FAFC;
+            border-radius: 6px;
+            border: 1px solid #E2E8F0;
+        }
+
+        .config-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--goodyear-racing-navy);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .config-input-time {
+            padding: 6px 10px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--goodyear-racing-navy);
+            border: 1px solid #CBD5E1;
+            border-radius: 4px;
+            background: #FFFFFF;
+            width: 110px;
+            text-align: center;
+        }
+
+        .toggle-switch-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #EFF6FF;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #BFDBFE;
+        }
+
+        .modal-footer {
+            padding: 14px 20px;
+            background: #F1F5F9;
+            border-top: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Modal Configuración Horarios -->
+    <div id="modal-horarios" class="modal-overlay" onclick="if(event.target === this) cerrarModalHorarios()">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-clock" style="color: var(--goodyear-trophy-gold);"></i> Horarios de Envío Automático (Teams)</h3>
+                <button class="btn-close-modal" onclick="cerrarModalHorarios()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="toggle-switch-container">
+                    <div>
+                        <b style="font-size: 13px; color: var(--goodyear-racing-navy);">Envío Automático a Teams</b><br>
+                        <span style="font-size: 11.5px; color: #64748B;">Se dispara en cada turno si Ticket Requerido > 0 tires</span>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 13px;">
+                        <input type="checkbox" id="cfg-auto-enabled" checked style="width: 18px; height: 18px; cursor: pointer;">
+                        <span>Activo</span>
+                    </label>
+                </div>
+
+                <div class="config-row">
+                    <span class="config-label"><i class="fa-solid fa-moon" style="color: #6366F1;"></i> Turno Noche (T1):</span>
+                    <input type="time" id="cfg-t1-time" class="config-input-time" value="06:45">
+                </div>
+
+                <div class="config-row">
+                    <span class="config-label"><i class="fa-solid fa-sun" style="color: #F59E0B;"></i> Turno Mañana (T2):</span>
+                    <input type="time" id="cfg-t2-time" class="config-input-time" value="14:45">
+                </div>
+
+                <div class="config-row">
+                    <span class="config-label"><i class="fa-solid fa-cloud-sun" style="color: #EC4899;"></i> Turno Tarde (T3):</span>
+                    <input type="time" id="cfg-t3-time" class="config-input-time" value="22:45">
+                </div>
+
+                </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="cerrarModalHorarios()">Cancelar</button>
+                <button class="btn btn-gold" onclick="guardarConfigHorarios()">
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar Horarios
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Action Bar -->
+    <div class="action-toolbar">
+        <div class="controls-left">
+            <a href="/" class="btn btn-navy" style="text-decoration: none; padding: 7px 12px;">
+                <i class="fa-solid fa-arrow-left"></i> Dashboard
+            </a>
+
+            <div class="input-group-custom">
+                <i class="fa-regular fa-calendar" style="color: var(--goodyear-racing-navy);"></i>
+                <label>Fecha:</label>
+                <input type="text" id="fecha-input" placeholder="YYYY-MM-DD">
+            </div>
+
+            <button class="btn btn-outline" id="btn-modal-horarios" onclick="abrirModalHorarios()" title="Configurar horarios de envío automático a Teams">
+                <i class="fa-solid fa-clock" style="color: var(--goodyear-racing-navy);"></i> Horarios de Envío
+            </button>
+
+            <div class="input-group-custom">
+                <i class="fa-solid fa-clock-rotate-left" style="color: var(--goodyear-racing-navy);"></i>
+                <label>Turno:</label>
+                <select id="turno-select">
+                    <option value="T2">Turno Mañana (06:00 - 14:00)</option>
+                    <option value="T3">Turno Tarde (14:00 - 22:00)</option>
+                    <option value="T1">Turno Noche (22:00 - 06:00)</option>
+                </select>
+            </div>
+
+            <button class="btn btn-outline" id="btn-refresh" onclick="cargarDatos()">
+                <i class="fa-solid fa-rotate"></i> Actualizar
+            </button>
+
+            <div style="font-size: 12px; font-weight: 700; color: #475569; background: #F1F5F9; padding: 6px 12px; border-radius: 4px; border: 1px solid #CBD5E1; display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-clipboard-check" style="color: var(--goodyear-racing-navy);"></i>
+                <span>Ticket: <b id="lbl-ticket-toolbar" style="color: var(--goodyear-racing-navy);">13,500 tires</b></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= REPORT CARD TO EXPORT ================= -->
+    <div id="report-card">
+        <!-- Header Banner: Racing Navy background with White Letters & Trophy Gold Badge -->
+        <div class="report-header-banner">
+            <div class="header-brand">
+                <img src="logo-goodyear.png" alt="Goodyear" onerror="this.style.display='none'">
+                <div class="brand-text">
+                    <h1 class="main-headline">
+                        ENTREGA DE TURNO - ASRS
+                    </h1>
+
+                </div>
+            </div>
+            <div class="header-meta">
+                <div class="badge-shift" id="lbl-shift-badge">
+                    <i class="fa-solid fa-sun" style="color: var(--goodyear-trophy-gold);"></i> <span id="lbl-turno-nombre">Turno Mañana (T2)</span>
+                </div>
+                <div class="badge-time" id="lbl-rango-horas">
+                    06:00 - 14:00
+                </div>
+            </div>
+        </div>
+
+        <!-- Inner Content Body -->
+        <div class="card-body-content">
+            <!-- Metrics Row -->
+            <div class="metrics-row">
+                <!-- Col 1: INPUT / OUTPUT -->
+                <div class="metric-card">
+                    <div class="card-header-custom">
+                        <h2><i class="fa-solid fa-arrow-right-arrow-left" style="color: var(--goodyear-racing-navy);"></i> Flujo / Input & Output</h2>
+                        <span class="badge-kpi" id="lbl-eficiencia-badge">Efic: 77.86%</span>
+                    </div>
+
+                    <div class="io-grid">
+                        <div class="io-subcard highlight">
+                            <span class="subcard-label">Construido</span>
+                            <span class="subcard-val" id="val-construido">2.583</span>
+                            <span class="subcard-sub">tires</span>
+                        </div>
+                        <div class="io-subcard highlight">
+                            <span class="subcard-label">Vulcanizado</span>
+                            <span class="subcard-val" id="val-vulcanizado">2.753</span>
+                            <span class="subcard-sub">tires</span>
+                        </div>
+                    </div>
+
+                    <div class="io-grid">
+                        <div class="io-subcard success">
+                            <span class="subcard-label">Entrada ASRS</span>
+                            <span class="subcard-val" id="val-entrada">2.011</span>
+                            <span class="subcard-sub">Rate: <b id="val-rate-in">6.7</b> t/m</span>
+                        </div>
+                        <div class="io-subcard amber">
+                            <span class="subcard-label">Total Salida</span>
+                            <span class="subcard-val" id="val-total-salida">2.464</span>
+                            <span class="subcard-sub">Rate: <b id="val-rate-out">8.17</b> t/m</span>
+                        </div>
+                    </div>
+
+                    <div class="io-output-split">
+                        <div>
+                            <span class="subcard-label">Manual</span>
+                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-amber);" id="val-manual">1.693 tires</div>
+                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-man">5.60</b></span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="subcard-label">Automático</span>
+                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-green);" id="val-auto">771 tires</div>
+                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-auto">2.57</b></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Col 2: CRANE & CONVEYOR PERFORMANCE -->
+                <div class="metric-card">
+                    <div class="card-header-custom">
+                        <h2><i class="fa-solid fa-dolly" style="color: var(--goodyear-racing-navy);"></i> Crane Performance</h2>
+                        <span class="badge-kpi" id="lbl-crane-disp">Disp: 84.79%</span>
+                    </div>
+
+                    <div class="crane-avail-badge">
+                        <div>
+                            <span style="font-size:10.5px; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:var(--goodyear-light-gray);">Disponibilidad Global</span>
+                            <div style="font-size: 11px; color: #CBD5E1;">11 Pasillos ASRS</div>
+                        </div>
+                        <span class="crane-avail-val" id="val-crane-disp">84.79%</span>
+                    </div>
+
+                    <div class="crane-box">
+                        <span class="subcard-label">Top 3 Pasillos con Downtime</span>
+                        <div class="top-crane-list" id="crane-top-list">
+                            <div class="crane-item">
+                                <span class="crane-name">Pasillo 4</span>
+                                <span class="crane-dt">361 min (75.1%)</span>
+                            </div>
+                            <div class="crane-item">
+                                <span class="crane-name">Pasillo 1</span>
+                                <span class="crane-dt">110 min (22.9%)</span>
+                            </div>
+                            <div class="crane-item">
+                                <span class="crane-name">Pasillo 2</span>
+                                <span class="crane-dt">110 min (22.9%)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Col 3: PRESS DELIVERY -->
+                <div class="metric-card">
+                    <div class="card-header-custom">
+                        <h2><i class="fa-solid fa-robot" style="color: var(--goodyear-racing-navy);"></i> Press Delivery</h2>
+                        <span class="badge-kpi" id="lbl-press-global">Cumpl: 28.68%</span>
+                    </div>
+
+                    <div class="press-summary-list" id="press-list">
+                        <!-- Dynamic Press Items -->
+                        <div class="press-item">
+                            <div class="press-header-row">
+                                <span class="press-group-name">400B</span>
+                                <span class="press-pct" style="color: var(--status-red);">0.0%</span>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 0%; background:var(--status-red);"></div></div>
+                            <div class="press-meta-counts">
+                                <span>Robot: <b>0</b></span>
+                                <span>Manual: <b>457</b></span>
+                                <span>Total: <b>457</b></span>
+                            </div>
+                        </div>
+                        <div class="press-item">
+                            <div class="press-header-row">
+                                <span class="press-group-name">500A</span>
+                                <span class="press-pct" style="color: var(--status-green);">42.1%</span>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 42.1%; background:var(--status-green);"></div></div>
+                            <div class="press-meta-counts">
+                                <span>Robot: <b>153</b></span>
+                                <span>Manual: <b>210</b></span>
+                                <span>Total: <b>363</b></span>
+                            </div>
+                        </div>
+                        <div class="press-item">
+                            <div class="press-header-row">
+                                <span class="press-group-name">500B</span>
+                                <span class="press-pct" style="color: var(--status-green);">39.7%</span>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 39.7%; background:var(--status-green);"></div></div>
+                            <div class="press-meta-counts">
+                                <span>Robot: <b>135</b></span>
+                                <span>Manual: <b>205</b></span>
+                                <span>Total: <b>340</b></span>
+                            </div>
+                        </div>
+                        <div class="press-item">
+                            <div class="press-header-row">
+                                <span class="press-group-name">600A</span>
+                                <span class="press-pct" style="color: var(--status-green);">32.7%</span>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 32.7%; background:var(--status-green);"></div></div>
+                            <div class="press-meta-counts">
+                                <span>Robot: <b>132</b></span>
+                                <span>Manual: <b>272</b></span>
+                                <span>Total: <b>404</b></span>
+                            </div>
+                        </div>
+                        <div class="press-item">
+                            <div class="press-header-row">
+                                <span class="press-group-name">600B</span>
+                                <span class="press-pct" style="color: var(--status-green);">36.1%</span>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 36.1%; background:var(--status-green);"></div></div>
+                            <div class="press-meta-counts">
+                                <span>Robot: <b>139</b></span>
+                                <span>Manual: <b>246</b></span>
+                                <span>Total: <b>385</b></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 4: Orders Table -->
+            <div class="orders-section">
+                <div class="card-header-custom">
+                    <h2><i class="fa-solid fa-wrench" style="color: var(--goodyear-racing-navy);"></i> Novedades y Órdenes Correctivas del Turno</h2>
+                    <span class="badge-kpi" id="lbl-total-orders">1 Orden Registrada</span>
+                </div>
+
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">N° OT</th>
+                            <th style="width: 90px;">Hora</th>
+                            <th style="width: 170px;">Equipo / Máquina</th>
+                            <th>Título / Problema</th>
+                            <th style="width: 110px; text-align: center;">Tiempo (TP)</th>
+                            <th>Detalle Intervención</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-tbody">
+                        <tr>
+                            <td><span class="badge-ot">7596476</span></td>
+                            <td style="font-family: var(--font-mono); font-weight:700;">07:33:10</td>
+                            <td><b>L504-Z13-MOTOPOLIN</b><br><span style="font-size:11px; color:var(--goodyear-black); font-weight:600;">CONVEYOR MOTOPOLIN ZONA 13</span></td>
+                            <td><b>Tarjeta CV bypass</b></td>
+                            <td style="text-align: center; font-family: var(--font-mono); font-weight:700;">0 min</td>
+                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:500;">Intervención técnica en tarjeta bypass de Zona 13 (sin impacto en parada de línea).</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"><i class="fa-solid fa-circle-check" style="color: var(--goodyear-trophy-gold);"></i> <span id="toast-msg">Mensaje</span></div>
+
+    <script>
+        let currentData = null;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramFecha = urlParams.get('fecha');
+        const paramTurno = urlParams.get('turno');
+
+        // Init Flatpickr
+        const fp = flatpickr("#fecha-input", {
+            dateFormat: "Y-m-d",
+            defaultDate: paramFecha || new Date(),
+            onChange: function() {
+                cargarDatos();
+            }
+        });
+
+        if (paramTurno) {
+            const tSel = document.getElementById('turno-select');
+            if (tSel) tSel.value = paramTurno;
+        }
+
+        document.getElementById('turno-select').addEventListener('change', cargarDatos);
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3500);
+        }
+
+        async function cargarDatos() {
+            const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
+            const turno = document.getElementById('turno-select').value || 'T2';
+
+            try {
+                const res = await fetch(`/api/consolidado-turno?fecha=${fecha}&turno=${turno}`);
+                if (!res.ok) throw new Error("Error en respuesta del servidor");
+                currentData = await res.json();
+                renderReport(currentData);
+                showToast("Datos actualizados correctamente.");
+            } catch (err) {
+                console.error(err);
+                showToast("Error al cargar datos desde el backend.");
+            }
+        }
+
+        function renderReport(data) {
+            if (!data) return;
+            const c = data.consulta;
+            const io = data.input_output;
+            const cr = data.crane_performance;
+            const pr = data.press_delivery;
+            const co = data.conveyor;
+            const ord = data.ordenes || [];
+
+            // Meta Header
+            document.getElementById('lbl-turno-nombre').innerText = c.turno_nombre;
+            document.getElementById('lbl-rango-horas').innerText = `${c.fecha} (${c.rango_horas})`;
+
+            // IO
+            document.getElementById('val-construido').innerText = io.construido;
+            document.getElementById('val-vulcanizado').innerText = io.vulcanizado;
+            document.getElementById('val-entrada').innerText = io.entrada_asrs;
+            document.getElementById('val-rate-in').innerText = io.rate_entrada;
+            document.getElementById('val-total-salida').innerText = io.total_salida;
+            document.getElementById('val-rate-out').innerText = io.rate_salida;
+            document.getElementById('val-manual').innerText = `${io.salida_manual} tires`;
+            document.getElementById('val-rate-man').innerText = io.rate_manual;
+            document.getElementById('val-auto').innerText = `${io.salida_auto} tires`;
+            document.getElementById('val-rate-auto').innerText = io.rate_auto;
+            document.getElementById('lbl-eficiencia-badge').innerText = `Efic: ${io.eficiencia_entrada}%`;
+
+            // Cranes
+            document.getElementById('val-crane-disp').innerText = `${cr.disponibilidad_pct}%`;
+            document.getElementById('lbl-crane-disp').innerText = `Disp: ${cr.disponibilidad_pct}%`;
+
+            const topCraneList = document.getElementById('crane-top-list');
+            topCraneList.innerHTML = '';
+            if (cr.top_downtime && cr.top_downtime.length > 0) {
+                cr.top_downtime.forEach(item => {
+                    topCraneList.innerHTML += `
+                        <div class="crane-item">
+                            <span class="crane-name">Pasillo ${item.aisle}</span>
+                            <span class="crane-dt">${item.downtime_minutes} min (${item.downtime_percent}%)</span>
+                        </div>
+                    `;
+                });
+            } else {
+                topCraneList.innerHTML = '<div style="font-size:12px; color:var(--goodyear-dark-gray); text-align:center; padding:10px;">Sin paradas registradas</div>';
+            }
+
+            // Presses
+            document.getElementById('lbl-press-global').innerText = `Cumpl: ${pr.cumplimiento_global_pct || 0}%`;
+            const pressList = document.getElementById('press-list');
+            pressList.innerHTML = '';
+            const prensasArr = (pr.resumen_prensas && pr.resumen_prensas.length > 0) ? pr.resumen_prensas : [
+                { press: "400B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
+                { press: "500A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
+                { press: "500B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
+                { press: "600A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
+                { press: "600B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 }
+            ];
+            prensasArr.forEach(p => {
+                const color = p.pct > 35 ? 'var(--status-green)' : (p.pct > 15 ? 'var(--status-amber)' : 'var(--status-red)');
+                pressList.innerHTML += `
+                    <div class="press-item">
+                        <div class="press-header-row">
+                            <span class="press-group-name">${p.press}</span>
+                            <span class="press-pct" style="color: ${color};">${p.pct}%</span>
+                        </div>
+                        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${p.pct}%; background:${color};"></div></div>
+                        <div class="press-meta-counts">
+                            <span>Robot: <b>${p.delivered_robot}</b></span>
+                            <span>Manual: <b>${p.manual}</b></span>
+                            <span>Total: <b>${p.vulcanized}</b></span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Orders Table
+            const orderCountText = ord.length === 1 ? '1 Orden Registrada' : (ord.length === 0 ? 'Sin Órdenes Registradas' : `${ord.length} Órdenes Registradas`);
+            document.getElementById('lbl-total-orders').innerText = orderCountText;
+            const tbody = document.getElementById('orders-tbody');
+            tbody.innerHTML = '';
+            if (ord.length > 0) {
+                ord.forEach(o => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><span class="badge-ot">${o.ot}</span></td>
+                            <td style="font-family: var(--font-mono); font-weight:800; font-size:14px;">${o.hora}</td>
+                            <td><b style="font-size:14px;">${o.maquina || o.equipo}</b><br><span style="font-size:12px; color:#475569; font-weight:700;">${o.equipo}</span></td>
+                            <td><b style="font-size:14px;">${o.titulo}</b></td>
+                            <td style="text-align: center; font-family: var(--font-mono); font-weight:800; font-size:14px;">${o.tp_min} min</td>
+                            <td style="font-size:14px; color:var(--goodyear-black); font-weight:500; line-height:1.4;">${o.detalle || o.titulo || 'Sin observaciones adicionales registradas.'}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align:center; padding:20px; color:var(--goodyear-dark-gray);">
+                            <i class="fa-solid fa-circle-check" style="color:var(--status-green); font-size:18px;"></i><br>
+                            Sin eventos correctivos reportados en este turno.
+                        </td>
+                    </tr>
+                `;
+            }
+            window.reportRendered = true;
+        }
+
+        async function cargarTicketToolbar() {
+            try {
+                const res = await fetch('/api/daily-ticket');
+                if (res.ok) {
+                    const d = await res.json();
+                    const val = d.formatted || d.total || '0';
+                    const el = document.getElementById('lbl-ticket-toolbar');
+                    if (el) el.innerText = `${val} tires`;
+                }
+            } catch (e) {
+                console.error("Error loading daily ticket:", e);
+            }
+        }
+
+        // ================= GESTIÓN DE HORARIOS DE ENVÍO =================
+        function abrirModalHorarios() {
+            document.getElementById('modal-horarios').classList.add('active');
+            cargarConfigHorarios();
+        }
+
+        function cerrarModalHorarios() {
+            document.getElementById('modal-horarios').classList.remove('active');
+        }
+
+        async function cargarConfigHorarios() {
+            try {
+                const res = await fetch('/api/schedule-config');
+                if (res.ok) {
+                    const cfg = await res.json();
+                    document.getElementById('cfg-auto-enabled').checked = cfg.auto_send_enabled !== false;
+                    document.getElementById('cfg-t1-time').value = cfg.t1_time || '06:45';
+                    document.getElementById('cfg-t2-time').value = cfg.t2_time || '14:45';
+                    document.getElementById('cfg-t3-time').value = cfg.t3_time || '22:45';
+                }
+            } catch (err) {
+                console.error("Error al cargar config de horarios:", err);
+            }
+        }
+
+        async function guardarConfigHorarios() {
+            const payload = {
+                auto_send_enabled: document.getElementById('cfg-auto-enabled').checked,
+                t1_time: document.getElementById('cfg-t1-time').value,
+                t2_time: document.getElementById('cfg-t2-time').value,
+                t3_time: document.getElementById('cfg-t3-time').value
+            };
+
+            try {
+                const res = await fetch('/api/schedule-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("✅ Horarios de envío guardados exitosamente.");
+                    cerrarModalHorarios();
+                } else {
+                    showToast(`⚠️ Error al guardar: ${data.error}`);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Error de conexión al guardar configuración.");
+            }
+        }
+
+        // Auto load on startup
+        window.addEventListener('DOMContentLoaded', () => {
+            cargarDatos();
+            cargarTicketToolbar();
+            cargarConfigHorarios();
+        });
+    </script>
+</body>
+</html>

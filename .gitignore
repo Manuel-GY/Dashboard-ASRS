@@ -16,3 +16,13 @@ parsed.json
 # Windows Executables and Scripts  
 *.bat  
 *.exe  
+
+# Runtime files
+orders_cache.json
+.env
+
+# Secrets / local config (webhook URL with auth token)
+schedule_config.json
+
+# Test capture outputs
+captura_*.png

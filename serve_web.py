@@ -1,11 +1,27 @@
 import os
+import sys
 import re
+import json
 import sqlite3
+import threading
 from datetime import datetime, timedelta
+import requests
+import urllib3
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from flask import Flask, request, jsonify
 
 DB_PATH = 'shift_history.db'
+INSPECCIONES_BASE = "http://10.107.194.70/ASRS/inspecciones"
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "schedule_config.json")
+
+TURNOS_ENTREGA = {
+    "T1": {"nombre": "Turno Noche (T1)", "inicio": "22:00:00", "fin": "06:00:00", "cruza_medianoche": True},
+    "T2": {"nombre": "Turno Mañana (T2)", "inicio": "06:00:00", "fin": "14:00:00", "cruza_medianoche": False},
+    "T3": {"nombre": "Turno Tarde (T3)", "inicio": "14:00:00", "fin": "22:00:00", "cruza_medianoche": False},
+}
 
 
 # ============================================================================
@@ -172,6 +188,13 @@ def init_db():
 # ============================================================================
 
 app = Flask(__name__, static_folder='static', static_url_path='')
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return response
 
 
 # ============================================================================
@@ -509,12 +532,312 @@ def api_daily_ticket():
 
             if row and row[1] and row[1] > 0:
                 return jsonify({"success": True, "total": row[1], "formatted": f"{row[1]:,}", "source": "db"})
-            else:
-                return jsonify({"success": False, "error": "Target no encontrado"}), 503
         finally:
             conn.close()
+    except Exception:
+        pass
+
+    plant_ip = os.environ.get("PLANT_SERVER_IP", "10.107.194.110:8006")
+    remote_ticket = fetch_json(f"http://{plant_ip}/api/daily-ticket", timeout=2)
+    if remote_ticket and remote_ticket.get("success"):
+        return jsonify(remote_ticket)
+
+    return jsonify({"success": True, "total": 13500, "formatted": "13,500", "source": "default"})
+
+
+@app.route('/entrega-turno')
+def serve_entrega_turno():
+    return app.send_static_file('entrega-turno.html')
+
+_http_session = requests.Session()
+_http_session.trust_env = False
+
+def fetch_json(url, timeout=6):
+    try:
+        r = _http_session.get(url, timeout=timeout, verify=False)
+        if r.status_code == 200:
+            return r.json()
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 503
+        print(f"[WARN] Error consultando {url}: {e}")
+    return None
+
+def get_shift_range_entrega(fecha_str, turno_key):
+    t_info = TURNOS_ENTREGA.get(turno_key, TURNOS_ENTREGA["T2"])
+    base_date = datetime.strptime(fecha_str, "%Y-%m-%d")
+    
+    if turno_key == "T1":
+        dt_start = (base_date - timedelta(days=1)).replace(hour=22, minute=0, second=0)
+        dt_end = base_date.replace(hour=6, minute=0, second=0)
+    elif turno_key == "T2":
+        dt_start = base_date.replace(hour=6, minute=0, second=0)
+        dt_end = base_date.replace(hour=14, minute=0, second=0)
+    else: # T3
+        dt_start = base_date.replace(hour=14, minute=0, second=0)
+        dt_end = base_date.replace(hour=22, minute=0, second=0)
+        
+    return dt_start, dt_end
+
+@app.route("/api/consolidado-turno")
+def api_consolidado_turno():
+    now_date, now_shift = get_current_shift_info()
+    fecha_req = request.args.get("fecha", now_date)
+    turno_req = request.args.get("turno", now_shift)
+    
+    dt_start, dt_end = get_shift_range_entrega(fecha_req, turno_req)
+    start_param = dt_start.strftime("%Y-%m-%dT%H:%M")
+    plant_ip = os.environ.get("PLANT_SERVER_IP", "10.107.194.110:8006")
+    
+    # 1. Fetch Dashboard metrics from local port 8006, fallback to plant server if local has empty metrics
+    io_data = fetch_json(f"http://127.0.0.1:8006/api/io-data?start={start_param}") or {}
+    if not io_data or io_data.get("entrada") == "-" or io_data.get("entrada") is None:
+        remote_io = fetch_json(f"http://{plant_ip}/api/io-data?start={start_param}")
+        if remote_io and remote_io.get("entrada") != "-":
+            io_data = remote_io
+
+    crane_data = fetch_json(f"http://127.0.0.1:8006/api/crane-performance?start={start_param}") or {}
+    if not crane_data.get("data") or all(c.get("downtime_minutes", 0) == 0 for c in crane_data.get("data", [])):
+        remote_crane = fetch_json(f"http://{plant_ip}/api/crane-performance?start={start_param}")
+        if remote_crane and remote_crane.get("data"):
+            crane_data = remote_crane
+
+    press_data = fetch_json(f"http://127.0.0.1:8006/api/press-delivery?start={start_param}") or {}
+    if not press_data.get("presses"):
+        remote_press = fetch_json(f"http://{plant_ip}/api/press-delivery?start={start_param}")
+        if remote_press and remote_press.get("presses"):
+            press_data = remote_press
+
+    conveyor_data = fetch_json(f"http://127.0.0.1:8006/api/conveyor-full?start={start_param}") or {}
+    if not conveyor_data.get("success") or conveyor_data.get("total_downtime", 0) == 0:
+        remote_conveyor = fetch_json(f"http://{plant_ip}/api/conveyor-full?start={start_param}")
+        if remote_conveyor and remote_conveyor.get("success"):
+            conveyor_data = remote_conveyor
+    
+    # Entrada / Salida Calculations
+    entrada_val = io_data.get("entrada", "-")
+    manual_val = io_data.get("manual", "-")
+    auto_val = io_data.get("auto", "-")
+    construido_val = io_data.get("construido", "-")
+    vulcanizado_val = io_data.get("vulcanizado", "-")
+    rate_entrada_val = io_data.get("rate_entrada", "-")
+    rate_manual_val = io_data.get("rate_manual", "-")
+    rate_auto_val = io_data.get("rate_auto", "-")
+
+    try:
+        m_num = int(str(manual_val).replace(",", "").strip())
+    except (ValueError, TypeError):
+        m_num = 0
+
+    try:
+        a_num = int(str(auto_val).replace(",", "").strip())
+    except (ValueError, TypeError):
+        a_num = 0
+
+    if manual_val != "-" or auto_val != "-":
+        total_salida = m_num + a_num
+    else:
+        total_salida = "-"
+
+    try:
+        rm_num = float(str(rate_manual_val).replace(",", ".").strip())
+        ra_num = float(str(rate_auto_val).replace(",", ".").strip())
+        rate_salida = round(rm_num + ra_num, 2)
+    except (ValueError, TypeError):
+        rate_salida = "-"
+
+    try:
+        e_num = int(str(entrada_val).replace(",", "").strip())
+        c_num = int(str(construido_val).replace(",", "").strip())
+        if c_num > 0:
+            eficiencia_entrada = round((e_num / c_num) * 100.0, 1)
+        else:
+            eficiencia_entrada = "-"
+    except (ValueError, TypeError):
+        eficiencia_entrada = "-"
+
+    # Crane Global Availability
+    crane_list = crane_data.get("data", [])
+    if crane_list:
+        total_dt_crane = sum(c.get("downtime_minutes", 0) for c in crane_list)
+        total_available = len(crane_list) * 480.0
+        crane_avail_pct = round(max(0.0, 100.0 - (total_dt_crane / total_available * 100.0)), 2)
+        top_cranes = [c for c in sorted(crane_list, key=lambda x: x.get("downtime_minutes", 0), reverse=True) if c.get("downtime_minutes", 0) > 0][:3]
+    else:
+        crane_avail_pct = 100.0
+        top_cranes = []
+
+    # Press Global Delivery
+    press_dict = press_data.get("presses", {})
+    press_summary = []
+    total_robot_delivered = 0
+    total_vulcanized = 0
+    for p_name in ["400B", "500A", "500B", "600A", "600B"]:
+        p_val = press_dict.get(p_name, {})
+        deliv = p_val.get("delivered", 0)
+        vulc = p_val.get("vulcanized", 0)
+        manual = max(0, vulc - deliv)
+        pct = round((deliv / vulc * 100.0), 1) if vulc > 0 else 0.0
+        total_robot_delivered += deliv
+        total_vulcanized += vulc
+        press_summary.append({
+            "press": p_name,
+            "delivered_robot": deliv,
+            "manual": manual,
+            "vulcanized": vulc,
+            "pct": pct,
+            "times": p_val.get("times", {})
+        })
+    global_press_pct = round((total_robot_delivered / total_vulcanized * 100.0), 2) if total_vulcanized > 0 else 0.0
+
+    # 2. Fetch Orders from Inspecciones (con timeout corto y caché)
+    n1_orders = fetch_json(f"{INSPECCIONES_BASE}/index_n1asrs_table.php", timeout=4) or {}
+    
+    ORDERS_CACHE_FILE = os.path.join(os.path.dirname(__file__), "orders_cache.json")
+    if n1_orders.get("data"):
+        try:
+            with open(ORDERS_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(n1_orders, f, ensure_ascii=False)
+        except Exception:
+            pass
+    elif os.path.exists(ORDERS_CACHE_FILE):
+        try:
+            with open(ORDERS_CACHE_FILE, "r", encoding="utf-8") as f:
+                n1_orders = json.load(f)
+        except Exception:
+            pass
+
+    filtered_orders = []
+    seen_ots = set()
+
+    for row in n1_orders.get("data", []):
+        if len(row) >= 8:
+            tag_equipo = str(row[0] or "").strip()
+            titulo = str(row[1] or "").strip()
+            ot = str(row[2] or "").strip()
+            fecha_str = str(row[3] or "").strip()
+            hora_str = str(row[4] or "").strip()
+            tp_min = str(row[5] or "0").strip()
+            detalle = str(row[6] or "").strip()
+            maquina = str(row[7] or "").strip() or tag_equipo
+
+            if not ot or not fecha_str or not hora_str:
+                continue
+
+            try:
+                if len(hora_str.split(":")) == 2:
+                    order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
+                else:
+                    order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                continue
+
+            if dt_start <= order_dt < dt_end and ot not in seen_ots:
+                seen_ots.add(ot)
+                filtered_orders.append({
+                    "ot": ot,
+                    "hora": hora_str,
+                    "equipo": tag_equipo or maquina,
+                    "maquina": maquina or tag_equipo,
+                    "titulo": titulo or "Aviso correctivo",
+                    "tp_min": tp_min,
+                    "detalle": detalle or titulo
+                })
+
+    turno_info = TURNOS_ENTREGA.get(turno_req, TURNOS_ENTREGA["T2"])
+    
+    payload = {
+        "consulta": {
+            "fecha": fecha_req,
+            "turno": turno_req,
+            "turno_nombre": turno_info["nombre"],
+            "rango_horas": f"{turno_info['inicio'][:5]} a {turno_info['fin'][:5]}",
+            "start_dt": dt_start.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_dt": dt_end.strftime("%Y-%m-%d %H:%M:%S")
+        },
+        "input_output": {
+            "construido": construido_val,
+            "vulcanizado": vulcanizado_val,
+            "entrada_asrs": entrada_val,
+            "total_salida": total_salida,
+            "salida_manual": manual_val,
+            "salida_auto": auto_val,
+            "rate_entrada": rate_entrada_val,
+            "rate_salida": rate_salida,
+            "rate_manual": rate_manual_val,
+            "rate_auto": rate_auto_val,
+            "eficiencia_entrada": eficiencia_entrada
+        },
+        "crane_performance": {
+            "disponibilidad_pct": crane_avail_pct,
+            "top_downtime": top_cranes,
+            "pasillos": crane_list
+        },
+        "conveyor": {
+            "downtime_min": conveyor_data.get("total_downtime", 0.0),
+            "frecuencia": conveyor_data.get("frequency", 0),
+            "objetivo_min": conveyor_data.get("objective_minutes", 15.0),
+            "is_ok": conveyor_data.get("is_ok", True)
+        },
+        "press_delivery": {
+            "cumplimiento_global_pct": global_press_pct,
+            "resumen_prensas": press_summary
+        },
+        "ordenes": filtered_orders
+    }
+
+    return jsonify(payload)
+
+@app.route('/api/schedule-config', methods=['GET', 'POST'])
+def api_schedule_config():
+    """Lee y actualiza la configuración dinámica de horarios de Teams."""
+    from scheduler_service import load_schedule_config, CONFIG_PATH
+    
+    if request.method == 'GET':
+        return jsonify(load_schedule_config())
+        
+    try:
+        data = request.get_json() or {}
+        current_cfg = load_schedule_config()
+        current_cfg.update({
+            "auto_send_enabled": bool(data.get("auto_send_enabled", True)),
+            "t1_time": str(data.get("t1_time", "06:45")).strip(),
+            "t2_time": str(data.get("t2_time", "14:45")).strip(),
+            "t3_time": str(data.get("t3_time", "22:45")).strip(),
+            "webhook_url": str(data.get("webhook_url", current_cfg.get("webhook_url", ""))).strip()
+        })
+        
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(current_cfg, f, indent=2, ensure_ascii=False)
+            
+        return jsonify({"success": True, "config": current_cfg})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/send-teams", methods=["GET", "POST"])
+def api_send_teams():
+    now_date, now_shift = get_current_shift_info()
+    fecha_req = request.args.get("fecha", now_date)
+    turno_req = request.args.get("turno", now_shift)
+    force = request.args.get("force", "false").lower() == "true"
+    
+    from scheduler_service import consultar_ticket_programado, ejecutar_proceso_envio_turno
+    
+    total_ticket, formatted_ticket, ok = consultar_ticket_programado(port=8006)
+    if total_ticket <= 0 and not force:
+        return jsonify({
+            "success": False,
+            "skipped": True,
+            "message": f"Envío omitido: Ticket Requerido en 0 tires ({formatted_ticket}). Use force=true para forzar.",
+            "ticket": formatted_ticket
+        }), 200
+        
+    exito, msg = ejecutar_proceso_envio_turno(turno_req, fecha_req, port=8006, force=force)
+    return jsonify({
+        "success": exito,
+        "message": msg,
+        "turno": turno_req,
+        "fecha": fecha_req,
+        "ticket": formatted_ticket
+    }), (200 if exito else 500)
 
 
 # ============================================================================
@@ -524,6 +847,15 @@ def api_daily_ticket():
 if __name__ == '__main__':
     init_db()
 
+    # Iniciar scheduler en segundo plano
+    try:
+        from scheduler_service import iniciar_scheduler_loop
+        t_sched = threading.Thread(target=iniciar_scheduler_loop, kwargs={"port": 8006}, daemon=True)
+        t_sched.start()
+        print("Scheduler automático de Teams iniciado en segundo plano.")
+    except Exception as e:
+        print(f"Error iniciando scheduler: {e}")
+
     try:
         print("Servidor Web corriendo en el puerto 8006...")
         from waitress import serve
@@ -531,3 +863,4 @@ if __name__ == '__main__':
     except Exception as e:
         print("Error iniciando Waitress, usando app.run()")
         app.run(host='0.0.0.0', port=8006, threaded=True)
+
