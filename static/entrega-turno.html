@@ -23,7 +23,11 @@
             --goodyear-light-gray: #D2D2D2;
             --goodyear-dark-gray: #707379;
             --goodyear-white: #FFFFFF;
-            --goodyear-black: #1E293B;
+            --goodyear-black: #231F20;
+
+            /* Secondary Brand Palette (energy accents) */
+            --goodyear-electric-blue: #224FF2;
+            --goodyear-electric-yellow: #FCF23D;
 
             /* Desaturated, harmonious functional status colors */
             --status-green: #15803D;
@@ -43,6 +47,11 @@
             --font-body: 'Jost', 'PT Sans', 'Segoe UI', sans-serif;
             --font-caption: 'EB Garamond', 'Livory', 'Palatino Linotype', serif;
             --font-mono: 'Roboto Mono', monospace;
+
+            /* TrackScale (Goodyear: headlines/body = -20) */
+            --tracking-headline: -0.02em;
+            --tracking-headline-long: -0.04em;
+            --tracking-body: -0.02em;
         }
 
         * {
@@ -60,6 +69,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            letter-spacing: var(--tracking-body);
         }
 
         /* Top Action Bar */
@@ -171,6 +181,46 @@
             box-shadow: 0 12px 30px rgba(11, 29, 69, 0.08);
         }
 
+        /* Loading overlay: tapa el reporte hasta que llegue la data real */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: var(--page-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 9998;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 46px;
+            height: 46px;
+            border: 5px solid var(--card-border);
+            border-top-color: var(--goodyear-racing-navy);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-text {
+            font-family: var(--font-body);
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--goodyear-dark-gray);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         /* Header Banner with Racing Navy Background & Clean Proportions */
         .report-header-banner {
             background-color: var(--goodyear-racing-navy);
@@ -208,7 +258,7 @@
             font-weight: 800;
             font-size: 24px;
             color: #FFFFFF;
-            letter-spacing: 0.5px;
+            letter-spacing: var(--tracking-headline-long);
             line-height: 1.1;
             text-transform: uppercase;
             white-space: nowrap;
@@ -303,8 +353,8 @@
             font-size: 15px;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #1E293B;
+            letter-spacing: var(--tracking-headline);
+            color: var(--goodyear-black);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -485,6 +535,36 @@
             height: 100%;
             background: #475569;
             border-radius: 3px;
+        }
+
+        /* Segmented bar: colores idénticos al PRESS DELIVERY del dashboard */
+        .press-segment {
+            height: 100%;
+            transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            cursor: default;
+        }
+
+        .press-segment:first-child { border-radius: 3px 0 0 3px; }
+        .press-segment:last-child { border-radius: 0 3px 3px 0; }
+        .press-segment:only-child { border-radius: 3px; }
+
+        .press-segment[data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
         .press-meta-counts {
@@ -780,6 +860,12 @@
         </div>
     </div>
 
+    <!-- Loading overlay: tapa el reporte hasta que llegue la data real -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Cargando reporte...</div>
+    </div>
+
     <!-- Top Action Bar -->
     <div class="action-toolbar">
         <div class="controls-left">
@@ -940,7 +1026,13 @@
                                 <span class="press-group-name">400B</span>
                                 <span class="press-pct" style="color: var(--status-red);">0.0%</span>
                             </div>
-                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 0%; background:var(--status-red);"></div></div>
+                            <div class="progress-bar-bg">
+                                <div class="press-segment" data-tooltip="Despacho robots: 0m (0.0%)" style="width: 0%; background-color: #22c55e;"></div>
+                                <div class="press-segment" data-tooltip="IDLE: 236m (49.2%)" style="width: 49.2%; background-color: #eab308;"></div>
+                                <div class="press-segment" data-tooltip="Cortinas: 96m (20.0%)" style="width: 20%; background-color: #38bdf8;"></div>
+                                <div class="press-segment" data-tooltip="Prensa: 124m (25.8%)" style="width: 25.8%; background-color: #c2884d;"></div>
+                                <div class="press-segment" data-tooltip="E-Stop: 24m (5.0%)" style="width: 5%; background-color: #ef4444;"></div>
+                            </div>
                             <div class="press-meta-counts">
                                 <span>Robot: <b>0</b></span>
                                 <span>Manual: <b>457</b></span>
@@ -952,7 +1044,13 @@
                                 <span class="press-group-name">500A</span>
                                 <span class="press-pct" style="color: var(--status-green);">42.1%</span>
                             </div>
-                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 42.1%; background:var(--status-green);"></div></div>
+                            <div class="progress-bar-bg">
+                                <div class="press-segment" data-tooltip="Despacho robots: 202m (42.1%)" style="width: 42.1%; background-color: #22c55e;"></div>
+                                <div class="press-segment" data-tooltip="IDLE: 118m (24.6%)" style="width: 24.6%; background-color: #eab308;"></div>
+                                <div class="press-segment" data-tooltip="Cortinas: 72m (15.0%)" style="width: 15%; background-color: #38bdf8;"></div>
+                                <div class="press-segment" data-tooltip="Prensa: 62m (12.9%)" style="width: 12.9%; background-color: #c2884d;"></div>
+                                <div class="press-segment" data-tooltip="E-Stop: 26m (5.4%)" style="width: 5.4%; background-color: #ef4444;"></div>
+                            </div>
                             <div class="press-meta-counts">
                                 <span>Robot: <b>153</b></span>
                                 <span>Manual: <b>210</b></span>
@@ -964,7 +1062,13 @@
                                 <span class="press-group-name">500B</span>
                                 <span class="press-pct" style="color: var(--status-green);">39.7%</span>
                             </div>
-                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 39.7%; background:var(--status-green);"></div></div>
+                            <div class="progress-bar-bg">
+                                <div class="press-segment" data-tooltip="Despacho robots: 191m (39.7%)" style="width: 39.7%; background-color: #22c55e;"></div>
+                                <div class="press-segment" data-tooltip="IDLE: 120m (25.0%)" style="width: 25%; background-color: #eab308;"></div>
+                                <div class="press-segment" data-tooltip="Cortinas: 70m (14.6%)" style="width: 14.6%; background-color: #38bdf8;"></div>
+                                <div class="press-segment" data-tooltip="Prensa: 79m (16.4%)" style="width: 16.4%; background-color: #c2884d;"></div>
+                                <div class="press-segment" data-tooltip="E-Stop: 20m (4.2%)" style="width: 4.2%; background-color: #ef4444;"></div>
+                            </div>
                             <div class="press-meta-counts">
                                 <span>Robot: <b>135</b></span>
                                 <span>Manual: <b>205</b></span>
@@ -976,7 +1080,13 @@
                                 <span class="press-group-name">600A</span>
                                 <span class="press-pct" style="color: var(--status-green);">32.7%</span>
                             </div>
-                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 32.7%; background:var(--status-green);"></div></div>
+                            <div class="progress-bar-bg">
+                                <div class="press-segment" data-tooltip="Despacho robots: 157m (32.7%)" style="width: 32.7%; background-color: #22c55e;"></div>
+                                <div class="press-segment" data-tooltip="IDLE: 118m (24.6%)" style="width: 24.6%; background-color: #eab308;"></div>
+                                <div class="press-segment" data-tooltip="Cortinas: 96m (20.0%)" style="width: 20%; background-color: #38bdf8;"></div>
+                                <div class="press-segment" data-tooltip="Prensa: 89m (18.5%)" style="width: 18.5%; background-color: #c2884d;"></div>
+                                <div class="press-segment" data-tooltip="E-Stop: 20m (4.2%)" style="width: 4.2%; background-color: #ef4444;"></div>
+                            </div>
                             <div class="press-meta-counts">
                                 <span>Robot: <b>132</b></span>
                                 <span>Manual: <b>272</b></span>
@@ -988,7 +1098,13 @@
                                 <span class="press-group-name">600B</span>
                                 <span class="press-pct" style="color: var(--status-green);">36.1%</span>
                             </div>
-                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 36.1%; background:var(--status-green);"></div></div>
+                            <div class="progress-bar-bg">
+                                <div class="press-segment" data-tooltip="Despacho robots: 173m (36.1%)" style="width: 36.1%; background-color: #22c55e;"></div>
+                                <div class="press-segment" data-tooltip="IDLE: 115m (24.0%)" style="width: 24%; background-color: #eab308;"></div>
+                                <div class="press-segment" data-tooltip="Cortinas: 76m (15.8%)" style="width: 15.8%; background-color: #38bdf8;"></div>
+                                <div class="press-segment" data-tooltip="Prensa: 95m (19.8%)" style="width: 19.8%; background-color: #c2884d;"></div>
+                                <div class="press-segment" data-tooltip="E-Stop: 20m (4.2%)" style="width: 4.2%; background-color: #ef4444;"></div>
+                            </div>
                             <div class="press-meta-counts">
                                 <span>Robot: <b>139</b></span>
                                 <span>Manual: <b>246</b></span>
@@ -1069,6 +1185,8 @@
             const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
             const turno = document.getElementById('turno-select').value || 'T2';
 
+            document.getElementById('loading-overlay').classList.remove('hidden');
+
             try {
                 const res = await fetch(`/api/consolidado-turno?fecha=${fecha}&turno=${turno}`);
                 if (!res.ok) throw new Error("Error en respuesta del servidor");
@@ -1078,6 +1196,8 @@
             } catch (err) {
                 console.error(err);
                 showToast("Error al cargar datos desde el backend.");
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
             }
         }
 
@@ -1126,26 +1246,43 @@
                 topCraneList.innerHTML = '<div style="font-size:12px; color:var(--goodyear-dark-gray); text-align:center; padding:10px;">Sin paradas registradas</div>';
             }
 
-            // Presses
+            // Presses - barras segmentadas con colores del dashboard PRESS DELIVERY
             document.getElementById('lbl-press-global').innerText = `Cumpl: ${pr.cumplimiento_global_pct || 0}%`;
             const pressList = document.getElementById('press-list');
             pressList.innerHTML = '';
             const prensasArr = (pr.resumen_prensas && pr.resumen_prensas.length > 0) ? pr.resumen_prensas : [
-                { press: "400B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
-                { press: "500A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
-                { press: "500B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
-                { press: "600A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 },
-                { press: "600B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0 }
+                { press: "400B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
+                { press: "500A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
+                { press: "500B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
+                { press: "600A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
+                { press: "600B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} }
             ];
             prensasArr.forEach(p => {
-                const color = p.pct > 35 ? 'var(--status-green)' : (p.pct > 15 ? 'var(--status-amber)' : 'var(--status-red)');
+                const t = p.times || { idle: 0, estop: 0, cortinas: 0, prensa: 0, despachando: 0 };
+                const totalTime = (t.idle + t.estop + t.cortinas + t.prensa + t.despachando) || 1;
+
+                const despPct = (t.despachando / totalTime) * 100;
+                const idlePct = (t.idle / totalTime) * 100;
+                const cortinasPct = (t.cortinas / totalTime) * 100;
+                const prensaPct = (t.prensa / totalTime) * 100;
+                const estopPct = (t.estop / totalTime) * 100;
+
+                const compliance = p.pct || 0;
+                const complianceColor = compliance >= 98.0 ? 'var(--status-green)' : (compliance >= 95.0 ? 'var(--status-amber)' : 'var(--status-red)');
+
                 pressList.innerHTML += `
                     <div class="press-item">
                         <div class="press-header-row">
                             <span class="press-group-name">${p.press}</span>
-                            <span class="press-pct" style="color: ${color};">${p.pct}%</span>
+                            <span class="press-pct" style="color: ${complianceColor};">${compliance.toFixed(1)}%</span>
                         </div>
-                        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width: ${p.pct}%; background:${color};"></div></div>
+                        <div class="progress-bar-bg">
+                            <div class="press-segment" data-tooltip="Despacho robots: ${t.despachando.toFixed(0)}m (${despPct.toFixed(1)}%)" style="width: ${despPct}%; background-color: #22c55e;"></div>
+                            <div class="press-segment" data-tooltip="IDLE: ${t.idle.toFixed(0)}m (${idlePct.toFixed(1)}%)" style="width: ${idlePct}%; background-color: #eab308;"></div>
+                            <div class="press-segment" data-tooltip="Cortinas: ${t.cortinas.toFixed(0)}m (${cortinasPct.toFixed(1)}%)" style="width: ${cortinasPct}%; background-color: #38bdf8;"></div>
+                            <div class="press-segment" data-tooltip="Prensa: ${t.prensa.toFixed(0)}m (${prensaPct.toFixed(1)}%)" style="width: ${prensaPct}%; background-color: #c2884d;"></div>
+                            <div class="press-segment" data-tooltip="E-Stop: ${t.estop.toFixed(0)}m (${estopPct.toFixed(1)}%)" style="width: ${estopPct}%; background-color: #ef4444;"></div>
+                        </div>
                         <div class="press-meta-counts">
                             <span>Robot: <b>${p.delivered_robot}</b></span>
                             <span>Manual: <b>${p.manual}</b></span>
