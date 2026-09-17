@@ -298,6 +298,28 @@
             white-space: nowrap;
         }
 
+        .badge-ticket {
+            background: rgba(255, 255, 255, 0.08);
+            color: #FFFFFF;
+            border: 1px solid rgba(251, 189, 0, 0.4);
+            padding: 0 14px;
+            border-radius: 4px;
+            font-size: 13.5px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            height: 38px;
+            white-space: nowrap;
+        }
+
+        .badge-ticket b {
+            color: var(--goodyear-trophy-gold);
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 13.5px;
+        }
+
         .badge-time {
             background: #FFFFFF;
             color: var(--goodyear-racing-navy);
@@ -898,14 +920,10 @@
             </button>
 
             <button class="btn btn-gold" id="btn-captura-manual" onclick="enviarCapturaManual()"
-                    title="Generar captura del reporte en el servidor y enviarla a Teams (sin importar la hora)">
+                    title="Generar captura del reporte en el servidor y enviarla a Teams (sin importar la hora)"
+                    style="padding: 4px 10px; font-size: 11.5px; font-weight: 700; border-radius: 4px; gap: 5px; height: 31px;">
                 <i class="fa-solid fa-camera"></i> Captura Manual
             </button>
-
-            <div style="font-size: 12px; font-weight: 700; color: #475569; background: #F1F5F9; padding: 6px 12px; border-radius: 4px; border: 1px solid #CBD5E1; display: flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-clipboard-check" style="color: var(--goodyear-racing-navy);"></i>
-                <span>Ticket: <b id="lbl-ticket-toolbar" style="color: var(--goodyear-racing-navy);">13,500 tires</b></span>
-            </div>
         </div>
     </div>
 
@@ -919,10 +937,13 @@
                     <h1 class="main-headline">
                         ENTREGA DE TURNO - ASRS
                     </h1>
-
                 </div>
             </div>
             <div class="header-meta">
+                <div class="badge-ticket" id="badge-ticket-banner">
+                    <i class="fa-solid fa-clipboard-check" style="color: var(--goodyear-trophy-gold);"></i>
+                    <span>Ticket: <b id="lbl-ticket-banner">...</b></span>
+                </div>
                 <div class="badge-shift" id="lbl-shift-badge">
                     <i class="fa-solid fa-sun" style="color: var(--goodyear-trophy-gold);"></i> <span id="lbl-turno-nombre">Turno Mañana (T2)</span>
                 </div>
@@ -1206,25 +1227,63 @@
             }
         }
 
+        let cooldownTimer = null;
+
+        function iniciarCooldownBoton(btn, segundos = 60) {
+            if (cooldownTimer) clearInterval(cooldownTimer);
+            btn.disabled = true;
+            let restante = segundos;
+            btn.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> Esperar (${restante}s)`;
+            btn.style.opacity = '0.75';
+            btn.style.cursor = 'not-allowed';
+
+            cooldownTimer = setInterval(() => {
+                restante--;
+                if (restante <= 0) {
+                    clearInterval(cooldownTimer);
+                    cooldownTimer = null;
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    btn.innerHTML = `<i class="fa-solid fa-camera"></i> Captura Manual`;
+                } else {
+                    btn.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> Esperar (${restante}s)`;
+                }
+            }, 1000);
+        }
+
         async function enviarCapturaManual() {
             const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
             const turno = document.getElementById('turno-select').value || 'T2';
             const btn = document.getElementById('btn-captura-manual');
+            
             btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generando...`;
             showToast("Generando captura en el servidor...");
+            
             try {
                 const res = await fetch(`/api/send-teams?fecha=${fecha}&turno=${turno}&force=true&renderer=pillow`);
                 const data = await res.json();
+                
+                if (res.status === 429 || data.rate_limited) {
+                    showToast(`⏳ ${data.message}`);
+                    iniciarCooldownBoton(btn, data.remaining_seconds || 60);
+                    return;
+                }
+                
                 if (data.success) {
-                    showToast(`Captura enviada: ${data.message}`);
+                    showToast(`✅ Captura enviada: ${data.message}`);
+                    iniciarCooldownBoton(btn, 60);
                 } else {
-                    showToast(`Error: ${data.message || data.error || 'no se pudo enviar'}`);
+                    showToast(`⚠️ Error: ${data.message || data.error || 'no se pudo enviar'}`);
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="fa-solid fa-camera"></i> Captura Manual`;
                 }
             } catch (err) {
                 console.error(err);
                 showToast("Error al conectar con el servidor.");
-            } finally {
                 btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-camera"></i> Captura Manual`;
             }
         }
 
@@ -1240,6 +1299,11 @@
             // Meta Header
             document.getElementById('lbl-turno-nombre').innerText = c.turno_nombre;
             document.getElementById('lbl-rango-horas').innerText = `${c.fecha} (${c.rango_horas})`;
+            if (c.ticket) {
+                const val = c.ticket.includes('tires') ? c.ticket : `${c.ticket} tires`;
+                const el = document.getElementById('lbl-ticket-banner');
+                if (el) el.innerText = val;
+            }
 
             // IO
             document.getElementById('val-construido').innerText = io.construido;
@@ -1356,7 +1420,7 @@
                 if (res.ok) {
                     const d = await res.json();
                     const val = d.formatted || d.total || '0';
-                    const el = document.getElementById('lbl-ticket-toolbar');
+                    const el = document.getElementById('lbl-ticket-banner');
                     if (el) el.innerText = `${val} tires`;
                 }
             } catch (e) {

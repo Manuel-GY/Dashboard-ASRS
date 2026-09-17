@@ -60,7 +60,7 @@
                     📋 Entrega de Turno
                 </a>
                 <button id="btn-captura-manual" type="button" title="Generar captura del reporte en el servidor y enviarla a Teams (sin importar la hora)"
-                    style="background: rgba(255,255,255,0.12); color: #FBBD00; border: 1px solid rgba(251,189,0,0.4); padding: 7px 14px; border-radius: 4px; font-size: 0.85rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                    style="background: rgba(255,255,255,0.12); color: #FBBD00; border: 1px solid rgba(251,189,0,0.4); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; height: 30px; transition: all 0.2s;">
                     📷 Captura Manual
                 </button>
             </div>
@@ -544,6 +544,31 @@
             }
 
             var btnCap = document.getElementById('btn-captura-manual');
+            var capCooldownTimer = null;
+
+            function startCapCooldown(seconds) {
+                if (capCooldownTimer) clearInterval(capCooldownTimer);
+                btnCap.disabled = true;
+                var remaining = seconds;
+                btnCap.textContent = '⏳ Esperar (' + remaining + 's)';
+                btnCap.style.opacity = '0.75';
+                btnCap.style.cursor = 'not-allowed';
+
+                capCooldownTimer = setInterval(function() {
+                    remaining--;
+                    if (remaining <= 0) {
+                        clearInterval(capCooldownTimer);
+                        capCooldownTimer = null;
+                        btnCap.disabled = false;
+                        btnCap.style.opacity = '1';
+                        btnCap.style.cursor = 'pointer';
+                        btnCap.textContent = '📷 Captura Manual';
+                    } else {
+                        btnCap.textContent = '⏳ Esperar (' + remaining + 's)';
+                    }
+                }, 1000);
+            }
+
             if (btnCap) {
                 btnCap.addEventListener('click', async function() {
                     btnCap.disabled = true;
@@ -551,13 +576,22 @@
                     try {
                         const res = await fetch('/api/send-teams?force=true&renderer=pillow');
                         const data = await res.json();
-                        alert(data.success
-                            ? 'Captura enviada a Teams: ' + data.message
-                            : 'Error: ' + (data.message || data.error || 'no se pudo enviar'));
+                        if (res.status === 429 || data.rate_limited) {
+                            alert('⏳ ' + (data.message || 'Espere un momento antes de enviar otra captura.'));
+                            startCapCooldown(data.remaining_seconds || 60);
+                            return;
+                        }
+                        if (data.success) {
+                            alert('✅ Captura enviada a Teams: ' + data.message);
+                            startCapCooldown(60);
+                        } else {
+                            alert('⚠️ Error: ' + (data.message || data.error || 'no se pudo enviar'));
+                            btnCap.disabled = false;
+                            btnCap.textContent = '📷 Captura Manual';
+                        }
                     } catch (err) {
                         console.error(err);
                         alert('Error al conectar con el servidor.');
-                    } finally {
                         btnCap.disabled = false;
                         btnCap.textContent = '📷 Captura Manual';
                     }

@@ -5,6 +5,8 @@ import json
 import sqlite3
 import threading
 from datetime import datetime, timedelta
+import time
+import math
 import requests
 import urllib3
 
@@ -744,6 +746,9 @@ def api_consolidado_turno():
 
     turno_info = TURNOS_ENTREGA.get(turno_req, TURNOS_ENTREGA["T2"])
     
+    from scheduler_service import consultar_ticket_programado
+    _, formatted_ticket, _ = consultar_ticket_programado(port=8006)
+    
     payload = {
         "consulta": {
             "fecha": fecha_req,
@@ -751,7 +756,8 @@ def api_consolidado_turno():
             "turno_nombre": turno_info["nombre"],
             "rango_horas": f"{turno_info['inicio'][:5]} a {turno_info['fin'][:5]}",
             "start_dt": dt_start.strftime("%Y-%m-%d %H:%M:%S"),
-            "end_dt": dt_end.strftime("%Y-%m-%d %H:%M:%S")
+            "end_dt": dt_end.strftime("%Y-%m-%d %H:%M:%S"),
+            "ticket": formatted_ticket
         },
         "input_output": {
             "construido": construido_val,
@@ -812,14 +818,35 @@ def api_schedule_config():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+import time
+import math
+
+_last_manual_send_lock = threading.Lock()
+_last_manual_send_time = 0.0
+
 @app.route("/api/send-teams", methods=["GET", "POST"])
 def api_send_teams():
+    global _last_manual_send_time
     now_date, now_shift = get_current_shift_info()
     fecha_req = request.args.get("fecha", now_date)
     turno_req = request.args.get("turno", now_shift)
     force = request.args.get("force", "false").lower() == "true"
     renderer = request.args.get("renderer", "pillow").lower()
-    
+
+    if force:
+        now_ts = time.time()
+        with _last_manual_send_lock:
+            elapsed = now_ts - _last_manual_send_time
+            if elapsed < 60:
+                remaining = int(math.ceil(60 - elapsed))
+                return jsonify({
+                    "success": False,
+                    "rate_limited": True,
+                    "remaining_seconds": remaining,
+                    "message": f"Bloqueo activo: Solo se permite 1 captura de prueba por minuto. Espere {remaining}s."
+                }), 429
+            _last_manual_send_time = now_ts
+
     from scheduler_service import consultar_ticket_programado, ejecutar_proceso_envio_turno
     
     total_ticket, formatted_ticket, ok = consultar_ticket_programado(port=8006)

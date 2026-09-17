@@ -369,21 +369,35 @@ def render_entrega_turno(data, output_path=None):
     chip_h = 34
     date_text = f"{fecha} ({rango})".strip()
     df = fm(11.5)
-    sf = fm(15)
-    dw = d.measure(date_text, df)[0] + 28
-    sw = d.measure(shift_code, sf)[0] + 28
+    sf = fm(14)
+    tf = fm(11.5)
+    dw = d.measure(date_text, df)[0] + 24
+    sw = d.measure(shift_code, sf)[0] + 24
+    
     date_x1 = PAGE_W - MARGIN
     date_x0 = date_x1 - dw
     d.rounded_rectangle((date_x0, hcx - chip_h / 2, date_x1, hcx + chip_h / 2),
-                        radius=8, fill=_hex(ACCENT), width=1)
+                        radius=6, fill=_hex(ACCENT), width=1)
     d.text((date_x0 + dw / 2, hcx), date_text, fill=_hex(ON_NAVY_BRIGHT),
            font=df, anchor="mm")
-    gold_x1 = date_x0 - 10
+           
+    gold_x1 = date_x0 - 8
     gold_x0 = gold_x1 - sw
     d.rounded_rectangle((gold_x0, hcx - chip_h / 2, gold_x1, hcx + chip_h / 2),
-                        radius=8, fill=_hex(GOLD))
+                        radius=6, fill=_hex(GOLD))
     d.text((gold_x0 + sw / 2, hcx), shift_code, fill=_hex(DARK_NAVY),
            font=sf, anchor="mm")
+
+    ticket_val = str(consulta.get("ticket") or data.get("ticket") or "").strip()
+    if ticket_val:
+        ticket_text = f"Ticket: {ticket_val}" if "tires" in ticket_val.lower() else f"Ticket: {ticket_val} tires"
+        tw = d.measure(ticket_text, tf)[0] + 22
+        tkt_x1 = gold_x0 - 8
+        tkt_x0 = tkt_x1 - tw
+        d.rounded_rectangle((tkt_x0, hcx - chip_h / 2, tkt_x1, hcx + chip_h / 2),
+                            radius=6, fill=_hex(ACCENT), width=1)
+        d.text((tkt_x0 + tw / 2, hcx), ticket_text, fill=_hex(GOLD),
+               font=tf, anchor="mm")
 
     # ── BODY ───────────────────────────────────────────────────────────────────
     d.rounded_rectangle((MARGIN, body_y, PAGE_W - MARGIN, body_y + body_h),
