@@ -1,6 +1,5 @@
 """
-image_builder.py — Renderiza el reporte de entrega de turno como PNG usando solo Pillow.
-Reemplaza a Playwright para servers sin navegador.
+image_builder.py — Renderiza el reporte de entrega de turno como PNG usando Pillow.
 """
 import io
 import math

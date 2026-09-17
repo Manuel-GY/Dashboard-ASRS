@@ -1262,7 +1262,7 @@
             showToast("Generando captura en el servidor...");
             
             try {
-                const res = await fetch(`/api/send-teams?fecha=${fecha}&turno=${turno}&force=true&renderer=pillow`);
+                const res = await fetch(`/api/send-teams?fecha=${fecha}&turno=${turno}&force=true`);
                 const data = await res.json();
                 
                 if (res.status === 429 || data.rate_limited) {

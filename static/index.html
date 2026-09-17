@@ -574,7 +574,7 @@
                     btnCap.disabled = true;
                     btnCap.textContent = '⏳ Generando...';
                     try {
-                        const res = await fetch('/api/send-teams?force=true&renderer=pillow');
+                        const res = await fetch('/api/send-teams?force=true');
                         const data = await res.json();
                         if (res.status === 429 || data.rate_limited) {
                             alert('⏳ ' + (data.message || 'Espere un momento antes de enviar otra captura.'));

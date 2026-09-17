@@ -36,7 +36,9 @@ def consultar_ticket_programado(port=8006):
     """
     url = f"http://127.0.0.1:{port}/api/daily-ticket"
     try:
-        resp = requests.get(url, timeout=5)
+        session = requests.Session()
+        session.trust_env = False
+        resp = session.get(url, timeout=8, proxies={"http": None, "https": None})
         if resp.status_code == 200:
             data = resp.json()
             total = data.get("total", 0)
@@ -46,11 +48,10 @@ def consultar_ticket_programado(port=8006):
         log.error(f"Error al consultar Ticket Requerido en {url}: {e}")
     return 0, "0", False
 
-def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False, renderer="pillow"):
+def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False):
     """
     Verifica si el ticket requerido > 0 (o si es envío forzado manual).
-    Si es positivo, genera la captura y despacha a Teams.
-    renderer: "pillow" (sin navegador, servidores con IT restrictivo) o "playwright".
+    Si es positivo, genera la captura con Pillow y despacha a Teams.
     """
     from teams_sender import enviar_imagen_a_teams
 
@@ -67,24 +68,12 @@ def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False, rend
         log.info(f"🚫 [ENVÍO OMITIDO] Ticket Requerido en 0 tires. El reporte de {turno} no se despacha.")
         return False, f"Omitido: Ticket Requerido en 0 tires ({formatted_ticket})"
 
-    # 2. Generar imagen del reporte (Pillow primero, sin navegador)
-    log.info(f"📸 Generando captura del reporte para {turno} ({fecha}) con renderer={renderer}...")
-    img_bytes = None
-    try:
-        if renderer == "playwright":
-            from capture_service import capturar_reporte_png
-            img_bytes = capturar_reporte_png(fecha=fecha, turno=turno, port=port)
-        else:
-            img_bytes = capturar_reporte_png_pillow(turno=turno, fecha=fecha, port=port)
-            if not img_bytes:
-                log.warning("Render Pillow falló, intentando fallback a Playwright...")
-                from capture_service import capturar_reporte_png
-                img_bytes = capturar_reporte_png(fecha=fecha, turno=turno, port=port)
-        if not img_bytes:
-            return False, "Error al generar imagen PNG del reporte"
-    except Exception as e:
-        log.error(f"Error en captura del reporte: {e}")
-        return False, str(e)
+    # 2. Generar imagen del reporte (Pillow nativo)
+    log.info(f"📸 Generando captura del reporte para {turno} ({fecha}) con Pillow...")
+    img_bytes, err = capturar_reporte_png_pillow(turno=turno, fecha=fecha, port=port)
+    if not img_bytes:
+        log.error(f"Error en render Pillow: {err}")
+        return False, f"Error en render Pillow: {err}"
 
     # 3. Enviar a Microsoft Teams
     titulo = f"Entrega de Turno - ASRS | {turno} ({fecha}) • Ticket: {formatted_ticket} tires"
@@ -95,35 +84,40 @@ def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False, rend
 def capturar_reporte_png_pillow(turno, fecha=None, port=8006):
     """
     Genera el PNG del reporte sin navegador usando el render Pillow (image_builder).
-    Retorna bytes PNG o None si falla.
+    Retorna (bytes PNG, error_message).
     """
     try:
-        import requests
         from image_builder import render_entrega_turno
     except Exception as e:
-        log.error(f"image_builder no disponible: {e}")
-        return None
+        err = f"image_builder no disponible: {e}"
+        log.error(err)
+        return None, err
 
     if fecha is None:
         fecha = datetime.now().strftime("%Y-%m-%d")
 
     url = f"http://127.0.0.1:{port}/api/consolidado-turno?fecha={fecha}&turno={turno}"
     try:
-        resp = requests.get(url, timeout=25)
+        session = requests.Session()
+        session.trust_env = False
+        resp = session.get(url, timeout=25, proxies={"http": None, "https": None})
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
-        log.error(f"Error obteniendo consolidado-turno para captura Pillow: {e}")
-        return None
+        err = f"Error obteniendo consolidado-turno en {url}: {e}"
+        log.error(err)
+        return None, err
 
     try:
         img_bytes = render_entrega_turno(data)
         if img_bytes:
             log.info(f"Captura Pillow generada: {len(img_bytes)} bytes")
-        return img_bytes
+            return img_bytes, None
+        return None, "render_entrega_turno retornó datos vacíos"
     except Exception as e:
-        log.error(f"Error en render Pillow: {e}")
-        return None
+        err = f"Error en render Pillow: {e}"
+        log.error(err)
+        return None, err
 
 def iniciar_scheduler_loop(port=8006):
     """
