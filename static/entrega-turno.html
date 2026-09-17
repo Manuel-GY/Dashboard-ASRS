@@ -897,6 +897,11 @@
                 <i class="fa-solid fa-rotate"></i> Actualizar
             </button>
 
+            <button class="btn btn-gold" id="btn-captura-manual" onclick="enviarCapturaManual()"
+                    title="Generar captura del reporte en el servidor y enviarla a Teams (sin importar la hora)">
+                <i class="fa-solid fa-camera"></i> Captura Manual
+            </button>
+
             <div style="font-size: 12px; font-weight: 700; color: #475569; background: #F1F5F9; padding: 6px 12px; border-radius: 4px; border: 1px solid #CBD5E1; display: flex; align-items: center; gap: 6px;">
                 <i class="fa-solid fa-clipboard-check" style="color: var(--goodyear-racing-navy);"></i>
                 <span>Ticket: <b id="lbl-ticket-toolbar" style="color: var(--goodyear-racing-navy);">13,500 tires</b></span>
@@ -1198,6 +1203,28 @@
                 showToast("Error al cargar datos desde el backend.");
             } finally {
                 document.getElementById('loading-overlay').classList.add('hidden');
+            }
+        }
+
+        async function enviarCapturaManual() {
+            const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
+            const turno = document.getElementById('turno-select').value || 'T2';
+            const btn = document.getElementById('btn-captura-manual');
+            btn.disabled = true;
+            showToast("Generando captura en el servidor...");
+            try {
+                const res = await fetch(`/api/send-teams?fecha=${fecha}&turno=${turno}&force=true&renderer=pillow`);
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`Captura enviada: ${data.message}`);
+                } else {
+                    showToast(`Error: ${data.message || data.error || 'no se pudo enviar'}`);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Error al conectar con el servidor.");
+            } finally {
+                btn.disabled = false;
             }
         }
 

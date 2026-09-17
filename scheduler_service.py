@@ -46,12 +46,12 @@ def consultar_ticket_programado(port=8006):
         log.error(f"Error al consultar Ticket Requerido en {url}: {e}")
     return 0, "0", False
 
-def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False):
+def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False, renderer="pillow"):
     """
     Verifica si el ticket requerido > 0 (o si es envío forzado manual).
-    Si es positivo, genera la captura con Playwright y despacha a Teams.
+    Si es positivo, genera la captura y despacha a Teams.
+    renderer: "pillow" (sin navegador, servidores con IT restrictivo) o "playwright".
     """
-    from capture_service import capturar_reporte_png
     from teams_sender import enviar_imagen_a_teams
 
     if fecha is None:
@@ -67,14 +67,23 @@ def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False):
         log.info(f"🚫 [ENVÍO OMITIDO] Ticket Requerido en 0 tires. El reporte de {turno} no se despacha.")
         return False, f"Omitido: Ticket Requerido en 0 tires ({formatted_ticket})"
 
-    # 2. Generar imagen del reporte exacto
-    log.info(f"📸 Generando captura Ultra HD del reporte para {turno} ({fecha})...")
+    # 2. Generar imagen del reporte (Pillow primero, sin navegador)
+    log.info(f"📸 Generando captura del reporte para {turno} ({fecha}) con renderer={renderer}...")
+    img_bytes = None
     try:
-        img_bytes = capturar_reporte_png(fecha=fecha, turno=turno, port=port)
+        if renderer == "playwright":
+            from capture_service import capturar_reporte_png
+            img_bytes = capturar_reporte_png(fecha=fecha, turno=turno, port=port)
+        else:
+            img_bytes = capturar_reporte_png_pillow(turno=turno, fecha=fecha, port=port)
+            if not img_bytes:
+                log.warning("Render Pillow falló, intentando fallback a Playwright...")
+                from capture_service import capturar_reporte_png
+                img_bytes = capturar_reporte_png(fecha=fecha, turno=turno, port=port)
         if not img_bytes:
             return False, "Error al generar imagen PNG del reporte"
     except Exception as e:
-        log.error(f"Error en captura Playwright: {e}")
+        log.error(f"Error en captura del reporte: {e}")
         return False, str(e)
 
     # 3. Enviar a Microsoft Teams
@@ -82,6 +91,39 @@ def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False):
     log.info(f"🚀 Despachando reporte a Microsoft Teams...")
     exito, msg = enviar_imagen_a_teams(img_bytes, titulo=titulo)
     return exito, msg
+
+def capturar_reporte_png_pillow(turno, fecha=None, port=8006):
+    """
+    Genera el PNG del reporte sin navegador usando el render Pillow (image_builder).
+    Retorna bytes PNG o None si falla.
+    """
+    try:
+        import requests
+        from image_builder import render_entrega_turno
+    except Exception as e:
+        log.error(f"image_builder no disponible: {e}")
+        return None
+
+    if fecha is None:
+        fecha = datetime.now().strftime("%Y-%m-%d")
+
+    url = f"http://127.0.0.1:{port}/api/consolidado-turno?fecha={fecha}&turno={turno}"
+    try:
+        resp = requests.get(url, timeout=25)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        log.error(f"Error obteniendo consolidado-turno para captura Pillow: {e}")
+        return None
+
+    try:
+        img_bytes = render_entrega_turno(data)
+        if img_bytes:
+            log.info(f"Captura Pillow generada: {len(img_bytes)} bytes")
+        return img_bytes
+    except Exception as e:
+        log.error(f"Error en render Pillow: {e}")
+        return None
 
 def iniciar_scheduler_loop(port=8006):
     """

@@ -818,6 +818,7 @@ def api_send_teams():
     fecha_req = request.args.get("fecha", now_date)
     turno_req = request.args.get("turno", now_shift)
     force = request.args.get("force", "false").lower() == "true"
+    renderer = request.args.get("renderer", "pillow").lower()
     
     from scheduler_service import consultar_ticket_programado, ejecutar_proceso_envio_turno
     
@@ -830,7 +831,7 @@ def api_send_teams():
             "ticket": formatted_ticket
         }), 200
         
-    exito, msg = ejecutar_proceso_envio_turno(turno_req, fecha_req, port=8006, force=force)
+    exito, msg = ejecutar_proceso_envio_turno(turno_req, fecha_req, port=8006, force=force, renderer=renderer)
     return jsonify({
         "success": exito,
         "message": msg,
