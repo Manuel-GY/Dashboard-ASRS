@@ -1099,12 +1099,22 @@ button[disabled] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 .press-overall-badge {
     font-size: 1.4rem;
-    color: var(--accent-color);
-    background: rgba(56, 189, 248, 0.1);
+    color: #0B1D45;
+    background: #FBBD00;
     padding: 4px 12px;
     border-radius: 8px;
     font-weight: 800;
-    border: 1px solid rgba(56, 189, 248, 0.2);
+    border: 1px solid #E5AA00;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+}
+
+.press-card-title-right .press-legend-item {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+body.dark .press-card-title-right .press-legend-item {
+    color: #cbd5e1;
 }
 
 .help-tooltip { position: relative; cursor: help; display: inline-flex; align-items: center; justify-content: center; color: #94a3b8; margin-left: 8px; transition: color 0.2s; pointer-events: auto; }
