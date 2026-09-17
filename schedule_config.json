@@ -1,0 +1,7 @@
+{
+  "auto_send_enabled": true,
+  "t1_time": "06:45",
+  "t2_time": "14:45",
+  "t3_time": "22:45",
+  "webhook_url": "https://default939e896692854a9a9f040887efe8aa.e0.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/258b99beb225416d8af5bd6f7e1e86ee/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=aHH1AlHvJYdG-YJNwGv9b_l0BtH2TLOSrPxC94WOsRA"
+}

@@ -21,8 +21,7 @@ parsed.json
 orders_cache.json
 .env
 
-# Secrets / local config (webhook URL with auth token)
-schedule_config.json
+# Secrets / local config
 
 # Test capture outputs
 captura_*.png
