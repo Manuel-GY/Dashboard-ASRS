@@ -29,11 +29,18 @@ def load_schedule_config():
             log.warning(f"Error al leer {CONFIG_PATH}: {e}")
     return config
 
+def _parse_ticket_number(val):
+    if isinstance(val, (int, float)):
+        return int(val)
+    s = str(val or "").replace(",", "").replace(".", "").strip()
+    return int(s) if s.isdigit() else 0
+
 def consultar_ticket_programado(port=8006):
     """
     Consulta el ticket requerido de producción de neumáticos en /api/daily-ticket.
     Retorna (ticket_total, ticket_formatted, success)
     """
+    port = int(os.environ.get("PORT", port))
     url = f"http://127.0.0.1:{port}/api/daily-ticket"
     try:
         session = requests.Session()
@@ -41,9 +48,12 @@ def consultar_ticket_programado(port=8006):
         resp = session.get(url, timeout=8, proxies={"http": None, "https": None})
         if resp.status_code == 200:
             data = resp.json()
-            total = data.get("total", 0)
-            formatted = data.get("formatted", str(total))
-            return int(total) if str(total).isdigit() else 0, formatted, True
+            raw_total = data.get("total", 0)
+            formatted = str(data.get("formatted", raw_total) or raw_total)
+            total_num = _parse_ticket_number(raw_total)
+            if total_num == 0 and formatted:
+                total_num = _parse_ticket_number(formatted)
+            return total_num, formatted, True
     except Exception as e:
         log.error(f"Error al consultar Ticket Requerido en {url}: {e}")
     return 0, "0", False
@@ -86,6 +96,7 @@ def capturar_reporte_png_pillow(turno, fecha=None, port=8006):
     Genera el PNG del reporte sin navegador usando el render Pillow (image_builder).
     Retorna (bytes PNG, error_message).
     """
+    port = int(os.environ.get("PORT", port))
     try:
         from image_builder import render_entrega_turno
     except Exception as e:
@@ -121,69 +132,55 @@ def capturar_reporte_png_pillow(turno, fecha=None, port=8006):
 
 def iniciar_scheduler_loop(port=8006):
     """
-    Bucle en segundo plano: calcula el próximo horario de envío configurado
-    y duerme hasta ese momento. Solo despierta 1 vez por turno (3 veces al día).
+    Bucle en segundo plano: revisa 1 vez por minuto si la hora actual (HH:MM)
+    coincide con los horarios programados de envío automático (T1, T2, T3).
     """
-    log.info("Iniciando Planificador Automático de Entrega de Turno ASRS...")
+    log.info("Iniciando Planificador Automático de Entrega de Turno ASRS (1 chequeo/min)...")
     ultimo_disparo = None
+    ultimo_mtime = 0
+    cached_cfg = None
 
     while True:
         try:
-            cfg = load_schedule_config()
+            # Recargar configuración si el archivo cambió en disco
+            if os.path.exists(CONFIG_PATH):
+                try:
+                    mtime = os.path.getmtime(CONFIG_PATH)
+                    if mtime != ultimo_mtime or cached_cfg is None:
+                        cached_cfg = load_schedule_config()
+                        ultimo_mtime = mtime
+                except Exception:
+                    cached_cfg = load_schedule_config()
+            else:
+                cached_cfg = load_schedule_config()
+
+            cfg = cached_cfg or {}
             auto_enabled = cfg.get("auto_send_enabled", True)
-
-            if not auto_enabled:
-                log.info("Envío automático deshabilitado. Esperando...")
-                time.sleep(60)
-                continue
-
             ahora = datetime.now()
+            hora_actual_str = ahora.strftime("%H:%M")
+            fecha_hoy_str = ahora.strftime("%Y-%m-%d")
 
-            horarios = []
-            for time_key, turno in (("t1_time", "T1"), ("t2_time", "T2"), ("t3_time", "T3")):
-                t_str = cfg.get(time_key, "").strip()
-                if t_str:
-                    try:
-                        horarios.append((datetime.strptime(t_str, "%H:%M"), turno))
-                    except ValueError:
-                        log.warning(f"Horario inválido '{t_str}' para {turno}")
+            if auto_enabled:
+                horarios = {
+                    "T1": cfg.get("t1_time", "06:45").strip(),
+                    "T2": cfg.get("t2_time", "14:45").strip(),
+                    "T3": cfg.get("t3_time", "22:45").strip()
+                }
 
-            if not horarios:
-                log.warning("Sin horarios configurados. Esperando 60s...")
-                time.sleep(60)
-                continue
+                for turno, hora_prog in horarios.items():
+                    if hora_prog and hora_actual_str == hora_prog:
+                        disparo_key = f"{fecha_hoy_str}_{turno}"
+                        if ultimo_disparo != disparo_key:
+                            ultimo_disparo = disparo_key
+                            log.info(f"⏰ [DISPARO AUTOMÁTICO] Horario alcanzado: {hora_actual_str} ({turno}) -> Despachando reporte...")
+                            exito, msg = ejecutar_proceso_envio_turno(turno, fecha_hoy_str, port=port)
+                            log.info(f"Resultado del envío de {turno}: {msg}")
 
-            # Encontrar el próximo horario de envío (hoy si aún no pasó, si no mañana)
-            next_target = None
-            for t, turno in sorted(horarios):
-                candidate = ahora.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
-                if candidate > ahora:
-                    next_target = (candidate, turno)
-                    break
-            if next_target is None:
-                t, turno = sorted(horarios)[0]
-                next_target = (ahora.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0) + timedelta(days=1), turno)
+            # Dormir hasta el inicio del próximo minuto (exactamente 1 vez por minuto)
+            now_sec = datetime.now().second
+            sleep_sec = max(1, 60 - now_sec)
+            time.sleep(sleep_sec)
 
-            target_dt, turno = next_target
-            fecha_str = target_dt.strftime("%Y-%m-%d")
-
-            delta = (target_dt - datetime.now()).total_seconds()
-            log.info(f"Próximo envío: {turno} a las {target_dt.strftime('%Y-%m-%d %H:%M')} (en {delta/3600:.1f} h)")
-
-            # Dormir hasta 1 minuto antes del horario
-            if delta > 60:
-                time.sleep(delta - 60)
-
-            # Ajuste fino para disparar exactamente en el minuto configurado
-            while datetime.now() < target_dt:
-                time.sleep(5)
-
-            disparo_key = f"{fecha_str}_{turno}"
-            if ultimo_disparo != disparo_key:
-                ultimo_disparo = disparo_key
-                log.info(f"⏰ Horario alcanzado: {target_dt.strftime('%H:%M')} -> Ejecutando envío de {turno}...")
-                exito, msg = ejecutar_proceso_envio_turno(turno, fecha_str, port=port)
-                log.info(f"Resultado de envío automático: {msg}")
         except Exception as e:
             log.error(f"Error en bucle de scheduler: {e}")
             time.sleep(30)

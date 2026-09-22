@@ -387,7 +387,7 @@ def render_entrega_turno(data, output_path=None):
     d.text((gold_x0 + sw / 2, hcx), shift_code, fill=_hex(DARK_NAVY),
            font=sf, anchor="mm")
 
-    ticket_val = str(consulta.get("ticket") or data.get("ticket") or "").strip()
+    ticket_val = str(consult.get("ticket") or data.get("ticket") or "").strip()
     if ticket_val:
         ticket_text = f"Ticket: {ticket_val}" if "tires" in ticket_val.lower() else f"Ticket: {ticket_val} tires"
         tw = d.measure(ticket_text, tf)[0] + 22

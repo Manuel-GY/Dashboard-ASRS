@@ -7,8 +7,11 @@ import threading
 from datetime import datetime, timedelta
 import time
 import math
+import logging
 import requests
 import urllib3
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
