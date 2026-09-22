@@ -691,7 +691,9 @@ def api_consolidado_turno():
     global_press_pct = round((total_robot_delivered / total_vulcanized * 100.0), 2) if total_vulcanized > 0 else 0.0
 
     # 2. Fetch Orders from Inspecciones (con timeout corto y caché)
-    n1_orders = fetch_json(f"{INSPECCIONES_BASE}/index_n1asrs_table.php", timeout=4) or {}
+    n1_orders = fetch_json(f"{INSPECCIONES_BASE}/avisos_correctivos_ASRS_table.php", timeout=3)
+    if not n1_orders or not n1_orders.get("data"):
+        n1_orders = fetch_json(f"{INSPECCIONES_BASE}/index_n1asrs_table.php", timeout=4) or {}
     
     ORDERS_CACHE_FILE = os.path.join(os.path.dirname(__file__), "orders_cache.json")
     if n1_orders.get("data"):
@@ -707,42 +709,88 @@ def api_consolidado_turno():
         except Exception:
             pass
 
+    def _extraer_titulo_limpio(titulo_raw, detalle_raw):
+        t = str(titulo_raw or "").strip()
+        d = str(detalle_raw or "").strip()
+        # Si el título ya es corto y diferente del detalle (ej. "Ajuste sensor en estructura"), usarlo
+        if t and t != d and len(t) <= 65:
+            return t
+        base = t or d
+        if not base:
+            return "Aviso correctivo"
+        s = base.strip()
+        for sep in [". ", "; ", "\n"]:
+            if sep in s:
+                part = s.split(sep)[0].strip()
+                if len(part) >= 8:
+                    s = part
+                    break
+        if len(s) > 50 and ", " in s:
+            comma_part = s.split(", ")[0].strip()
+            if len(comma_part) >= 15:
+                s = comma_part
+        if len(s) > 50:
+            s = s[:48].rsplit(" ", 1)[0].strip() + "..."
+        if s:
+            s = s[0].upper() + s[1:]
+        return s
+
     filtered_orders = []
     seen_ots = set()
 
     for row in n1_orders.get("data", []):
-        if len(row) >= 8:
+        if not isinstance(row, (list, tuple)) or len(row) < 7:
+            continue
+
+        # Soporte para formato de 9 columnas (avisos_correctivos_ASRS) y 8 columnas (index_n1asrs)
+        if len(row) >= 9 and str(row[0] or "").isdigit() and len(str(row[0] or "")) >= 6:
+            ot = str(row[0] or "").strip()
+            titulo_raw = str(row[1] or "").strip()
+            fecha_str = str(row[2] or "").strip()
+            maquina = str(row[4] or "").strip()
+            tag_equipo = str(row[5] or "").strip()
+            tp_min = str(row[7] or "0").strip()
+            detalle_raw = str(row[8] or "").strip()
+            hora_str = "00:00:00"
+            if " " in fecha_str:
+                parts = fecha_str.split(" ")
+                fecha_str, hora_str = parts[0], parts[1]
+        elif len(row) >= 8:
             tag_equipo = str(row[0] or "").strip()
-            titulo = str(row[1] or "").strip()
+            titulo_raw = str(row[1] or "").strip()
             ot = str(row[2] or "").strip()
             fecha_str = str(row[3] or "").strip()
             hora_str = str(row[4] or "").strip()
             tp_min = str(row[5] or "0").strip()
-            detalle = str(row[6] or "").strip()
+            detalle_raw = str(row[6] or "").strip()
             maquina = str(row[7] or "").strip() or tag_equipo
+        else:
+            continue
 
-            if not ot or not fecha_str or not hora_str:
-                continue
+        if not ot or not fecha_str or not hora_str:
+            continue
 
-            try:
-                if len(hora_str.split(":")) == 2:
-                    order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
-                else:
-                    order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M:%S")
-            except Exception:
-                continue
+        try:
+            if len(hora_str.split(":")) == 2:
+                order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
+            else:
+                order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            continue
 
-            if dt_start <= order_dt < dt_end and ot not in seen_ots:
-                seen_ots.add(ot)
-                filtered_orders.append({
-                    "ot": ot,
-                    "hora": hora_str,
-                    "equipo": tag_equipo or maquina,
-                    "maquina": maquina or tag_equipo,
-                    "titulo": titulo or "Aviso correctivo",
-                    "tp_min": tp_min,
-                    "detalle": detalle or titulo
-                })
+        if dt_start <= order_dt < dt_end and ot not in seen_ots:
+            seen_ots.add(ot)
+            titulo_final = _extraer_titulo_limpio(titulo_raw, detalle_raw)
+            detalle_final = detalle_raw or titulo_raw or "Sin observaciones adicionales registradas."
+            filtered_orders.append({
+                "ot": ot,
+                "hora": hora_str,
+                "equipo": tag_equipo or maquina,
+                "maquina": maquina or tag_equipo,
+                "titulo": titulo_final,
+                "tp_min": tp_min,
+                "detalle": detalle_final
+            })
 
     turno_info = TURNOS_ENTREGA.get(turno_req, TURNOS_ENTREGA["T2"])
     
