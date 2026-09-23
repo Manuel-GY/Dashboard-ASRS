@@ -693,22 +693,52 @@ def api_consolidado_turno():
         })
     global_press_pct = round((total_robot_delivered / total_vulcanized * 100.0), 2) if total_vulcanized > 0 else 0.0
 
-    # 2. Fetch Orders from Inspecciones (con timeout corto y caché)
-    n1_orders = fetch_json(f"{INSPECCIONES_BASE}/avisos_correctivos_ASRS_table.php", timeout=3)
-    if not n1_orders or not n1_orders.get("data"):
-        n1_orders = fetch_json(f"{INSPECCIONES_BASE}/index_n1asrs_table.php", timeout=4) or {}
+    # 2. Fetch Orders from Inspecciones (combinar avisos_correctivos con index_n1asrs para timestamps exactos)
+    n1_orders = fetch_json(f"{INSPECCIONES_BASE}/avisos_correctivos_ASRS_table.php", timeout=4) or {}
+    n1_recent = fetch_json(f"{INSPECCIONES_BASE}/index_n1asrs_table.php", timeout=4) or {}
+    
+    # Crear mapa de OTs con horas y datos precisos desde index_n1asrs
+    n1_map = {}
+    for row in n1_recent.get("data", []):
+        if isinstance(row, (list, tuple)) and len(row) >= 5:
+            ot_k = str(row[2] or "").strip()
+            if ot_k:
+                n1_map[ot_k] = {
+                    "tag": str(row[0] or "").strip(),
+                    "titulo": str(row[1] or "").strip(),
+                    "fecha": str(row[3] or "").strip(),
+                    "hora": str(row[4] or "").strip(),
+                    "tp_min": str(row[5] or "0").strip(),
+                    "detalle": str(row[6] or "").strip() if len(row) > 6 else "",
+                    "maquina": str(row[7] or "").strip() if len(row) > 7 else ""
+                }
     
     ORDERS_CACHE_FILE = os.path.join(os.path.dirname(__file__), "orders_cache.json")
     if n1_orders.get("data"):
         try:
             with open(ORDERS_CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(n1_orders, f, ensure_ascii=False)
+                json.dump({"orders": n1_orders, "recent": n1_recent}, f, ensure_ascii=False)
         except Exception:
             pass
     elif os.path.exists(ORDERS_CACHE_FILE):
         try:
             with open(ORDERS_CACHE_FILE, "r", encoding="utf-8") as f:
-                n1_orders = json.load(f)
+                cached_data = json.load(f)
+                n1_orders = cached_data.get("orders", {})
+                if not n1_map:
+                    for row in cached_data.get("recent", {}).get("data", []):
+                        if isinstance(row, (list, tuple)) and len(row) >= 5:
+                            ot_k = str(row[2] or "").strip()
+                            if ot_k:
+                                n1_map[ot_k] = {
+                                    "tag": str(row[0] or "").strip(),
+                                    "titulo": str(row[1] or "").strip(),
+                                    "fecha": str(row[3] or "").strip(),
+                                    "hora": str(row[4] or "").strip(),
+                                    "tp_min": str(row[5] or "0").strip(),
+                                    "detalle": str(row[6] or "").strip() if len(row) > 6 else "",
+                                    "maquina": str(row[7] or "").strip() if len(row) > 7 else ""
+                                }
         except Exception:
             pass
 
@@ -741,11 +771,16 @@ def api_consolidado_turno():
     filtered_orders = []
     seen_ots = set()
 
-    for row in n1_orders.get("data", []):
+    # Combinar filas de avisos_correctivos_ASRS y de index_n1asrs
+    all_raw_rows = list(n1_orders.get("data", []))
+    for row in n1_recent.get("data", []):
+        all_raw_rows.append(row)
+
+    for row in all_raw_rows:
         if not isinstance(row, (list, tuple)) or len(row) < 7:
             continue
 
-        # Soporte para formato de 9 columnas (avisos_correctivos_ASRS) y 8 columnas (index_n1asrs)
+        # Soporte para formato de 9/10 columnas (avisos_correctivos_ASRS) y 8 columnas (index_n1asrs)
         if len(row) >= 9 and str(row[0] or "").isdigit() and len(str(row[0] or "")) >= 6:
             ot = str(row[0] or "").strip()
             titulo_raw = str(row[1] or "").strip()
@@ -754,10 +789,16 @@ def api_consolidado_turno():
             tag_equipo = str(row[5] or "").strip()
             tp_min = str(row[7] or "0").strip()
             detalle_raw = str(row[8] or "").strip()
+            if len(row) >= 10 and row[9]:
+                maquina = str(row[9]).strip() or maquina
             hora_str = "00:00:00"
             if " " in fecha_str:
                 parts = fecha_str.split(" ")
                 fecha_str, hora_str = parts[0], parts[1]
+            elif ot in n1_map and n1_map[ot].get("hora"):
+                hora_str = n1_map[ot]["hora"]
+                if not tag_equipo and n1_map[ot].get("tag"):
+                    tag_equipo = n1_map[ot]["tag"]
         elif len(row) >= 8:
             tag_equipo = str(row[0] or "").strip()
             titulo_raw = str(row[1] or "").strip()
@@ -770,7 +811,7 @@ def api_consolidado_turno():
         else:
             continue
 
-        if not ot or not fecha_str or not hora_str:
+        if not ot or not fecha_str or not hora_str or ot in seen_ots:
             continue
 
         try:
@@ -781,7 +822,7 @@ def api_consolidado_turno():
         except Exception:
             continue
 
-        if dt_start <= order_dt < dt_end and ot not in seen_ots:
+        if dt_start <= order_dt < dt_end:
             seen_ots.add(ot)
             titulo_final = _extraer_titulo_limpio(titulo_raw, detalle_raw)
             detalle_final = detalle_raw or titulo_raw or "Sin observaciones adicionales registradas."

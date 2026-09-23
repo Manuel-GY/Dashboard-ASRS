@@ -254,6 +254,7 @@ def fetch_and_save_shift_data():
                     match = re.search(rf"getElementById\('{id_name}'\)\.innerHTML\s*=\s*'([^']+)'", html)
                     return match.group(1) if match else "0"
 
+                # 1. Turno actual en curso (s1)
                 entrada = extract("s1_inbound_total")
                 manual = extract("s1_outbound_cv31_actual")
                 auto = extract("s1_press_total")
@@ -271,6 +272,37 @@ def fetch_and_save_shift_data():
                     cursor.execute('''INSERT INTO io_history (fecha, turno, entrada, manual, auto, rate_entrada, rate_manual, rate_auto)
                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
                                    (date_str, current_shift, entrada, manual, auto, rate_entrada, rate_manual, rate_auto))
+
+                # 2. Turno anterior consolidado (s2 - 1 Shift Back)
+                curr_d = datetime.strptime(date_str, "%Y-%m-%d")
+                if current_shift == "T1":
+                    prev_shift = "T3"
+                    prev_date_str = (curr_d - timedelta(days=1)).strftime("%Y-%m-%d")
+                elif current_shift == "T2":
+                    prev_shift = "T1"
+                    prev_date_str = date_str
+                else: # T3
+                    prev_shift = "T2"
+                    prev_date_str = date_str
+
+                s2_entrada = extract("s2_inbound_total")
+                s2_manual = extract("s2_outbound_cv31_actual")
+                s2_auto = extract("s2_press_total")
+                s2_rate_entrada = extract("s2_inbound_avg")
+                s2_rate_manual = extract("s2_manual_rate")
+                s2_rate_auto = extract("s2_press_rate")
+
+                if s2_entrada != "0" or s2_manual != "0" or s2_auto != "0":
+                    cursor.execute("SELECT id FROM io_history WHERE fecha = ? AND turno = ?", (prev_date_str, prev_shift))
+                    prev_row = cursor.fetchone()
+                    if prev_row:
+                        cursor.execute('''UPDATE io_history
+                                          SET entrada=?, manual=?, auto=?, rate_entrada=?, rate_manual=?, rate_auto=?, timestamp=CURRENT_TIMESTAMP
+                                          WHERE id=?''', (s2_entrada, s2_manual, s2_auto, s2_rate_entrada, s2_rate_manual, s2_rate_auto, prev_row[0]))
+                    else:
+                        cursor.execute('''INSERT INTO io_history (fecha, turno, entrada, manual, auto, rate_entrada, rate_manual, rate_auto)
+                                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                                       (prev_date_str, prev_shift, s2_entrada, s2_manual, s2_auto, s2_rate_entrada, s2_rate_manual, s2_rate_auto))
         except Exception as e:
             print(f"[WARN] Error saving IO data: {e}")
 
