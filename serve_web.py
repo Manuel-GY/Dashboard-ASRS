@@ -864,11 +864,10 @@ def api_consolidado_turno():
                 if api_resp.status_code != 200 or not api_payload.get("data"):
                     return []
 
-                # El árbol SAP agrupa el área ASRS bajo el nodo "L504-5200", pero el
-                # campo functional_location/equipment de /api/orders no trae ese código:
-                # trae la ubicación real (ej. "L504-ASRS(M)", "L504-CC03-NBS"). Se filtra
-                # por esas familias de ubicación/equipo confirmadas dentro de esa jerarquía.
-                ASRS_KEYWORDS = ("ASRS", "CC03-NBS")
+                # Nodo ASRS real del árbol SAP: "L504-5200 ASRS DISTRIBUCION DE NEUMATICOS".
+                # Toda su familia de hijos confirmada: L504-ASRS(M), L504-PLMT01..04
+                # (Plummer machines) y sus equipos/sububicaciones (ej. CH-...-PLMT0x-...).
+                ASRS_KEYWORDS = ("L504-ASRS", "L504-PLMT", "PLMT")
 
                 orders_list = []
                 seen = set()
