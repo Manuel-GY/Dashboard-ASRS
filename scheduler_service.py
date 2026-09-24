@@ -9,6 +9,36 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 log = logging.getLogger("scheduler_service")
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    try:
+        from backports.zoneinfo import ZoneInfo
+    except ImportError:
+        ZoneInfo = None
+
+DEFAULT_TIMEZONE = "America/Santiago"
+
+def get_target_now(tz_name=None):
+    """
+    Retorna la fecha y hora actual en la zona horaria objetivo (por defecto America/Santiago).
+    Si el servidor corre en UTC u otra zona horaria, esto garantiza que la hora evaluada
+    corresponda siempre a la hora local chilena.
+    """
+    if tz_name is None:
+        try:
+            cfg = load_schedule_config()
+            tz_name = cfg.get("timezone", DEFAULT_TIMEZONE)
+        except Exception:
+            tz_name = DEFAULT_TIMEZONE
+
+    if ZoneInfo and tz_name:
+        try:
+            return datetime.now(ZoneInfo(tz_name))
+        except Exception as e:
+            log.warning(f"Error al aplicar ZoneInfo({tz_name}): {e}. Usando hora local del sistema.")
+    return datetime.now()
+
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "schedule_config.json")
 
 def load_schedule_config():
@@ -18,7 +48,8 @@ def load_schedule_config():
         "t1_time": "06:45",
         "t2_time": "14:45",
         "t3_time": "22:45",
-        "webhook_url": ""
+        "webhook_url": "",
+        "timezone": "America/Santiago"
     }
     if os.path.exists(CONFIG_PATH):
         try:
@@ -66,7 +97,7 @@ def ejecutar_proceso_envio_turno(turno, fecha=None, port=8006, force=False):
     from teams_sender import enviar_imagen_a_teams
 
     if fecha is None:
-        fecha = datetime.now().strftime("%Y-%m-%d")
+        fecha = get_target_now().strftime("%Y-%m-%d")
 
     log.info(f"=== EVALUANDO ENVÍO AUTOMÁTICO: {turno} ({fecha}) ===")
     
@@ -105,7 +136,7 @@ def capturar_reporte_png_pillow(turno, fecha=None, port=8006):
         return None, err
 
     if fecha is None:
-        fecha = datetime.now().strftime("%Y-%m-%d")
+        fecha = get_target_now().strftime("%Y-%m-%d")
 
     url = f"http://127.0.0.1:{port}/api/consolidado-turno?fecha={fecha}&turno={turno}"
     try:
@@ -134,8 +165,9 @@ def iniciar_scheduler_loop(port=8006):
     """
     Bucle en segundo plano: revisa 1 vez por minuto si la hora actual (HH:MM)
     coincide con los horarios programados de envío automático (T1, T2, T3).
+    Utiliza la zona horaria configurada (ej. America/Santiago) para evitar desfases.
     """
-    log.info("Iniciando Planificador Automático de Entrega de Turno ASRS (1 chequeo/min)...")
+    log.info("Iniciando Planificador Automático de Entrega de Turno ASRS (1 chequeo/min, Zona Horaria: America/Santiago)...")
     ultimo_disparo = None
     ultimo_mtime = 0
     cached_cfg = None
@@ -156,7 +188,8 @@ def iniciar_scheduler_loop(port=8006):
 
             cfg = cached_cfg or {}
             auto_enabled = cfg.get("auto_send_enabled", True)
-            ahora = datetime.now()
+            tz_name = cfg.get("timezone", DEFAULT_TIMEZONE)
+            ahora = get_target_now(tz_name)
             hora_actual_str = ahora.strftime("%H:%M")
             fecha_hoy_str = ahora.strftime("%Y-%m-%d")
 
@@ -172,12 +205,12 @@ def iniciar_scheduler_loop(port=8006):
                         disparo_key = f"{fecha_hoy_str}_{turno}"
                         if ultimo_disparo != disparo_key:
                             ultimo_disparo = disparo_key
-                            log.info(f"⏰ [DISPARO AUTOMÁTICO] Horario alcanzado: {hora_actual_str} ({turno}) -> Despachando reporte...")
+                            log.info(f"⏰ [DISPARO AUTOMÁTICO] Horario alcanzado ({tz_name}): {hora_actual_str} ({turno}) -> Despachando reporte...")
                             exito, msg = ejecutar_proceso_envio_turno(turno, fecha_hoy_str, port=port)
                             log.info(f"Resultado del envío de {turno}: {msg}")
 
             # Dormir hasta el inicio del próximo minuto (exactamente 1 vez por minuto)
-            now_sec = datetime.now().second
+            now_sec = ahora.second
             sleep_sec = max(1, 60 - now_sec)
             time.sleep(sleep_sec)
 
