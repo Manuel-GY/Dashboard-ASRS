@@ -10,6 +10,7 @@ import math
 import logging
 import requests
 import urllib3
+from urllib.parse import urljoin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s")
 
@@ -22,6 +23,9 @@ from bs4 import BeautifulSoup
 DB_PATH = 'shift_history.db'
 INDICADORES_BASE = os.environ.get("INDICADORES_BASE", "http://cl01sv34a:8050/reporte")
 INSPECCIONES_BASE = os.environ.get("INSPECCIONES_BASE", "http://10.107.194.70/ASRS/inspecciones")
+SAP_USERNAME = os.environ.get("SAP_USERNAME")
+SAP_PASSWORD = os.environ.get("SAP_PASSWORD")
+SAP_LOGIN_URL = os.environ.get("SAP_LOGIN_URL")
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "schedule_config.json")
 
 TURNOS_ENTREGA = {
@@ -559,6 +563,81 @@ def serve_entrega_turno():
 _http_session = requests.Session()
 _http_session.trust_env = False
 
+
+def build_sap_session():
+    """Crea una sesión autenticada para el sitio de Indicadores Planta que exige LDAP/SSO."""
+    session = requests.Session()
+    session.trust_env = False
+    session.verify = False
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+        "Accept-Language": "es-CL,es;q=0.9",
+    })
+
+    if not SAP_USERNAME or not SAP_PASSWORD:
+        print("[WARN] SAP_USERNAME / SAP_PASSWORD no configurados. Se usará sesión anónima para Indicadores Planta.")
+        return session, False
+
+    login_endpoint = SAP_LOGIN_URL or f"{INDICADORES_BASE.rstrip('/')}/login"
+    base_url = INDICADORES_BASE.rstrip('/') + "/"
+
+    try:
+        probe = session.get(base_url, timeout=12, allow_redirects=True)
+        if probe.status_code == 200 and "login" not in probe.url.lower() and "auth" not in probe.url.lower():
+            return session, True
+
+        soup = BeautifulSoup(probe.text, "html.parser")
+        form = soup.find("form")
+        payload = {}
+        if form:
+            action = form.get("action") or login_endpoint
+            action_url = urljoin(base_url, action) if not action.startswith("http") else action
+            for field in form.select("input"):
+                name = field.get("name")
+                if not name:
+                    continue
+                key = name.lower()
+                field_type = (field.get("type") or "text").lower()
+                if field_type == "hidden":
+                    payload[name] = field.get("value", "")
+                elif key in {"username", "user", "userid", "j_username", "login", "usuario", "email"}:
+                    payload[name] = SAP_USERNAME
+                elif key in {"password", "passwd", "pass", "pwd", "j_password", "contrasena"}:
+                    payload[name] = SAP_PASSWORD
+                elif key in {"submit", "button"}:
+                    continue
+
+            if not payload:
+                payload = {
+                    "username": SAP_USERNAME,
+                    "password": SAP_PASSWORD,
+                    "j_username": SAP_USERNAME,
+                    "j_password": SAP_PASSWORD,
+                    "login": SAP_USERNAME,
+                    "passwd": SAP_PASSWORD,
+                }
+
+            if action_url:
+                login_resp = session.post(action_url, data=payload, timeout=12, allow_redirects=True)
+                if login_resp.status_code in (200, 302) and "login" not in login_resp.url.lower() and "auth" not in login_resp.url.lower():
+                    return session, True
+
+        login_resp = session.post(login_endpoint, data={
+            "username": SAP_USERNAME,
+            "password": SAP_PASSWORD,
+            "j_username": SAP_USERNAME,
+            "j_password": SAP_PASSWORD,
+            "login": SAP_USERNAME,
+            "passwd": SAP_PASSWORD,
+        }, timeout=12, allow_redirects=True)
+        if login_resp.status_code in (200, 302) and "login" not in login_resp.url.lower() and "auth" not in login_resp.url.lower():
+            return session, True
+    except Exception as e:
+        print(f"[WARN] Error autenticando sesión SAP/LDAP: {e}")
+
+    return session, False
+
+
 def fetch_json(url, timeout=6):
     try:
         r = _http_session.get(url, timeout=timeout, verify=False)
@@ -723,23 +802,149 @@ def api_consolidado_turno():
 
     def fetch_orders_indicadores_planta():
         """
-        Fuente Primaria: http://cl01sv34a:8050/reporte/<YYYY-MM-DD>
-        Filtra por Área == 'ASRS', incluye todas las órdenes (con o sin máquina detenida)
-        y selecciona las correspondientes a la ventana de tiempo del turno [dt_start, dt_end).
+        Fuente primaria de órdenes del turno: portal SAP PM interno con LDAP.
+        Solo se usa en la sección de Entrega de Turno para filtrar por el turno actual.
         """
+        def parse_order_date(value):
+            if not value:
+                return None
+            value = str(value).strip()
+            for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%d/%m/%Y", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    pass
+            return None
+
+        def fetch_orders_portal_turno():
+            if not SAP_USERNAME or not SAP_PASSWORD:
+                return []
+
+            portal_url = (SAP_LOGIN_URL or "http://10.107.194.110:5000/api/auth/login").strip()
+            portal_base = portal_url.rsplit("/api/auth/login", 1)[0] if "/api/auth/login" in portal_url else "http://10.107.194.110:5000"
+            api_orders_url = f"{portal_base}/api/orders"
+
+            session = requests.Session()
+            session.trust_env = False
+            session.verify = False
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            })
+
+            try:
+                login_resp = session.post(
+                    portal_url,
+                    json={"username": SAP_USERNAME, "password": SAP_PASSWORD, "sap_target": "L1P"},
+                    timeout=15,
+                )
+                login_payload = login_resp.json() if login_resp.content else {}
+                if login_resp.status_code not in (200, 201) or not login_payload.get("success"):
+                    print(f"[WARN] Login portal SAP falló para Entrega de Turno: {login_resp.status_code} {login_payload}")
+                    return []
+            except Exception as e:
+                print(f"[WARN] Error autenticando portal SAP para Entrega de Turno: {e}")
+                return []
+
+            try:
+                # El rango de fechas a consultar debe cubrir el día anterior cuando el
+                # turno T1 cruza medianoche (22:00 - 06:00).
+                from_date = min(dt_start, dt_end).strftime("%Y%m%d")
+                to_date = max(dt_start, dt_end).strftime("%Y%m%d")
+                params = {
+                    "plant": "L504",
+                    "page": 1,
+                    "per_page": 500,
+                    "date_from": from_date,
+                    "date_to": to_date,
+                }
+                api_resp = session.get(api_orders_url, params=params, timeout=20)
+                api_payload = api_resp.json() if api_resp.content else {}
+                if api_resp.status_code != 200 or not api_payload.get("data"):
+                    return []
+
+                # El árbol SAP agrupa el área ASRS bajo el nodo "L504-5200", pero el
+                # campo functional_location/equipment de /api/orders no trae ese código:
+                # trae la ubicación real (ej. "L504-ASRS(M)", "L504-CC03-NBS"). Se filtra
+                # por esas familias de ubicación/equipo confirmadas dentro de esa jerarquía.
+                ASRS_KEYWORDS = ("ASRS", "CC03-NBS")
+
+                orders_list = []
+                seen = set()
+                for order in api_payload.get("data", []):
+                    order_number = str(order.get("number") or order.get("id") or "").strip()
+                    if not order_number or order_number in seen:
+                        continue
+
+                    order_type = str(order.get("type") or "").strip().upper()
+                    if order_type != "ZM01":
+                        continue
+
+                    functional_location = str(order.get("functional_location") or "").strip().upper()
+                    equipment = str(order.get("equipment") or "").strip().upper()
+                    if not any(kw in functional_location or kw in equipment for kw in ASRS_KEYWORDS):
+                        continue
+
+                    order_dt = None
+                    for key in ("actual_start", "start_date", "created_date", "actual_end", "end_date"):
+                        candidate = parse_order_date(order.get(key))
+                        if candidate is not None:
+                            order_dt = candidate
+                            break
+
+                    if order_dt is None:
+                        continue
+
+                    # El recurso SAP solo entrega fecha (sin hora real), por lo que el
+                    # turno se ubica por fecha: T2/T3 caen en un único día; T1 cruza
+                    # medianoche, por eso dt_start/dt_end ya cubren ambas fechas.
+                    order_date = order_dt.date()
+                    allowed_dates = {dt_start.date(), dt_end.date()}
+                    if order_date not in allowed_dates:
+                        continue
+
+                    seen.add(order_number)
+
+                    description = str(order.get("description") or "").strip() or "Sin descripción"
+                    equipment_display = str(order.get("equipment") or order.get("functional_location") or "").strip()
+                    order_number_digits = order_number.lstrip("0") or order_number
+                    orders_list.append({
+                        "ot": order_number_digits,
+                        "hora": order_dt.strftime("%H:%M:%S") if order_dt.hour or order_dt.minute or order_dt.second else "00:00:00",
+                        "equipo": equipment_display,
+                        "maquina": equipment_display,
+                        "titulo": description,
+                        "tp_min": str(order.get("parts_cost") or "0"),
+                        "detalle": description,
+                    })
+                return orders_list
+            except Exception as e:
+                print(f"[WARN] Error consultando /api/orders del portal SAP: {e}")
+                return []
+
+        portal_orders = fetch_orders_portal_turno()
+        if portal_orders:
+            return portal_orders
+
         base_d = datetime.strptime(fecha_req, "%Y-%m-%d")
         if turno_req == "T1":
             fechas_query = [(base_d - timedelta(days=1)).strftime("%Y-%m-%d"), fecha_req]
         else:
             fechas_query = [fecha_req]
 
+        sap_session, authenticated = build_sap_session()
+        if not authenticated:
+            print("[WARN] No fue posible autenticar la sesión de Indicadores Planta; se usará fallback de inspecciones.")
+            return []
+
         orders_list = []
         seen = set()
 
         for f_q in fechas_query:
-            url = f"{INDICADORES_BASE}/{f_q}"
+            url = f"{INDICADORES_BASE.rstrip('/')}/{f_q}"
             try:
-                r = _http_session.get(url, timeout=5, verify=False)
+                r = sap_session.get(url, timeout=12, verify=False, allow_redirects=True)
                 if r.status_code != 200:
                     continue
                 r.encoding = "utf-8"
@@ -749,40 +954,42 @@ def api_consolidado_turno():
                     continue
                 for tr in table.find_all("tr"):
                     tds = [td.get_text(strip=True) for td in tr.find_all("td")]
-                    # Formato: [Area, Equipo, Descripcion, Detalle, Orden SAP, Fecha-Hora, Status, Downtime]
-                    if len(tds) >= 6 and "ASRS" in tds[0].upper():
-                        equipo = tds[1].strip()
-                        titulo_raw = tds[2].strip()
-                        detalle_raw = tds[3].strip()
-                        ot = tds[4].strip()
-                        fh_str = tds[5].strip()
-                        tp_min = tds[7].strip() if len(tds) > 7 else "0"
-                        if not tp_min:
-                            tp_min = "0"
+                    if len(tds) < 6:
+                        continue
+                    if "ASRS" not in tds[0].upper():
+                        continue
 
-                        if not ot or not fh_str or ot in seen:
-                            continue
+                    equipo = tds[1].strip()
+                    titulo_raw = tds[2].strip()
+                    detalle_raw = tds[3].strip()
+                    ot = tds[4].strip()
+                    fh_str = tds[5].strip()
+                    tp_min = tds[7].strip() if len(tds) > 7 else "0"
+                    if not tp_min:
+                        tp_min = "0"
+                    if not ot or not fh_str or ot in seen:
+                        continue
 
-                        try:
-                            order_dt = datetime.strptime(fh_str, "%d/%m/%Y %H:%M")
-                        except Exception:
-                            continue
+                    try:
+                        order_dt = datetime.strptime(fh_str, "%d/%m/%Y %H:%M")
+                    except Exception:
+                        continue
 
-                        if dt_start <= order_dt < dt_end:
-                            seen.add(ot)
-                            titulo_final = _extraer_titulo_limpio(titulo_raw, detalle_raw)
-                            detalle_final = detalle_raw or titulo_raw or "Sin observaciones adicionales registradas."
-                            orders_list.append({
-                                "ot": ot,
-                                "hora": order_dt.strftime("%H:%M:%S"),
-                                "equipo": equipo,
-                                "maquina": equipo,
-                                "titulo": titulo_final,
-                                "tp_min": tp_min,
-                                "detalle": detalle_final
-                            })
+                    if dt_start <= order_dt < dt_end:
+                        seen.add(ot)
+                        titulo_final = _extraer_titulo_limpio(titulo_raw, detalle_raw)
+                        detalle_final = detalle_raw or titulo_raw or "Sin observaciones adicionales registradas."
+                        orders_list.append({
+                            "ot": ot,
+                            "hora": order_dt.strftime("%H:%M:%S"),
+                            "equipo": equipo,
+                            "maquina": equipo,
+                            "titulo": titulo_final,
+                            "tp_min": tp_min,
+                            "detalle": detalle_final
+                        })
             except Exception as e:
-                print(f"[WARN] Error consultando Indicadores Planta en {url}: {e}")
+                print(f"[WARN] Error consultando Indicadores Planta autenticado en {url}: {e}")
 
         return orders_list
 
