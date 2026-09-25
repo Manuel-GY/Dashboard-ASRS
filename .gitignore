@@ -19,6 +19,7 @@ parsed.json
 
 # Runtime files
 orders_cache.json
+asrs_tree_cache.json
 .env
 
 # Secrets / local config

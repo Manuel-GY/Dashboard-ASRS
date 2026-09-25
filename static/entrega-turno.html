@@ -838,45 +838,29 @@
 </head>
 <body>
 
-    <!-- Modal Configuración Horarios -->
-    <div id="modal-horarios" class="modal-overlay" onclick="if(event.target === this) cerrarModalHorarios()">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3><i class="fa-solid fa-clock" style="color: var(--goodyear-trophy-gold);"></i> Horarios de Envío Automático (Teams)</h3>
-                <button class="btn-close-modal" onclick="cerrarModalHorarios()"><i class="fa-solid fa-xmark"></i></button>
+    <!-- Modal Login SAP (LDAP) -->
+    <div id="modal-login" class="modal-overlay active">
+        <div class="modal-card" style="width: 340px;">
+            <div class="modal-header" style="padding: 12px 16px;">
+                <h3 style="font-size: 14px;"><i class="fa-solid fa-lock" style="color: var(--goodyear-trophy-gold);"></i> Iniciar sesión SAP</h3>
             </div>
-            <div class="modal-body">
-                <div class="toggle-switch-container">
-                    <div>
-                        <b style="font-size: 13px; color: var(--goodyear-racing-navy);">Envío Automático a Teams</b><br>
-                        <span style="font-size: 11.5px; color: #64748B;">Se dispara en cada turno si Ticket Requerido > 0 tires</span>
-                    </div>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 13px;">
-                        <input type="checkbox" id="cfg-auto-enabled" checked style="width: 18px; height: 18px; cursor: pointer;">
-                        <span>Activo</span>
-                    </label>
+            <div class="modal-body" style="padding: 14px 16px;">
+                <p style="font-size: 11.5px; color: #64748B; margin-bottom: 10px;">
+                    Usá tu cuenta LDAP para consultar las órdenes del turno.
+                </p>
+                <div class="config-row" style="flex-direction: column; align-items: stretch; gap: 3px; margin-bottom: 8px;">
+                    <span class="config-label" style="font-size: 11.5px;">Usuario</span>
+                    <input type="text" id="login-username" class="config-input-time" style="width: 100%; padding: 6px 8px; font-size: 13px;" autocomplete="username">
                 </div>
-
-                <div class="config-row">
-                    <span class="config-label"><i class="fa-solid fa-moon" style="color: #6366F1;"></i> Turno Noche (T1):</span>
-                    <input type="time" id="cfg-t1-time" class="config-input-time" value="06:45">
+                <div class="config-row" style="flex-direction: column; align-items: stretch; gap: 3px;">
+                    <span class="config-label" style="font-size: 11.5px;">Contraseña</span>
+                    <input type="password" id="login-password" class="config-input-time" style="width: 100%; padding: 6px 8px; font-size: 13px;" autocomplete="current-password" onkeydown="if(event.key==='Enter') iniciarSesion()">
                 </div>
-
-                <div class="config-row">
-                    <span class="config-label"><i class="fa-solid fa-sun" style="color: #F59E0B;"></i> Turno Mañana (T2):</span>
-                    <input type="time" id="cfg-t2-time" class="config-input-time" value="14:45">
-                </div>
-
-                <div class="config-row">
-                    <span class="config-label"><i class="fa-solid fa-cloud-sun" style="color: #EC4899;"></i> Turno Tarde (T3):</span>
-                    <input type="time" id="cfg-t3-time" class="config-input-time" value="22:45">
-                </div>
-
-                </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline" onclick="cerrarModalHorarios()">Cancelar</button>
-                <button class="btn btn-gold" onclick="guardarConfigHorarios()">
-                    <i class="fa-solid fa-floppy-disk"></i> Guardar Horarios
+                <p id="login-error" style="color: var(--status-red); font-size: 11.5px; display: none; margin-top: 6px;"></p>
+            </div>
+            <div class="modal-footer" style="padding: 10px 16px;">
+                <button class="btn btn-gold" id="btn-login" onclick="iniciarSesion()" style="font-size: 12.5px; padding: 6px 14px;">
+                    <i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión
                 </button>
             </div>
         </div>
@@ -901,9 +885,11 @@
                 <input type="text" id="fecha-input" placeholder="YYYY-MM-DD">
             </div>
 
-            <button class="btn btn-outline" id="btn-modal-horarios" onclick="abrirModalHorarios()" title="Configurar horarios de envío automático a Teams">
-                <i class="fa-solid fa-clock" style="color: var(--goodyear-racing-navy);"></i> Horarios de Envío
-            </button>
+            <span id="lbl-usuario-sesion" style="font-size: 12px; color: #64748B; display: none; align-items: center; gap: 6px;">
+                <img id="lbl-usuario-foto" src="" alt="" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; display: none; border: 1px solid var(--card-border);">
+                <i id="lbl-usuario-icono" class="fa-solid fa-circle-user"></i> <span id="lbl-usuario-nombre"></span>
+                <button class="btn btn-outline" id="btn-logout" onclick="cerrarSesion()" style="padding: 3px 8px; font-size: 11px;">Cerrar sesión</button>
+            </span>
 
             <div class="input-group-custom">
                 <i class="fa-solid fa-clock-rotate-left" style="color: var(--goodyear-racing-navy);"></i>
@@ -919,13 +905,14 @@
                 <i class="fa-solid fa-rotate"></i> Actualizar
             </button>
 
-            <button class="btn btn-gold" id="btn-captura-manual" onclick="enviarCapturaManual()"
-                    title="Generar captura del reporte en el servidor y enviarla a Teams (sin importar la hora)"
+            <button class="btn btn-gold" id="btn-capturar" onclick="capturarReporte()"
+                    title="Capturar el reporte como imagen"
                     style="padding: 4px 10px; font-size: 11.5px; font-weight: 700; border-radius: 4px; gap: 5px; height: 31px;">
-                <i class="fa-solid fa-camera"></i> Captura Manual
+                <i class="fa-solid fa-camera"></i> Capturar
             </button>
         </div>
     </div>
+
 
     <!-- ================= REPORT CARD TO EXPORT ================= -->
     <div id="report-card">
@@ -1155,18 +1142,18 @@
                             <th style="width: 90px;">Hora</th>
                             <th style="width: 170px;">Equipo / Máquina</th>
                             <th>Título / Problema</th>
-                            <th style="width: 110px; text-align: center;">Tiempo (TP)</th>
-                            <th>Detalle Intervención</th>
+                            <th style="width: 140px;">Reportado por</th>
+                            <th>Repuestos utilizados</th>
                         </tr>
                     </thead>
                     <tbody id="orders-tbody">
                         <tr>
                             <td><span class="badge-ot">7596476</span></td>
-                            <td style="font-family: var(--font-mono); font-weight:700;">07:33:10</td>
+                            <td style="font-family: var(--font-mono); font-weight:800;">07:33:10</td>
                             <td><b>L504-Z13-MOTOPOLIN</b><br><span style="font-size:11px; color:var(--goodyear-black); font-weight:600;">CONVEYOR MOTOPOLIN ZONA 13</span></td>
                             <td><b>Tarjeta CV bypass</b></td>
-                            <td style="text-align: center; font-family: var(--font-mono); font-weight:700;">0 min</td>
-                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:500;">Intervención técnica en tarjeta bypass de Zona 13 (sin impacto en parada de línea).</td>
+                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">Manuel Rivera</td>
+                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">Sin repuestos registrados.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1217,6 +1204,9 @@
                 const res = await fetch(`/api/consolidado-turno?fecha=${fecha}&turno=${turno}`);
                 if (!res.ok) throw new Error("Error en respuesta del servidor");
                 currentData = await res.json();
+                if (currentData.ordenes_auth_required) {
+                    mostrarModalLogin("Tu sesión SAP expiró. Iniciá sesión de nuevo para ver las órdenes.");
+                }
                 renderReport(currentData);
                 showToast("Datos actualizados correctamente.");
             } catch (err) {
@@ -1227,63 +1217,134 @@
             }
         }
 
-        let cooldownTimer = null;
-
-        function iniciarCooldownBoton(btn, segundos = 60) {
-            if (cooldownTimer) clearInterval(cooldownTimer);
-            btn.disabled = true;
-            let restante = segundos;
-            btn.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> Esperar (${restante}s)`;
-            btn.style.opacity = '0.75';
-            btn.style.cursor = 'not-allowed';
-
-            cooldownTimer = setInterval(() => {
-                restante--;
-                if (restante <= 0) {
-                    clearInterval(cooldownTimer);
-                    cooldownTimer = null;
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.cursor = 'pointer';
-                    btn.innerHTML = `<i class="fa-solid fa-camera"></i> Captura Manual`;
-                } else {
-                    btn.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> Esperar (${restante}s)`;
-                }
-            }, 1000);
+        // ================= LOGIN SAP (LDAP) =================
+        function mostrarModalLogin(mensajeError) {
+            document.getElementById('modal-login').classList.add('active');
+            const errEl = document.getElementById('login-error');
+            if (mensajeError) {
+                errEl.innerText = mensajeError;
+                errEl.style.display = 'block';
+            } else {
+                errEl.style.display = 'none';
+            }
         }
 
-        async function enviarCapturaManual() {
-            const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
-            const turno = document.getElementById('turno-select').value || 'T2';
-            const btn = document.getElementById('btn-captura-manual');
-            
-            btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generando...`;
-            showToast("Generando captura en el servidor...");
-            
+        function ocultarModalLogin() {
+            document.getElementById('modal-login').classList.remove('active');
+        }
+
+        function mostrarUsuarioSesion(displayName, photoUrl) {
+            const lbl = document.getElementById('lbl-usuario-sesion');
+            document.getElementById('lbl-usuario-nombre').innerText = displayName;
+            const foto = document.getElementById('lbl-usuario-foto');
+            const icono = document.getElementById('lbl-usuario-icono');
+            if (photoUrl) {
+                foto.src = photoUrl;
+                foto.style.display = 'inline-block';
+                foto.onerror = () => { foto.style.display = 'none'; icono.style.display = 'inline'; };
+                icono.style.display = 'none';
+            } else {
+                foto.style.display = 'none';
+                icono.style.display = 'inline';
+            }
+            lbl.style.display = 'inline-flex';
+        }
+
+        async function verificarSesion() {
             try {
-                const res = await fetch(`/api/send-teams?fecha=${fecha}&turno=${turno}&force=true`);
+                const res = await fetch('/api/auth/status');
                 const data = await res.json();
-                
-                if (res.status === 429 || data.rate_limited) {
-                    showToast(`⏳ ${data.message}`);
-                    iniciarCooldownBoton(btn, data.remaining_seconds || 60);
-                    return;
+                if (data.authenticated) {
+                    mostrarUsuarioSesion(data.display_name || data.username, data.photo_url);
+                    ocultarModalLogin();
+                    return true;
                 }
-                
+            } catch (err) {
+                console.error("Error verificando sesión:", err);
+            }
+            mostrarModalLogin();
+            return false;
+        }
+
+        async function iniciarSesion() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            const btn = document.getElementById('btn-login');
+
+            if (!username || !password) {
+                mostrarModalLogin("Ingresá usuario y contraseña.");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Ingresando...`;
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
                 if (data.success) {
-                    showToast(`✅ Captura enviada: ${data.message}`);
-                    iniciarCooldownBoton(btn, 60);
+                    document.getElementById('login-password').value = '';
+                    mostrarUsuarioSesion(data.display_name || data.username, data.photo_url);
+                    ocultarModalLogin();
+                    await cargarDatos();
                 } else {
-                    showToast(`⚠️ Error: ${data.message || data.error || 'no se pudo enviar'}`);
-                    btn.disabled = false;
-                    btn.innerHTML = `<i class="fa-solid fa-camera"></i> Captura Manual`;
+                    mostrarModalLogin(data.error || "Credenciales inválidas.");
                 }
             } catch (err) {
                 console.error(err);
-                showToast("Error al conectar con el servidor.");
+                mostrarModalLogin("Error de conexión con el servidor.");
+            } finally {
                 btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-camera"></i> Captura Manual`;
+                btn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión`;
+            }
+        }
+
+        async function cerrarSesion() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (err) {
+                console.error(err);
+            }
+            document.getElementById('lbl-usuario-sesion').style.display = 'none';
+            mostrarModalLogin();
+        }
+
+        // ================= CAPTURA DEL REPORTE (cliente, sin servidor) =================
+        async function capturarReporte() {
+            const btn = document.getElementById('btn-capturar');
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Capturando...`;
+
+            try {
+                const el = document.getElementById('report-card');
+                const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                if (!blob) throw new Error("No se pudo generar la imagen");
+
+                if (navigator.clipboard && window.ClipboardItem) {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    showToast("✅ Captura copiada al portapapeles.");
+                } else {
+                    // Fallback: navegador sin soporte de Clipboard API para imágenes
+                    const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
+                    const turno = document.getElementById('turno-select').value || 'T2';
+                    const link = document.createElement('a');
+                    link.download = `entrega-turno-${turno}-${fecha}.png`;
+                    link.href = URL.createObjectURL(blob);
+                    link.click();
+                    showToast("⚠️ Tu navegador no soporta copiar imágenes; se descargó el archivo.");
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Error al generar la captura.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-camera"></i> Capturar`;
             }
         }
 
@@ -1338,7 +1399,10 @@
             }
 
             // Presses - barras segmentadas con colores del dashboard PRESS DELIVERY
-            document.getElementById('lbl-press-global').innerText = `Cumpl: ${pr.cumplimiento_global_pct || 0}%`;
+            let globalEstopTime = 0;
+            let globalTotalTime = 0;
+            let globalDelivered = 0;
+            let globalVulcanized = 0;
             const pressList = document.getElementById('press-list');
             pressList.innerHTML = '';
             const prensasArr = (pr.resumen_prensas && pr.resumen_prensas.length > 0) ? pr.resumen_prensas : [
@@ -1358,14 +1422,23 @@
                 const prensaPct = (t.prensa / totalTime) * 100;
                 const estopPct = (t.estop / totalTime) * 100;
 
-                const compliance = p.pct || 0;
-                const complianceColor = compliance >= 98.0 ? 'var(--status-green)' : (compliance >= 95.0 ? 'var(--status-amber)' : 'var(--status-red)');
+                globalEstopTime += t.estop;
+                globalTotalTime += totalTime;
+                globalDelivered += (p.delivered_robot || 0);
+                globalVulcanized += (p.vulcanized || 0);
+
+                // % operativo: 100% menos el tiempo real en falla (E-Stop). Si no hubo E-Stop, es 100%.
+                const operativoPct = 100 - estopPct;
+                const operativoColor = operativoPct >= 99.0 ? 'var(--status-green)' : (operativoPct >= 95.0 ? 'var(--status-amber)' : 'var(--status-red)');
+
+                // % de despachos realizados por robot (antiguo "compliance"): métrica secundaria, no de falla.
+                const despachosPorRobot = p.pct || 0;
 
                 pressList.innerHTML += `
                     <div class="press-item">
                         <div class="press-header-row">
                             <span class="press-group-name">${p.press}</span>
-                            <span class="press-pct" style="color: ${complianceColor};">${compliance.toFixed(1)}%</span>
+                            <span class="press-pct" style="color: ${operativoColor};">${operativoPct.toFixed(1)}%</span>
                         </div>
                         <div class="progress-bar-bg">
                             <div class="press-segment" data-tooltip="Despacho robots: ${t.despachando.toFixed(0)}m (${despPct.toFixed(1)}%)" style="width: ${despPct}%; background-color: #22c55e;"></div>
@@ -1378,10 +1451,16 @@
                             <span>Robot: <b>${p.delivered_robot}</b></span>
                             <span>Manual: <b>${p.manual}</b></span>
                             <span>Total: <b>${p.vulcanized}</b></span>
+                            <span style="opacity: 0.6; font-size: 0.85em;">% despachos por robot: ${despachosPorRobot.toFixed(1)}%</span>
                         </div>
                     </div>
                 `;
             });
+
+            const globalOperativoPct = globalTotalTime > 0 ? (100 - (globalEstopTime / globalTotalTime * 100)) : 100.0;
+            const globalDespachosPorRobot = globalVulcanized > 0 ? (globalDelivered / globalVulcanized * 100) : 100.0;
+            document.getElementById('lbl-press-global').innerText = `Operativo: ${globalOperativoPct.toFixed(1)}%`;
+
 
             // Orders Table
             const orderCountText = ord.length === 1 ? '1 Orden Registrada' : (ord.length === 0 ? 'Sin Órdenes Registradas' : `${ord.length} Órdenes Registradas`);
@@ -1390,21 +1469,24 @@
             tbody.innerHTML = '';
             if (ord.length > 0) {
                 ord.forEach(o => {
+                    const repuestos = (o.repuestos && o.repuestos.length > 0)
+                        ? o.repuestos.map(r => `<div style="font-weight:800;">• ${r}</div>`).join('')
+                        : 'Sin repuestos registrados.';
                     tbody.innerHTML += `
                         <tr>
                             <td><span class="badge-ot">${o.ot}</span></td>
                             <td style="font-family: var(--font-mono); font-weight:800; font-size:14px;">${o.hora}</td>
                             <td><b style="font-size:14px;">${o.maquina || o.equipo}</b><br><span style="font-size:12px; color:#475569; font-weight:700;">${o.equipo}</span></td>
                             <td><b style="font-size:14px;">${o.titulo}</b></td>
-                            <td style="text-align: center; font-family: var(--font-mono); font-weight:800; font-size:14px;">${o.tp_min} min</td>
-                            <td style="font-size:14px; color:var(--goodyear-black); font-weight:500; line-height:1.4;">${o.detalle || o.titulo || 'Sin observaciones adicionales registradas.'}</td>
+                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">${o.reportado_por || '-'}</td>
+                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800; line-height:1.4;">${repuestos}</td>
                         </tr>
                     `;
                 });
             } else {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align:center; padding:20px; color:var(--goodyear-dark-gray);">
+                        <td colspan="5" style="text-align:center; padding:20px; color:var(--goodyear-dark-gray);">
                             <i class="fa-solid fa-circle-check" style="color:var(--status-green); font-size:18px;"></i><br>
                             Sin eventos correctivos reportados en este turno.
                         </td>
@@ -1428,63 +1510,15 @@
             }
         }
 
-        // ================= GESTIÓN DE HORARIOS DE ENVÍO =================
-        function abrirModalHorarios() {
-            document.getElementById('modal-horarios').classList.add('active');
-            cargarConfigHorarios();
-        }
-
-        function cerrarModalHorarios() {
-            document.getElementById('modal-horarios').classList.remove('active');
-        }
-
-        async function cargarConfigHorarios() {
-            try {
-                const res = await fetch('/api/schedule-config');
-                if (res.ok) {
-                    const cfg = await res.json();
-                    document.getElementById('cfg-auto-enabled').checked = cfg.auto_send_enabled !== false;
-                    document.getElementById('cfg-t1-time').value = cfg.t1_time || '06:45';
-                    document.getElementById('cfg-t2-time').value = cfg.t2_time || '14:45';
-                    document.getElementById('cfg-t3-time').value = cfg.t3_time || '22:45';
-                }
-            } catch (err) {
-                console.error("Error al cargar config de horarios:", err);
-            }
-        }
-
-        async function guardarConfigHorarios() {
-            const payload = {
-                auto_send_enabled: document.getElementById('cfg-auto-enabled').checked,
-                t1_time: document.getElementById('cfg-t1-time').value,
-                t2_time: document.getElementById('cfg-t2-time').value,
-                t3_time: document.getElementById('cfg-t3-time').value
-            };
-
-            try {
-                const res = await fetch('/api/schedule-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast("✅ Horarios de envío guardados exitosamente.");
-                    cerrarModalHorarios();
-                } else {
-                    showToast(`⚠️ Error al guardar: ${data.error}`);
-                }
-            } catch (err) {
-                console.error(err);
-                showToast("Error de conexión al guardar configuración.");
-            }
-        }
-
-        // Auto load on startup
-        window.addEventListener('DOMContentLoaded', () => {
-            cargarDatos();
+        // Auto load on startup: primero verifica sesión, recién ahí carga datos
+        window.addEventListener('DOMContentLoaded', async () => {
+            const logueado = await verificarSesion();
             cargarTicketToolbar();
-            cargarConfigHorarios();
+            if (logueado) {
+                cargarDatos();
+            } else {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
         });
     </script>
 </body>

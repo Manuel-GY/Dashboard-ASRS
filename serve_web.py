@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import json
+import secrets
 import sqlite3
 import threading
 from datetime import datetime, timedelta
@@ -17,7 +18,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] (%(n
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from bs4 import BeautifulSoup
 
 DB_PATH = 'shift_history.db'
@@ -28,11 +29,28 @@ SAP_PASSWORD = os.environ.get("SAP_PASSWORD")
 SAP_LOGIN_URL = os.environ.get("SAP_LOGIN_URL")
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "schedule_config.json")
 
+# Árbol de equipos ASRS en SAP: todo lo que cuelga de L504-5200 (grúas, conveyors, horseshoes, robots, etc.)
+ASRS_TREE_ROOT_FL = "L504-5200"
+ASRS_TREE_CACHE_FILE = os.path.join(os.path.dirname(__file__), "asrs_tree_cache.json")
+ASRS_TREE_TTL_SECONDS = 24 * 3600
+# Fallback si el portal no responde y no hay cache previo del árbol
+ASRS_KEYWORDS_FALLBACK = ("L504-ASRS", "L504-PLMT", "PLMT")
+_asrs_tree_cache = {"ids": None, "loaded_at": 0}
+
+# Login por usuario (LDAP) para Entrega de Turno: cada persona usa su propia cuenta,
+# la sesión autenticada contra el portal SAP se guarda en memoria del servidor (nunca la contraseña).
+AUTH_SESSION_TTL_SECONDS = 9 * 3600
+_user_portal_sessions = {}
+_user_sessions_lock = threading.Lock()
+
 TURNOS_ENTREGA = {
     "T1": {"nombre": "Turno Noche (T1)", "inicio": "22:00:00", "fin": "06:00:00", "cruza_medianoche": True},
     "T2": {"nombre": "Turno Mañana (T2)", "inicio": "06:00:00", "fin": "14:00:00", "cruza_medianoche": False},
     "T3": {"nombre": "Turno Tarde (T3)", "inicio": "14:00:00", "fin": "22:00:00", "cruza_medianoche": False},
 }
+
+# Margen de tolerancia: órdenes cargadas poco después del cierre nominal siguen contando para el turno que termina
+SHIFT_GRACE_MINUTES = 59
 
 
 # ============================================================================
@@ -199,6 +217,9 @@ def init_db():
 # ============================================================================
 
 app = Flask(__name__, static_folder='static', static_url_path='')
+# Necesario para la sesión de login (cookie firmada); no persiste entre reinicios del server.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 
 @app.after_request
 def add_cors_headers(response):
@@ -206,6 +227,123 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
     return response
+
+
+def _get_authenticated_portal_session():
+    """
+    Retorna (requests.Session, portal_base, username) de la sesión LDAP del usuario logueado
+    en el navegador actual, o (None, None, None) si no hay sesión válida/vigente.
+    """
+    entry = _get_auth_entry()
+    if not entry:
+        return None, None, None
+    return entry["session"], entry["portal_base"], entry["username"]
+
+
+def _get_auth_entry():
+    """Retorna el dict completo de la sesión autenticada (incluye display_name/photo_url) o None."""
+    token = session.get("auth_token")
+    if not token:
+        return None
+    with _user_sessions_lock:
+        entry = _user_portal_sessions.get(token)
+        if not entry:
+            return None
+        if (time.time() - entry["created_at"]) >= AUTH_SESSION_TTL_SECONDS:
+            _user_portal_sessions.pop(token, None)
+            return None
+        return entry
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_auth_login():
+    """Login LDAP contra el portal SAP; cada usuario usa su propia cuenta."""
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    password = str(data.get("password") or "")
+    if not username or not password:
+        return jsonify({"success": False, "error": "Usuario y contraseña son requeridos"}), 400
+
+    portal_url = (SAP_LOGIN_URL or "").strip()
+    if not portal_url:
+        return jsonify({"success": False, "error": "El servidor no tiene configurado SAP_LOGIN_URL"}), 500
+
+    portal_session = requests.Session()
+    portal_session.trust_env = False
+    portal_session.verify = False
+    portal_session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    })
+
+    try:
+        login_resp = portal_session.post(
+            portal_url,
+            json={"username": username, "password": password, "sap_target": os.environ.get("SAP_TARGET", "L1P")},
+            timeout=15,
+        )
+        login_payload = login_resp.json() if login_resp.content else {}
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error de conexión con el portal SAP: {e}"}), 502
+
+    if login_resp.status_code not in (200, 201) or not login_payload.get("success"):
+        return jsonify({"success": False, "error": login_payload.get("error") or "Credenciales inválidas"}), 401
+
+    portal_base = portal_url.rsplit("/api/auth/login", 1)[0] if "/api/auth/login" in portal_url else ""
+    if not portal_base:
+        return jsonify({"success": False, "error": "SAP_LOGIN_URL mal configurado en el servidor"}), 500
+
+    display_name, photo_url = username, ""
+    try:
+        status_resp = portal_session.get(f"{portal_base}/api/auth/status", timeout=10)
+        status_payload = status_resp.json() if status_resp.content else {}
+        user_info = status_payload.get("data", {}).get("user", {})
+        display_name = user_info.get("display_name") or username
+        photo_url = user_info.get("photo_url") or ""
+    except Exception as e:
+        print(f"[WARN] No se pudo obtener el nombre del usuario desde el portal: {e}")
+
+    token = secrets.token_urlsafe(32)
+    with _user_sessions_lock:
+        _user_portal_sessions[token] = {
+            "session": portal_session,
+            "portal_base": portal_base,
+            "username": username,
+            "display_name": display_name,
+            "photo_url": photo_url,
+            "created_at": time.time(),
+        }
+
+    session.clear()
+    session["auth_token"] = token
+    session["username"] = username
+    session.permanent = False
+    return jsonify({"success": True, "username": username, "display_name": display_name, "photo_url": photo_url})
+
+
+@app.route("/api/auth/status")
+def api_auth_status():
+    entry = _get_auth_entry()
+    if not entry:
+        return jsonify({"success": True, "authenticated": False, "username": None})
+    return jsonify({
+        "success": True,
+        "authenticated": True,
+        "username": entry["username"],
+        "display_name": entry.get("display_name") or entry["username"],
+        "photo_url": entry.get("photo_url") or "",
+    })
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_auth_logout():
+    token = session.pop("auth_token", None)
+    session.pop("username", None)
+    if token:
+        with _user_sessions_lock:
+            _user_portal_sessions.pop(token, None)
+    return jsonify({"success": True})
 
 
 # ============================================================================
@@ -663,6 +801,163 @@ def get_shift_range_entrega(fecha_str, turno_key):
         
     return dt_start, dt_end
 
+
+def _portal_login_session():
+    """Crea una sesión autenticada (LDAP) contra el portal SAP configurado en SAP_LOGIN_URL."""
+    portal_url = (SAP_LOGIN_URL or "").strip()
+    if not portal_url or not SAP_USERNAME or not SAP_PASSWORD:
+        return None, None
+
+    session = requests.Session()
+    session.trust_env = False
+    session.verify = False
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    })
+    try:
+        login_resp = session.post(
+            portal_url,
+            json={"username": SAP_USERNAME, "password": SAP_PASSWORD, "sap_target": os.environ.get("SAP_TARGET", "L1P")},
+            timeout=15,
+        )
+        login_payload = login_resp.json() if login_resp.content else {}
+        if login_resp.status_code not in (200, 201) or not login_payload.get("success"):
+            print(f"[WARN] Login portal SAP falló: {login_resp.status_code} {login_payload}")
+            return None, None
+    except Exception as e:
+        print(f"[WARN] Error autenticando portal SAP: {e}")
+        return None, None
+
+    portal_base = portal_url.rsplit("/api/auth/login", 1)[0] if "/api/auth/login" in portal_url else ""
+    if not portal_base:
+        return None, None
+    return session, portal_base
+
+
+def _fetch_asset_tree_children(session, portal_base, parent_id):
+    try:
+        resp = session.get(f"{portal_base}/api/asset-tree/children", params={"parent_id": parent_id}, timeout=8)
+        payload = resp.json() if resp.content else {}
+        if resp.status_code == 200 and payload.get("success"):
+            return payload.get("data", [])
+    except Exception as e:
+        print(f"[WARN] Error consultando asset-tree/children({parent_id}): {e}")
+    return []
+
+
+def _walk_asset_tree(session, portal_base, node_id, collected):
+    for child in _fetch_asset_tree_children(session, portal_base, node_id):
+        cid = child.get("id")
+        if not cid:
+            continue
+        collected.add(cid)
+        print(f"  [{len(collected)}] {cid}")
+        if child.get("has_children"):
+            _walk_asset_tree(session, portal_base, cid, collected)
+
+
+def get_asrs_functional_locations(auth_session=None, portal_base_override=None):
+    """
+    Retorna el set de FL/EQ que cuelgan de L504-5200 (ASRS) en el árbol de equipos SAP.
+    Se cachea en memoria y en disco (TTL 24h) para no golpear el portal en cada request.
+    Si se pasa una sesión ya autenticada (del usuario logueado), se reutiliza esa en vez de loguear con env vars.
+    """
+    now = time.time()
+    if _asrs_tree_cache["ids"] is not None and (now - _asrs_tree_cache["loaded_at"]) < ASRS_TREE_TTL_SECONDS:
+        return _asrs_tree_cache["ids"]
+
+    if os.path.exists(ASRS_TREE_CACHE_FILE):
+        try:
+            with open(ASRS_TREE_CACHE_FILE, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            if (now - cached.get("loaded_at", 0)) < ASRS_TREE_TTL_SECONDS and cached.get("ids"):
+                ids = set(cached["ids"])
+                _asrs_tree_cache["ids"] = ids
+                _asrs_tree_cache["loaded_at"] = cached.get("loaded_at", now)
+                return ids
+        except Exception as e:
+            print(f"[WARN] Error leyendo cache de árbol ASRS: {e}")
+
+    if auth_session is not None and portal_base_override:
+        session_obj, portal_base = auth_session, portal_base_override
+    else:
+        session_obj, portal_base = _portal_login_session()
+    if not session_obj:
+        print("[WARN] No se pudo autenticar contra el portal para traer el árbol ASRS; se usará cache anterior si existe.")
+        return _asrs_tree_cache["ids"] or set()
+
+    collected = {ASRS_TREE_ROOT_FL}
+    _walk_asset_tree(session_obj, portal_base, ASRS_TREE_ROOT_FL, collected)
+    if len(collected) <= 1:
+        print("[WARN] El árbol ASRS quedó vacío; se usará cache anterior si existe.")
+        return _asrs_tree_cache["ids"] or set()
+
+    _asrs_tree_cache["ids"] = collected
+    _asrs_tree_cache["loaded_at"] = now
+    try:
+        with open(ASRS_TREE_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"ids": sorted(collected), "loaded_at": now}, f)
+    except Exception as e:
+        print(f"[WARN] Error guardando cache de árbol ASRS: {e}")
+
+    print(f"[INFO] Árbol ASRS actualizado: {len(collected)} FL/EQ encontrados bajo {ASRS_TREE_ROOT_FL}.")
+    return collected
+
+
+def _is_asrs_location(value, ids_set):
+    """Determina si un FL/EQ de una orden pertenece al árbol ASRS (match exacto o por prefijo jerárquico)."""
+    if not value or not ids_set:
+        return False
+    if value in ids_set:
+        return True
+    parts = value.split("-")
+    for i in range(len(parts) - 1, 0, -1):
+        if "-".join(parts[:i]) in ids_set:
+            return True
+    return False
+
+
+def _fetch_order_time_and_detail(get_json_fn, base_url, order_id, notification_id):
+    """
+    Trae hora real (malf_start_time), autor y repuestos usados desde /api/orders/{id}, y el
+    texto largo del trabajo realizado desde /api/notifications/{id}.
+    Retorna (order_dt|None, detalle|None, reportado_por|None, repuestos: list[str]).
+    """
+    order_dt = None
+    detail_text = None
+    reported_by = None
+    components = []
+
+    detail_payload = get_json_fn(f"{base_url}/api/orders/{order_id}")
+    if detail_payload and detail_payload.get("success"):
+        d = detail_payload.get("data", {}) or {}
+        malf_date = str(d.get("malf_start_date") or d.get("start_date") or "").strip()
+        malf_time = str(d.get("malf_start_time") or "").strip()
+        if malf_date:
+            for fmt in (("%d/%m/%Y %H:%M" if malf_time else "%d/%m/%Y"),):
+                try:
+                    order_dt = datetime.strptime(f"{malf_date} {malf_time}".strip() if malf_time else malf_date, fmt)
+                except ValueError:
+                    order_dt = None
+
+        reported_by = str(d.get("created_by_name") or d.get("created_by") or "").strip() or None
+        for comp in d.get("components", []) or []:
+            desc = str(comp.get("description") or "").strip()
+            qty = str(comp.get("quantity") or "").strip().rstrip("0").rstrip(".")
+            unit = str(comp.get("unit") or "").strip()
+            if desc:
+                components.append(f"{desc} ({qty} {unit})".strip() if qty else desc)
+
+    if notification_id:
+        notif_payload = get_json_fn(f"{base_url}/api/notifications/{notification_id}")
+        if notif_payload and notif_payload.get("success"):
+            detail_text = str(notif_payload.get("data", {}).get("long_text") or "").strip() or None
+
+    return order_dt, detail_text, reported_by, components
+
+
 @app.route("/api/consolidado-turno")
 def api_consolidado_turno():
     now_date, now_shift = get_current_shift_info()
@@ -802,8 +1097,8 @@ def api_consolidado_turno():
 
     def fetch_orders_indicadores_planta():
         """
-        Fuente primaria de órdenes del turno: portal SAP PM interno con LDAP.
-        Solo se usa en la sección de Entrega de Turno para filtrar por el turno actual.
+        Fuente de órdenes del turno: portal SAP PM interno, usando la sesión LDAP del usuario
+        logueado en el navegador. Retorna (orders_list, auth_required).
         """
         def parse_order_date(value):
             if not value:
@@ -816,186 +1111,107 @@ def api_consolidado_turno():
                     pass
             return None
 
-        def fetch_orders_portal_turno():
-            if not SAP_USERNAME or not SAP_PASSWORD:
-                return []
+        portal_session, portal_base, _username = _get_authenticated_portal_session()
+        if not portal_session:
+            return [], True
 
-            portal_url = (SAP_LOGIN_URL or "http://10.107.194.110:5000/api/auth/login").strip()
-            portal_base = portal_url.rsplit("/api/auth/login", 1)[0] if "/api/auth/login" in portal_url else "http://10.107.194.110:5000"
-            api_orders_url = f"{portal_base}/api/orders"
+        try:
+            from_date = min(dt_start, dt_end).strftime("%Y%m%d")
+            to_date = max(dt_start, dt_end).strftime("%Y%m%d")
+            params = {
+                "plant": "L504",
+                "page": 1,
+                "per_page": 500,
+                "date_from": from_date,
+                "date_to": to_date,
+            }
+            api_resp = portal_session.get(f"{portal_base}/api/orders", params=params, timeout=20)
+            api_payload = api_resp.json() if api_resp.content else {}
+            if api_resp.status_code != 200 or not api_payload.get("data"):
+                return [], False
 
-            session = requests.Session()
-            session.trust_env = False
-            session.verify = False
-            session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            })
+            asrs_ids = get_asrs_functional_locations(portal_session, portal_base)
+            orders_list = []
+            seen = set()
 
-            try:
-                login_resp = session.post(
-                    portal_url,
-                    json={"username": SAP_USERNAME, "password": SAP_PASSWORD, "sap_target": "L1P"},
-                    timeout=15,
+            def _get_json_portal(url):
+                try:
+                    r = portal_session.get(url, timeout=15)
+                    return r.json() if r.status_code == 200 and r.content else None
+                except Exception as e:
+                    print(f"[WARN] Error consultando {url}: {e}")
+                    return None
+
+            for order in api_payload.get("data", []):
+                order_number = str(order.get("number") or order.get("id") or "").strip()
+                if not order_number or order_number in seen:
+                    continue
+
+                order_type = str(order.get("type") or "").strip().upper()
+                if order_type != "ZM01":
+                    continue
+
+                functional_location = str(order.get("functional_location") or "").strip().upper()
+                equipment = str(order.get("equipment") or "").strip().upper()
+                is_asrs = _is_asrs_location(functional_location, asrs_ids) or _is_asrs_location(equipment, asrs_ids)
+                if not asrs_ids and not is_asrs:
+                    is_asrs = any(kw in functional_location or kw in equipment for kw in ASRS_KEYWORDS_FALLBACK)
+                if not is_asrs:
+                    continue
+
+                order_dt = None
+                for key in ("actual_start", "start_date", "created_date", "actual_end", "end_date"):
+                    candidate = parse_order_date(order.get(key))
+                    if candidate is not None:
+                        order_dt = candidate
+                        break
+
+                if order_dt is None:
+                    continue
+
+                order_date = order_dt.date()
+                allowed_dates = {dt_start.date(), dt_end.date()}
+                if order_date not in allowed_dates:
+                    continue
+
+                order_number_digits = order_number.lstrip("0") or order_number
+                real_dt, detail_text, reported_by, repuestos = _fetch_order_time_and_detail(
+                    _get_json_portal, portal_base, order.get("id") or order_number_digits, order.get("notification")
                 )
-                login_payload = login_resp.json() if login_resp.content else {}
-                if login_resp.status_code not in (200, 201) or not login_payload.get("success"):
-                    print(f"[WARN] Login portal SAP falló para Entrega de Turno: {login_resp.status_code} {login_payload}")
-                    return []
-            except Exception as e:
-                print(f"[WARN] Error autenticando portal SAP para Entrega de Turno: {e}")
-                return []
-
-            try:
-                # El rango de fechas a consultar debe cubrir el día anterior cuando el
-                # turno T1 cruza medianoche (22:00 - 06:00).
-                from_date = min(dt_start, dt_end).strftime("%Y%m%d")
-                to_date = max(dt_start, dt_end).strftime("%Y%m%d")
-                params = {
-                    "plant": "L504",
-                    "page": 1,
-                    "per_page": 500,
-                    "date_from": from_date,
-                    "date_to": to_date,
-                }
-                api_resp = session.get(api_orders_url, params=params, timeout=20)
-                api_payload = api_resp.json() if api_resp.content else {}
-                if api_resp.status_code != 200 or not api_payload.get("data"):
-                    return []
-
-                # Nodo ASRS real del árbol SAP: "L504-5200 ASRS DISTRIBUCION DE NEUMATICOS".
-                # Toda su familia de hijos confirmada: L504-ASRS(M), L504-PLMT01..04
-                # (Plummer machines) y sus equipos/sububicaciones (ej. CH-...-PLMT0x-...).
-                ASRS_KEYWORDS = ("L504-ASRS", "L504-PLMT", "PLMT")
-
-                orders_list = []
-                seen = set()
-                for order in api_payload.get("data", []):
-                    order_number = str(order.get("number") or order.get("id") or "").strip()
-                    if not order_number or order_number in seen:
+                if real_dt is not None:
+                    # Ventana de conteo de órdenes corrida +margen: una orden cargada poco después
+                    # del cierre nominal cuenta para el turno que termina, sin duplicarse en el siguiente.
+                    order_win_start = dt_start + timedelta(minutes=SHIFT_GRACE_MINUTES)
+                    order_win_end = dt_end + timedelta(minutes=SHIFT_GRACE_MINUTES)
+                    if not (order_win_start <= real_dt <= order_win_end):
                         continue
+                    order_dt = real_dt
 
-                    order_type = str(order.get("type") or "").strip().upper()
-                    if order_type != "ZM01":
-                        continue
+                seen.add(order_number)
+                description = str(order.get("description") or "").strip() or "Sin descripción"
+                equipment_code = str(order.get("equipment") or "").strip()
+                functional_location_display = str(order.get("functional_location") or "").strip()
 
-                    functional_location = str(order.get("functional_location") or "").strip().upper()
-                    equipment = str(order.get("equipment") or "").strip().upper()
-                    if not any(kw in functional_location or kw in equipment for kw in ASRS_KEYWORDS):
-                        continue
-
-                    order_dt = None
-                    for key in ("actual_start", "start_date", "created_date", "actual_end", "end_date"):
-                        candidate = parse_order_date(order.get(key))
-                        if candidate is not None:
-                            order_dt = candidate
-                            break
-
-                    if order_dt is None:
-                        continue
-
-                    # El recurso SAP solo entrega fecha (sin hora real), por lo que el
-                    # turno se ubica por fecha: T2/T3 caen en un único día; T1 cruza
-                    # medianoche, por eso dt_start/dt_end ya cubren ambas fechas.
-                    order_date = order_dt.date()
-                    allowed_dates = {dt_start.date(), dt_end.date()}
-                    if order_date not in allowed_dates:
-                        continue
-
-                    seen.add(order_number)
-
-                    description = str(order.get("description") or "").strip() or "Sin descripción"
-                    equipment_display = str(order.get("equipment") or order.get("functional_location") or "").strip()
-                    order_number_digits = order_number.lstrip("0") or order_number
-                    orders_list.append({
-                        "ot": order_number_digits,
-                        "hora": order_dt.strftime("%H:%M:%S") if order_dt.hour or order_dt.minute or order_dt.second else "00:00:00",
-                        "equipo": equipment_display,
-                        "maquina": equipment_display,
-                        "titulo": description,
-                        "tp_min": str(order.get("parts_cost") or "0"),
-                        "detalle": description,
-                    })
-                return orders_list
-            except Exception as e:
-                print(f"[WARN] Error consultando /api/orders del portal SAP: {e}")
-                return []
-
-        portal_orders = fetch_orders_portal_turno()
-        if portal_orders:
-            return portal_orders
-
-        base_d = datetime.strptime(fecha_req, "%Y-%m-%d")
-        if turno_req == "T1":
-            fechas_query = [(base_d - timedelta(days=1)).strftime("%Y-%m-%d"), fecha_req]
-        else:
-            fechas_query = [fecha_req]
-
-        sap_session, authenticated = build_sap_session()
-        if not authenticated:
-            print("[WARN] No fue posible autenticar la sesión de Indicadores Planta; se usará fallback de inspecciones.")
-            return []
-
-        orders_list = []
-        seen = set()
-
-        for f_q in fechas_query:
-            url = f"{INDICADORES_BASE.rstrip('/')}/{f_q}"
-            try:
-                r = sap_session.get(url, timeout=12, verify=False, allow_redirects=True)
-                if r.status_code != 200:
-                    continue
-                r.encoding = "utf-8"
-                soup = BeautifulSoup(r.text, "html.parser")
-                table = soup.find("table", {"id": "tablaOfensoresDia"})
-                if not table:
-                    continue
-                for tr in table.find_all("tr"):
-                    tds = [td.get_text(strip=True) for td in tr.find_all("td")]
-                    if len(tds) < 6:
-                        continue
-                    if "ASRS" not in tds[0].upper():
-                        continue
-
-                    equipo = tds[1].strip()
-                    titulo_raw = tds[2].strip()
-                    detalle_raw = tds[3].strip()
-                    ot = tds[4].strip()
-                    fh_str = tds[5].strip()
-                    tp_min = tds[7].strip() if len(tds) > 7 else "0"
-                    if not tp_min:
-                        tp_min = "0"
-                    if not ot or not fh_str or ot in seen:
-                        continue
-
-                    try:
-                        order_dt = datetime.strptime(fh_str, "%d/%m/%Y %H:%M")
-                    except Exception:
-                        continue
-
-                    if dt_start <= order_dt < dt_end:
-                        seen.add(ot)
-                        titulo_final = _extraer_titulo_limpio(titulo_raw, detalle_raw)
-                        detalle_final = detalle_raw or titulo_raw or "Sin observaciones adicionales registradas."
-                        orders_list.append({
-                            "ot": ot,
-                            "hora": order_dt.strftime("%H:%M:%S"),
-                            "equipo": equipo,
-                            "maquina": equipo,
-                            "titulo": titulo_final,
-                            "tp_min": tp_min,
-                            "detalle": detalle_final
-                        })
-            except Exception as e:
-                print(f"[WARN] Error consultando Indicadores Planta autenticado en {url}: {e}")
-
-        return orders_list
+                orders_list.append({
+                    "ot": order_number_digits,
+                    "hora": order_dt.strftime("%H:%M:%S") if order_dt.hour or order_dt.minute or order_dt.second else "00:00:00",
+                    "equipo": equipment_code or "-",
+                    "maquina": functional_location_display or equipment_code or "-",
+                    "titulo": description,
+                    "detalle": detail_text or description,
+                    "reportado_por": reported_by or str(order.get("created_by") or "").strip() or "-",
+                    "repuestos": repuestos,
+                })
+            return orders_list, False
+        except Exception as e:
+            print(f"[WARN] Error consultando /api/orders del portal SAP: {e}")
+            return [], False
 
     # 2. Obtener órdenes de mantenimiento
     filtered_orders = []
+    orders_auth_required = False
     try:
-        filtered_orders = fetch_orders_indicadores_planta()
+        filtered_orders, orders_auth_required = fetch_orders_indicadores_planta()
     except Exception as e:
         print(f"[WARN] Error en fetch_orders_indicadores_planta: {e}")
 
@@ -1126,84 +1342,11 @@ def api_consolidado_turno():
             "cumplimiento_global_pct": global_press_pct,
             "resumen_prensas": press_summary
         },
-        "ordenes": filtered_orders
+        "ordenes": filtered_orders,
+        "ordenes_auth_required": orders_auth_required
     }
 
     return jsonify(payload)
-
-@app.route('/api/schedule-config', methods=['GET', 'POST'])
-def api_schedule_config():
-    """Lee y actualiza la configuración dinámica de horarios de Teams."""
-    from scheduler_service import load_schedule_config, CONFIG_PATH
-    
-    if request.method == 'GET':
-        return jsonify(load_schedule_config())
-        
-    try:
-        data = request.get_json() or {}
-        current_cfg = load_schedule_config()
-        current_cfg.update({
-            "auto_send_enabled": bool(data.get("auto_send_enabled", True)),
-            "t1_time": str(data.get("t1_time", "06:45")).strip(),
-            "t2_time": str(data.get("t2_time", "14:45")).strip(),
-            "t3_time": str(data.get("t3_time", "22:45")).strip(),
-            "webhook_url": str(data.get("webhook_url", current_cfg.get("webhook_url", ""))).strip()
-        })
-        
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(current_cfg, f, indent=2, ensure_ascii=False)
-            
-        return jsonify({"success": True, "config": current_cfg})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-import time
-import math
-
-_last_manual_send_lock = threading.Lock()
-_last_manual_send_time = 0.0
-
-@app.route("/api/send-teams", methods=["GET", "POST"])
-def api_send_teams():
-    global _last_manual_send_time
-    now_date, now_shift = get_current_shift_info()
-    fecha_req = request.args.get("fecha", now_date)
-    turno_req = request.args.get("turno", now_shift)
-    force = request.args.get("force", "false").lower() == "true"
-
-    if force:
-        now_ts = time.time()
-        with _last_manual_send_lock:
-            elapsed = now_ts - _last_manual_send_time
-            if elapsed < 60:
-                remaining = int(math.ceil(60 - elapsed))
-                return jsonify({
-                    "success": False,
-                    "rate_limited": True,
-                    "remaining_seconds": remaining,
-                    "message": f"Bloqueo activo: Solo se permite 1 captura de prueba por minuto. Espere {remaining}s."
-                }), 429
-            _last_manual_send_time = now_ts
-
-    from scheduler_service import consultar_ticket_programado, ejecutar_proceso_envio_turno
-    
-    total_ticket, formatted_ticket, ok = consultar_ticket_programado(port=8006)
-    if total_ticket <= 0 and not force:
-        return jsonify({
-            "success": False,
-            "skipped": True,
-            "message": f"Envío omitido: Ticket Requerido en 0 tires ({formatted_ticket}). Use force=true para forzar.",
-            "ticket": formatted_ticket
-        }), 200
-        
-    exito, msg = ejecutar_proceso_envio_turno(turno_req, fecha_req, port=8006, force=force)
-    return jsonify({
-        "success": exito,
-        "message": msg,
-        "turno": turno_req,
-        "fecha": fecha_req,
-        "ticket": formatted_ticket
-    }), (200 if exito else 500)
 
 
 # ============================================================================
@@ -1212,15 +1355,6 @@ def api_send_teams():
 
 if __name__ == '__main__':
     init_db()
-
-    # Iniciar scheduler en segundo plano
-    try:
-        from scheduler_service import iniciar_scheduler_loop
-        t_sched = threading.Thread(target=iniciar_scheduler_loop, kwargs={"port": 8006}, daemon=True)
-        t_sched.start()
-        print("Scheduler automático de Teams iniciado en segundo plano.")
-    except Exception as e:
-        print(f"Error iniciando scheduler: {e}")
 
     try:
         print("Servidor Web corriendo en el puerto 8006...")

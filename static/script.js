@@ -561,6 +561,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     let pressesHtml = '';
                     let globalDelivered = 0;
                     let globalVulcanized = 0;
+                    let globalEstopTime = 0;
+                    let globalTotalTime = 0;
                     const order = ["400B", "500A", "500B", "600A", "600B"];
                     const allWidths = [];
                     
@@ -583,15 +585,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         globalDelivered += delivered;
                         globalVulcanized += vulcanized;
+                        globalEstopTime += t.estop;
+                        globalTotalTime += totalTime;
 
-                        const compliance = vulcanized > 0 ? (delivered / vulcanized * 100) : 100.0;
-                        const complianceColor = compliance >= 98.0 ? 'var(--success-color)' : (compliance >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
+                        // % operativo: 100% menos el tiempo real en falla (E-Stop). Si no hubo E-Stop, es 100%.
+                        const operativoPct = 100 - estopPct;
+                        const operativoColor = operativoPct >= 99.0 ? 'var(--success-color)' : (operativoPct >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
+
+                        // % de despachos realizados por robot (antiguo "compliance"): métrica secundaria, no de falla.
+                        const despachosPorRobot = vulcanized > 0 ? (delivered / vulcanized * 100) : 100.0;
 
                         pressesHtml += `
                             <div class="press-row-item">
                                 <div class="press-row-header">
                                     <span class="press-row-id">${p}</span>
-                                    <span class="press-row-pct" style="color: ${complianceColor}; font-size: 0.85rem; font-weight: 800;">${compliance.toFixed(1)}%</span>
+                                    <span class="press-row-pct" style="color: ${operativoColor}; font-size: 0.85rem; font-weight: 800;">${operativoPct.toFixed(1)}%</span>
                                 </div>
                                 <div class="press-progress-bar-bg press-bar-animated">
                                     <div class="press-segment" data-tooltip="Despacho robots: ${t.despachando.toFixed(0)}m (${despPct.toFixed(1)}%)" style="width: 0%; background-color: #22c55e;"></div>
@@ -604,16 +612,22 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <span>Despacho robots: <strong>${delivered}</strong></span>
                                     <span>Carga manual: <strong>${manual}</strong></span>
                                     <span>Vulcanizados total: <strong>${vulcanized}</strong></span>
+                                    <span style="opacity: 0.65; font-size: 0.75em;">% despachos realizados por robot: ${despachosPorRobot.toFixed(1)}%</span>
                                 </div>
                             </div>
                         `;
                     });
                     
-                    const overallCompliance = globalVulcanized > 0 ? (globalDelivered / globalVulcanized * 100) : 100.0;
+                    const overallOperativoPct = globalTotalTime > 0 ? (100 - (globalEstopTime / globalTotalTime * 100)) : 100.0;
+                    const overallDespachosPorRobot = globalVulcanized > 0 ? (globalDelivered / globalVulcanized * 100) : 100.0;
                     if (overallVal) {
-                        overallVal.textContent = overallCompliance.toFixed(2) + '%';
+                        overallVal.textContent = overallOperativoPct.toFixed(2) + '%';
                     }
-                    setIndicatorColor('ind-press-delivery', overallCompliance >= 98.00);
+                    const overallSecondary = document.getElementById('press-overall-secondary');
+                    if (overallSecondary) {
+                        overallSecondary.textContent = `despachos por robot: ${overallDespachosPorRobot.toFixed(1)}%`;
+                    }
+                    setIndicatorColor('ind-press-delivery', overallOperativoPct >= 99.00);
 
                     container.innerHTML = `
                         <div class="press-delivery-right" style="width: 100%;">
