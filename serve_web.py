@@ -5,6 +5,7 @@ import json
 import secrets
 import sqlite3
 import threading
+import concurrent.futures
 from datetime import datetime, timedelta
 import time
 import math
@@ -838,7 +839,7 @@ def _portal_login_session():
 
 def _fetch_asset_tree_children(session, portal_base, parent_id):
     try:
-        resp = session.get(f"{portal_base}/api/asset-tree/children", params={"parent_id": parent_id}, timeout=8)
+        resp = session.get(f"{portal_base}/api/asset-tree/children", params={"parent_id": parent_id}, timeout=20)
         payload = resp.json() if resp.content else {}
         if resp.status_code == 200 and payload.get("success"):
             return payload.get("data", [])
@@ -847,22 +848,77 @@ def _fetch_asset_tree_children(session, portal_base, parent_id):
     return []
 
 
-def _walk_asset_tree(session, portal_base, node_id, collected):
-    for child in _fetch_asset_tree_children(session, portal_base, node_id):
-        cid = child.get("id")
-        if not cid:
-            continue
-        collected.add(cid)
-        print(f"  [{len(collected)}] {cid}")
-        if child.get("has_children"):
-            _walk_asset_tree(session, portal_base, cid, collected)
+def _walk_asset_tree(session, portal_base, root_id, collected, max_workers=4):
+    """
+    Recorre el árbol en anchura (BFS), pidiendo los hijos de cada nivel en paralelo,
+    para no hacer ~70 llamadas HTTP secuenciales (que tardaban 1-2 min en frío).
+    """
+    frontier = [root_id]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        while frontier:
+            results = executor.map(lambda node: _fetch_asset_tree_children(session, portal_base, node), frontier)
+            next_frontier = []
+            for children in results:
+                for child in children:
+                    cid = child.get("id")
+                    if not cid or cid in collected:
+                        continue
+                    collected.add(cid)
+                    if child.get("has_children"):
+                        next_frontier.append(cid)
+            frontier = next_frontier
+
+
+ASRS_TREE_SEED_FILE = os.path.join(os.path.dirname(__file__), "asrs_tree_seed.json")
+# Umbral mínimo de nodos para considerar "buena" una respuesta en vivo del portal (el árbol real tiene ~525)
+ASRS_TREE_MIN_GOOD_SIZE = 400
+
+
+def _load_asrs_tree_seed():
+    """Lista fija de respaldo (capturada manualmente una vez) por si el portal falla/está lento."""
+    try:
+        with open(ASRS_TREE_SEED_FILE, "r", encoding="utf-8") as f:
+            return set(json.load(f).get("ids", []))
+    except Exception as e:
+        print(f"[WARN] Error leyendo semilla del árbol ASRS: {e}")
+        return set()
+
+
+_asrs_tree_refresh_lock = threading.Lock()
+_asrs_tree_refreshing = False
+
+
+def _refresh_asrs_tree_background(auth_session, portal_base):
+    """Recorre el árbol real del portal en un hilo aparte y actualiza el cache si sale bien."""
+    global _asrs_tree_refreshing
+    try:
+        collected = {ASRS_TREE_ROOT_FL}
+        _walk_asset_tree(auth_session, portal_base, ASRS_TREE_ROOT_FL, collected)
+        if len(collected) >= ASRS_TREE_MIN_GOOD_SIZE:
+            now = time.time()
+            _asrs_tree_cache["ids"] = collected
+            _asrs_tree_cache["loaded_at"] = now
+            try:
+                with open(ASRS_TREE_CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump({"ids": sorted(collected), "loaded_at": now}, f)
+            except Exception as e:
+                print(f"[WARN] Error guardando cache de árbol ASRS: {e}")
+            print(f"[INFO] Árbol ASRS actualizado en segundo plano desde el portal: {len(collected)} FL/EQ.")
+        else:
+            print(f"[WARN] Actualización en segundo plano del árbol ASRS incompleta ({len(collected)} nodos); se mantiene la semilla.")
+    except Exception as e:
+        print(f"[WARN] Error actualizando árbol ASRS en segundo plano: {e}")
+    finally:
+        with _asrs_tree_refresh_lock:
+            _asrs_tree_refreshing = False
 
 
 def get_asrs_functional_locations(auth_session=None, portal_base_override=None):
     """
     Retorna el set de FL/EQ que cuelgan de L504-5200 (ASRS) en el árbol de equipos SAP.
-    Se cachea en memoria y en disco (TTL 24h) para no golpear el portal en cada request.
-    Si se pasa una sesión ya autenticada (del usuario logueado), se reutiliza esa en vez de loguear con env vars.
+    Responde al instante con cache (memoria/disco, TTL 24h) o con la semilla fija (asrs_tree_seed.json)
+    si no hay cache vigente, y dispara una actualización real contra el portal en segundo plano
+    (sin bloquear la respuesta) para refrescar el cache de cara a la próxima consulta.
     """
     now = time.time()
     if _asrs_tree_cache["ids"] is not None and (now - _asrs_tree_cache["loaded_at"]) < ASRS_TREE_TTL_SECONDS:
@@ -880,30 +936,31 @@ def get_asrs_functional_locations(auth_session=None, portal_base_override=None):
         except Exception as e:
             print(f"[WARN] Error leyendo cache de árbol ASRS: {e}")
 
+    # Sin cache vigente: responder al instante con la semilla fija y refrescar en segundo plano.
+    seed_ids = _load_asrs_tree_seed()
+    _asrs_tree_cache["ids"] = seed_ids
+    # Marca el cache como "viejo" (expira pronto) para reintentar el refresco real en la próxima consulta.
+    _asrs_tree_cache["loaded_at"] = now - ASRS_TREE_TTL_SECONDS + 300
+
     if auth_session is not None and portal_base_override:
         session_obj, portal_base = auth_session, portal_base_override
     else:
         session_obj, portal_base = _portal_login_session()
-    if not session_obj:
-        print("[WARN] No se pudo autenticar contra el portal para traer el árbol ASRS; se usará cache anterior si existe.")
-        return _asrs_tree_cache["ids"] or set()
 
-    collected = {ASRS_TREE_ROOT_FL}
-    _walk_asset_tree(session_obj, portal_base, ASRS_TREE_ROOT_FL, collected)
-    if len(collected) <= 1:
-        print("[WARN] El árbol ASRS quedó vacío; se usará cache anterior si existe.")
-        return _asrs_tree_cache["ids"] or set()
+    if session_obj:
+        global _asrs_tree_refreshing
+        with _asrs_tree_refresh_lock:
+            already_running = _asrs_tree_refreshing
+            _asrs_tree_refreshing = True
+        if not already_running:
+            print(f"[INFO] Usando semilla del árbol ASRS ({len(seed_ids)} nodos) mientras se actualiza en segundo plano...")
+            threading.Thread(
+                target=_refresh_asrs_tree_background, args=(session_obj, portal_base), daemon=True
+            ).start()
+    else:
+        print("[WARN] No se pudo autenticar contra el portal para refrescar el árbol ASRS; se usa la semilla fija.")
 
-    _asrs_tree_cache["ids"] = collected
-    _asrs_tree_cache["loaded_at"] = now
-    try:
-        with open(ASRS_TREE_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"ids": sorted(collected), "loaded_at": now}, f)
-    except Exception as e:
-        print(f"[WARN] Error guardando cache de árbol ASRS: {e}")
-
-    print(f"[INFO] Árbol ASRS actualizado: {len(collected)} FL/EQ encontrados bajo {ASRS_TREE_ROOT_FL}.")
-    return collected
+    return seed_ids
 
 
 def _is_asrs_location(value, ids_set):
