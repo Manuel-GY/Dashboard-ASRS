@@ -834,32 +834,172 @@
             justify-content: space-between;
             gap: 10px;
         }
+
+        /* ================= MODAL LOGIN SAP (LDAP) ================= */
+        .login-modal-card {
+            background: var(--goodyear-white);
+            width: 380px;
+            max-width: 95vw;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(11, 29, 69, 0.4);
+            border: none;
+            transform: scale(0.94) translateY(8px);
+            transition: transform 0.25s ease;
+        }
+
+        .modal-overlay.active .login-modal-card {
+            transform: scale(1) translateY(0);
+        }
+
+        .login-modal-header {
+            background: linear-gradient(160deg, var(--goodyear-racing-navy) 0%, #132E6B 100%);
+            padding: 28px 24px 20px;
+            text-align: center;
+            border-bottom: 3px solid var(--goodyear-trophy-gold);
+        }
+
+        .login-modal-header img {
+            height: 32px;
+            margin-bottom: 14px;
+        }
+
+        .login-modal-header h3 {
+            margin: 0;
+            font-family: var(--font-headline);
+            font-weight: 400;
+            font-size: 19px;
+            letter-spacing: var(--tracking-headline);
+            color: var(--goodyear-white);
+        }
+
+        .login-modal-header p {
+            margin: 6px 0 0;
+            font-family: var(--font-caption);
+            font-style: italic;
+            font-size: 13px;
+            color: rgba(255,255,255,0.75);
+        }
+
+        .login-modal-body {
+            padding: 24px 24px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .login-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .login-field label {
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--goodyear-dark-gray);
+        }
+
+        .login-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .login-input-wrap i {
+            position: absolute;
+            left: 12px;
+            color: var(--goodyear-dark-gray);
+            font-size: 14px;
+            transition: color 0.15s ease;
+        }
+
+        .login-input-wrap input {
+            width: 100%;
+            padding: 11px 12px 11px 36px;
+            font-family: var(--font-body);
+            font-size: 14px;
+            color: var(--goodyear-black);
+            border: 1.5px solid #E2E8F0;
+            border-radius: 6px;
+            background: var(--section-bg);
+            transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .login-input-wrap input:focus {
+            outline: none;
+            border-color: var(--goodyear-racing-navy);
+            background: var(--goodyear-white);
+            box-shadow: 0 0 0 3px rgba(11, 29, 69, 0.1);
+        }
+
+        .login-input-wrap input:focus + i,
+        .login-input-wrap:focus-within i {
+            color: var(--goodyear-racing-navy);
+        }
+
+        .login-error {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: var(--status-red-bg);
+            color: var(--status-red);
+            border: 1px solid rgba(185, 28, 28, 0.2);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .login-error::before {
+            font: normal 900 13px "Font Awesome 6 Free";
+            content: "\f071";
+            flex-shrink: 0;
+        }
+
+        .login-modal-footer {
+            padding: 20px 24px 24px;
+        }
+
+        .btn-login-submit {
+            width: 100%;
+            justify-content: center;
+            padding: 12px 18px;
+            font-size: 13.5px;
+        }
     </style>
 </head>
 <body>
 
     <!-- Modal Login SAP (LDAP) -->
     <div id="modal-login" class="modal-overlay active">
-        <div class="modal-card" style="width: 340px;">
-            <div class="modal-header" style="padding: 12px 16px;">
-                <h3 style="font-size: 14px;"><i class="fa-solid fa-lock" style="color: var(--goodyear-trophy-gold);"></i> Iniciar sesión SAP</h3>
+        <div class="login-modal-card">
+            <div class="login-modal-header">
+                <img src="logo-goodyear.png" alt="Goodyear" onerror="this.style.display='none'">
+                <h3>Iniciar sesión SAP</h3>
+                <p>Usá tu cuenta LDAP para consultar las órdenes del turno</p>
             </div>
-            <div class="modal-body" style="padding: 14px 16px;">
-                <p style="font-size: 11.5px; color: #64748B; margin-bottom: 10px;">
-                    Usá tu cuenta LDAP para consultar las órdenes del turno.
-                </p>
-                <div class="config-row" style="flex-direction: column; align-items: stretch; gap: 3px; margin-bottom: 8px;">
-                    <span class="config-label" style="font-size: 11.5px;">Usuario</span>
-                    <input type="text" id="login-username" class="config-input-time" style="width: 100%; padding: 6px 8px; font-size: 13px;" autocomplete="username">
+            <div class="login-modal-body">
+                <div class="login-field">
+                    <label for="login-username">Usuario</label>
+                    <div class="login-input-wrap">
+                        <i class="fa-solid fa-user"></i>
+                        <input type="text" id="login-username" autocomplete="username" placeholder="Usuario LDAP">
+                    </div>
                 </div>
-                <div class="config-row" style="flex-direction: column; align-items: stretch; gap: 3px;">
-                    <span class="config-label" style="font-size: 11.5px;">Contraseña</span>
-                    <input type="password" id="login-password" class="config-input-time" style="width: 100%; padding: 6px 8px; font-size: 13px;" autocomplete="current-password" onkeydown="if(event.key==='Enter') iniciarSesion()">
+                <div class="login-field">
+                    <label for="login-password">Contraseña</label>
+                    <div class="login-input-wrap">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter') iniciarSesion()">
+                    </div>
                 </div>
-                <p id="login-error" style="color: var(--status-red); font-size: 11.5px; display: none; margin-top: 6px;"></p>
+                <p id="login-error" class="login-error"></p>
             </div>
-            <div class="modal-footer" style="padding: 10px 16px;">
-                <button class="btn btn-gold" id="btn-login" onclick="iniciarSesion()" style="font-size: 12.5px; padding: 6px 14px;">
+            <div class="login-modal-footer">
+                <button class="btn btn-gold btn-login-submit" id="btn-login" onclick="iniciarSesion()">
                     <i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión
                 </button>
             </div>
@@ -1223,7 +1363,7 @@
             const errEl = document.getElementById('login-error');
             if (mensajeError) {
                 errEl.innerText = mensajeError;
-                errEl.style.display = 'block';
+                errEl.style.display = 'flex';
             } else {
                 errEl.style.display = 'none';
             }
