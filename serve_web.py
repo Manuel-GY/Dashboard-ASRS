@@ -27,7 +27,24 @@ INDICADORES_BASE = os.environ.get("INDICADORES_BASE", "http://cl01sv34a:8050/rep
 INSPECCIONES_BASE = os.environ.get("INSPECCIONES_BASE", "http://10.107.194.70/ASRS/inspecciones")
 SAP_USERNAME = os.environ.get("SAP_USERNAME")
 SAP_PASSWORD = os.environ.get("SAP_PASSWORD")
-SAP_LOGIN_URL = os.environ.get("SAP_LOGIN_URL")
+
+# server_config.json viaja con el repo (no tiene secretos, solo la URL del portal) para no
+# depender de que alguien configure variables de entorno a mano en el servidor de producción.
+SERVER_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "server_config.json")
+
+
+def _load_server_config():
+    try:
+        with open(SERVER_CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[WARN] No se pudo leer server_config.json: {e}")
+        return {}
+
+
+_server_config = _load_server_config()
+SAP_LOGIN_URL = os.environ.get("SAP_LOGIN_URL") or _server_config.get("SAP_LOGIN_URL")
+SAP_TARGET_DEFAULT = os.environ.get("SAP_TARGET") or _server_config.get("SAP_TARGET") or "L1P"
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "schedule_config.json")
 
 # Árbol de equipos ASRS en SAP: todo lo que cuelga de L504-5200 (grúas, conveyors, horseshoes, robots, etc.)
@@ -281,7 +298,7 @@ def api_auth_login():
     try:
         login_resp = portal_session.post(
             portal_url,
-            json={"username": username, "password": password, "sap_target": os.environ.get("SAP_TARGET", "L1P")},
+            json={"username": username, "password": password, "sap_target": SAP_TARGET_DEFAULT},
             timeout=15,
         )
         login_payload = login_resp.json() if login_resp.content else {}
@@ -820,7 +837,7 @@ def _portal_login_session():
     try:
         login_resp = session.post(
             portal_url,
-            json={"username": SAP_USERNAME, "password": SAP_PASSWORD, "sap_target": os.environ.get("SAP_TARGET", "L1P")},
+            json={"username": SAP_USERNAME, "password": SAP_PASSWORD, "sap_target": SAP_TARGET_DEFAULT},
             timeout=15,
         )
         login_payload = login_resp.json() if login_resp.content else {}

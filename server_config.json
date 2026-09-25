@@ -1,0 +1,4 @@
+{
+  "SAP_LOGIN_URL": "http://10.107.194.110:5000/api/auth/login",
+  "SAP_TARGET": "L1P"
+}
