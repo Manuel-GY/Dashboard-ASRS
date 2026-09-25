@@ -47,9 +47,12 @@
     --bg-gradient-2: rgba(251, 189, 0, 0.05);
     --table-header-bg: #0B1D45;
     --table-cell-bg: #FFFFFF;
-    --header-navy-bg: #0B1D45;
+    /* Slightly lighter/less inky navy than --gy-racing-navy to reduce header heaviness; gradient end keeps the deep brand navy for subtle depth */
+    --header-navy-bg: #14285E;
+    --header-navy-bg-end: #0B1D45;
     --header-navy-text: #FFFFFF;
-    --header-gold-border: #FBBD00;
+    /* Warmer, less neon gold for thin accent borders (brighter --gy-trophy-gold reserved for badges/CTAs) */
+    --header-gold-border: #E8A800;
 }
 
 /* ---- Dark Mode (Goodyear Dark Navy) ---- */
@@ -67,7 +70,8 @@ body.dark {
     --bg-gradient-2: rgba(251, 189, 0, 0.02);
     --table-header-bg: #06122D;
     --table-cell-bg: #0B1D45;
-    --header-navy-bg: #06122D;
+    --header-navy-bg: #0E1F42;
+    --header-navy-bg-end: #06122D;
     background-color: var(--bg-base);
     color: var(--text-main);
     background-image: radial-gradient(circle at top right, var(--bg-gradient-1), transparent 40%),
@@ -127,7 +131,7 @@ body.dark ::-webkit-scrollbar-thumb { background: #FBBD00; }
     flex-wrap: wrap;
     gap: 15px;
     padding: 18px 24px;
-    background: var(--header-navy-bg);
+    background: linear-gradient(135deg, var(--header-navy-bg), var(--header-navy-bg-end));
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-bottom: 3px solid var(--header-gold-border);
     border-radius: var(--card-radius);
@@ -240,7 +244,7 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    background: var(--header-navy-bg);
+    background: linear-gradient(135deg, var(--header-navy-bg), var(--header-navy-bg-end));
     color: var(--header-navy-text);
     border-bottom: 3px solid var(--header-gold-border);
     padding: 14px 18px;
@@ -248,7 +252,7 @@ td, th, .press-overall-val, .io-box-value, .metric, .value, .time {
 }
 
 body.dark .card-header {
-    background: #06122D;
+    background: linear-gradient(135deg, var(--header-navy-bg), var(--header-navy-bg-end));
     border-bottom: 3px solid var(--header-gold-border);
 }
 
@@ -289,7 +293,7 @@ body.dark .kpi-bracket {
     height: 12px;
     border-radius: 50%;
     display: inline-block;
-    box-shadow: 0 0 8px currentColor;
+    box-shadow: 0 0 6px currentColor;
     transition: all 0.3s ease;
 }
 
@@ -306,13 +310,13 @@ body.dark .kpi-bracket {
 }
 
 @keyframes indicator-pulse-green {
-    0% { box-shadow: 0 0 4px var(--success-color), inset 0 0 1px #fff; }
-    100% { box-shadow: 0 0 12px var(--success-color), inset 0 0 3px #fff; }
+    0% { box-shadow: 0 0 3px var(--success-color), inset 0 0 1px #fff; }
+    100% { box-shadow: 0 0 8px var(--success-color), inset 0 0 2px #fff; }
 }
 
 @keyframes indicator-pulse-red {
-    0% { box-shadow: 0 0 4px var(--danger-color), inset 0 0 1px #fff; }
-    100% { box-shadow: 0 0 12px var(--danger-color), inset 0 0 3px #fff; }
+    0% { box-shadow: 0 0 3px var(--danger-color), inset 0 0 1px #fff; }
+    100% { box-shadow: 0 0 8px var(--danger-color), inset 0 0 2px #fff; }
 }
 
 .kpi-bracket {
@@ -457,6 +461,7 @@ body.dark .data-table tbody tr:hover { background: rgba(251, 189, 0, 0.08); }
 
 .downtime-group-box .group-name {
     background: var(--table-header-bg);
+    color: var(--header-navy-text);
     padding: 6px 4px;
     text-align: center;
     font-size: 0.75rem;
@@ -767,7 +772,7 @@ body.dark .data-table tbody tr:hover { background: rgba(251, 189, 0, 0.08); }
     max-width: 120px;
 }
 
-.press-id { background: var(--table-header-bg); padding: 6px 4px; font-weight: 700; font-size: 0.75rem; text-align: center; border-bottom: 1px solid var(--border-color); color: var(--accent-color); }
+.press-id { background: var(--table-header-bg); padding: 6px 4px; font-weight: 700; font-size: 0.75rem; text-align: center; border-bottom: 1px solid var(--border-color); color: var(--header-navy-text); }
 
 .press-stats { padding: 8px 4px; display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; text-align: center; }
 .press-stats .despachados { color: var(--text-main); font-weight: 600; }
