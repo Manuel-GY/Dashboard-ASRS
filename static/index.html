@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard ASRS</title>
-    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="style.css?v=17">
 
     <!-- Google Fonts for Goodyear Brand Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -96,7 +96,7 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-conveyor-full"></span>
                         <h2>CONVEYOR FULL</h2>
-                        <span class="kpi-bracket">[Objetivo: <span class="highlight" id="conv-target">15</span> min]</span>
+                        <span class="hdr-chip">Obj <strong id="conv-target">15</strong> min</span>
                     </div>
                 </div>
                 <div class="card-content" style="display: flex; justify-content: center; align-items: center; min-height: 120px;">
@@ -113,7 +113,7 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-plummers"></span>
                         <h2>PLUMMERS</h2>
-                        <span class="kpi-bracket" style="margin-left: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">[Valores en min]</span>
+                        <span class="hdr-chip">En min</span>
                     </div>
                 </div>
                 <div class="card-content">
@@ -150,7 +150,7 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-robots"></span>
                         <h2>Robots</h2>
-                        <span class="kpi-bracket" style="margin-left: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">[Valores en min]</span>
+                        <span class="hdr-chip">En min</span>
                     </div>
                 </div>
                 <div class="card-content" style="display: flex; flex-direction: column; justify-content: center; min-height: 200px;">
@@ -199,7 +199,7 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-downtime-conveyor"></span>
                         <h2>DOWNTIME CONVEYOR</h2>
-                        <span class="kpi-bracket" style="margin-left: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">[Valores en min]</span>
+                        <span class="hdr-chip">En min</span>
                     </div>
                 </div>
                 <div class="card-content" style="display: flex; flex-direction: column; justify-content: center; min-height: 200px;">
@@ -242,7 +242,7 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-no-tire"></span>
                         <h2>NO TIRE</h2>
-                        <span class="kpi-bracket">[Total = <span class="highlight" id="no-tire-total-percent">-</span> % (<span id="no-tire-total-min">-</span> min) - Objetivo: <span class="highlight">0.50</span> %]</span>
+                        <span class="hdr-kpi"><span class="hdr-kpi-label">Total turno · Obj 0.50%</span><span class="hdr-kpi-value"><span id="no-tire-total-percent">-</span>% <small>(<span id="no-tire-total-min">-</span> min)</small></span></span>
                     </div>
                 </div>
                 <div class="card-content">
@@ -258,13 +258,9 @@
                         <span class="indicator green" id="ind-io"></span>
                         <h2>INPUT / OUTPUT</h2>
                     </div>
-                    <div class="io-premium-efficiency">
-                        <span class="io-eff-title">Eficiencia Entrada</span>
-                        <div class="io-eff-value-container">
-                            <span class="io-eff-value" id="io-efficiency">-</span>
-                            <span class="io-eff-percent">%</span>
-                        </div>
-                        <span class="io-eff-target">Obj: 95.00%</span>
+                    <div class="hdr-kpi">
+                        <span class="hdr-kpi-label">Eficiencia entrada · Obj 95.00%</span>
+                        <span class="hdr-kpi-value"><span id="io-efficiency">-</span>%</span>
                     </div>
                 </div>
                 
@@ -374,7 +370,7 @@
                     <div class="card-title">
                         <span class="indicator green" id="ind-crane"></span>
                         <h2>Crane performance</h2>
-                        <span class="kpi-bracket">[Disponibilidad = <span class="highlight" id="crane-uptime">-</span> %]</span>
+                        <span class="hdr-kpi"><span class="hdr-kpi-label">Disponibilidad</span><span class="hdr-kpi-value"><span id="crane-uptime">-</span>%</span></span>
                     </div>
                 </div>
                 <div class="card-content" style="display: flex; flex-direction: column; gap: 15px; padding-top: 10px;">
@@ -401,22 +397,21 @@
                     <div class="card-title press-card-title-row">
                         <div class="press-card-title-left">
                             <span class="indicator green" id="ind-press-delivery"></span>
-                            <h2>PRESS DELIVERY PERFORMANCE</h2>
+                            <h2>Disponibilidad de press robots</h2>
                         </div>
                         <div class="press-card-title-right">
-                            <div class="press-legend-header">
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #22c55e;"></div>Despacho</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #eab308;"></div>IDLE</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #38bdf8;"></div>Cortinas</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #c2884d;"></div>Prensa</div>
-                                <div class="press-legend-item"><div class="press-legend-dot" style="background: #ef4444;"></div>E-Stop</div>
-                            </div>
-                            <div class="press-overall-badge" id="press-overall-val">- %</div>
-                            <span id="press-overall-secondary" style="font-size: 0.65rem; opacity: 0.6; margin-left: 6px;">despachos por robot: -%</span>
+                            <div class="hdr-kpi"><span class="hdr-kpi-label" id="press-overall-secondary">Despachos por robot: -%</span><span class="hdr-kpi-value" id="press-overall-val">- %</span></div>
                         </div>
                     </div>
                 </div>
                 <div class="card-content">
+                    <div class="press-legend-strip" aria-label="Estados de press robots">
+                        <span><i style="background:#22c55e"></i>Despacho</span>
+                        <span><i style="background:#eab308"></i>IDLE</span>
+                        <span><i style="background:#38bdf8"></i>Cortinas</span>
+                        <span><i style="background:#c2884d"></i>Prensa</span>
+                        <span><i style="background:#ef4444"></i>E-Stop</span>
+                    </div>
                     <div class="press-delivery-layout" id="press-delivery-container">
                         <div class="press-delivery-left">
                             <div class="press-overall-gauge">
@@ -541,6 +536,6 @@
             }
         });
     </script>
-    <script src="script.js?v=9"></script>
+    <script src="script.js?v=10"></script>
 </body>
 </html>

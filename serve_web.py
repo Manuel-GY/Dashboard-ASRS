@@ -1117,7 +1117,7 @@ def api_consolidado_turno():
         crane_avail_pct = round(max(0.0, 100.0 - (total_dt_crane / total_available * 100.0)), 2)
         top_cranes = [c for c in sorted(crane_list, key=lambda x: x.get("downtime_minutes", 0), reverse=True) if c.get("downtime_minutes", 0) > 0][:3]
     else:
-        crane_avail_pct = 100.0
+        crane_avail_pct = "-"
         top_cranes = []
 
     # Press Global Delivery
@@ -1437,4 +1437,3 @@ if __name__ == '__main__':
     except Exception as e:
         print("Error iniciando Waitress, usando app.run()")
         app.run(host='0.0.0.0', port=8006, threaded=True)
-

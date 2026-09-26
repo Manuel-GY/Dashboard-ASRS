@@ -221,6 +221,15 @@ Archivo: `shift_history.db` (se crea automáticamente, modo WAL).
 | T2 | 06:00 - 14:00 | manana |
 | T3 | 14:00 - 22:00 | tarde |
 
+El agrupamiento de datos conserva estos intervalos. En el dashboard, «Turno Actual» mantiene
+el turno saliente durante el relevo (06:00–07:00, 14:00–15:00 y 22:00–23:00):
+actualiza el turno completado al inicio del relevo, no lo vuelve a consultar durante
+esa hora y cambia automáticamente al entrante a las 07:00, 15:00 o 23:00.
+Los botones de turnos anteriores siguen relativos al turno mostrado. La entrega de
+turno consulta los intervalos de datos originales y permite capturar el reporte como
+imagen; copiar al portapapeles requiere HTTPS o localhost. En HTTP de red local la
+captura se descarga en PNG, con un aviso visible.
+
 ---
 
 ## Funcionalidades del Frontend

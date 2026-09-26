@@ -969,6 +969,63 @@
             padding: 12px 18px;
             font-size: 13.5px;
         }
+
+        /* Compact report layout for a single image */
+        body { padding: 12px; }
+        .action-toolbar { margin-bottom: 10px; }
+        #report-card { width: min(1180px, 100%); }
+        .action-toolbar { width: 1180px; }
+        .card-body-content { padding: 12px 16px; gap: 10px; background: var(--section-bg); }
+        .report-header-banner { padding: 14px 22px; }
+        .report-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .summary-tile {
+            background: var(--goodyear-white);
+            border: 1px solid var(--card-border);
+            border-top: 3px solid var(--goodyear-racing-navy);
+            border-radius: 6px;
+            padding: 9px 12px;
+            min-width: 0;
+        }
+        .summary-tile span { display: block; font-size: 11px; font-weight: 700; color: var(--goodyear-dark-gray); text-transform: uppercase; }
+        .summary-tile strong { display: block; font-size: 23px; color: var(--goodyear-racing-navy); line-height: 1.2; font-family: var(--font-mono); }
+        .summary-tile small { font-size: 11px; color: var(--goodyear-dark-gray); }
+        .metrics-row { grid-template-columns: 1.45fr 1fr; gap: 10px; }
+        .metrics-row > .metric-card:last-child { grid-column: 1 / -1; }
+        .metric-card, .orders-section { border-top-color: var(--goodyear-racing-navy); padding: 10px 12px; gap: 7px; }
+        .flow-card { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+        .flow-card .card-header-custom, .flow-card .io-output-split { grid-column: 1 / -1; }
+        .flow-card .io-grid { display: contents; }
+        .io-subcard { padding: 7px; }
+        .subcard-val { font-size: 20px; }
+        .crane-avail-badge { padding: 6px 12px; }
+        .crane-avail-val { font-size: 22px; }
+        .crane-item { padding: 4px 9px; }
+        .top-crane-list { gap: 4px; }
+        .press-summary-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+        .press-item { padding: 7px; min-width: 0; }
+        .press-header-row { align-items: flex-start; }
+        .press-percentages { display: flex; flex-direction: column; align-items: flex-end; }
+        .press-robot-share { font-size: 10px; color: var(--goodyear-dark-gray); font-weight: 600; }
+        .press-meta-counts { flex-wrap: wrap; gap: 2px 8px; font-size: 10px; }
+        .orders-section { gap: 0; }
+        .orders-section .card-header-custom { margin-bottom: 6px; }
+        .orders-table { font-size: 11px; }
+        .orders-table th, .orders-table td { padding: 6px 8px; }
+        @media (max-width: 850px) {
+            body { padding: 12px; }
+            .metrics-row { grid-template-columns: 1fr; }
+            .metrics-row > .metric-card:last-child { grid-column: auto; }
+            .report-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .press-summary-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .report-header-banner { flex-wrap: wrap; }
+            .header-meta { flex-wrap: wrap; }
+            .orders-section { overflow-x: auto; }
+            .orders-table { min-width: 720px; }
+        }
     </style>
 </head>
 <body>
@@ -1082,24 +1139,30 @@
 
         <!-- Inner Content Body -->
         <div class="card-body-content">
+            <div class="report-summary" aria-label="Indicadores del turno">
+                <div class="summary-tile"><span>Entrada ASRS</span><strong id="summary-entrada">-</strong><small>neumáticos · <span id="summary-rate-in" style="display:inline; text-transform:none;">-</span> t/m</small></div>
+                <div class="summary-tile"><span>Salida ASRS</span><strong id="summary-salida">-</strong><small>neumáticos · <span id="summary-rate-out" style="display:inline; text-transform:none;">-</span> t/m</small></div>
+                <div class="summary-tile"><span>Disp. Crane</span><strong id="summary-crane">-</strong><small id="summary-pasillos">Pasillos ASRS</small></div>
+                <div class="summary-tile"><span>Eficiencia ASRS</span><strong id="summary-eficiencia">-</strong><small>Entrada / Construido</small></div>
+            </div>
             <!-- Metrics Row -->
             <div class="metrics-row">
                 <!-- Col 1: INPUT / OUTPUT -->
-                <div class="metric-card">
+                <div class="metric-card flow-card">
                     <div class="card-header-custom">
-                        <h2><i class="fa-solid fa-arrow-right-arrow-left" style="color: var(--goodyear-racing-navy);"></i> Flujo / Input & Output</h2>
-                        <span class="badge-kpi" id="lbl-eficiencia-badge">Efic: 77.86%</span>
+                        <h2><i class="fa-solid fa-arrow-right-arrow-left" style="color: var(--goodyear-racing-navy);"></i> 01 / Flujo de producción</h2>
+                        <span class="badge-kpi" id="lbl-eficiencia-badge">Eficiencia: -</span>
                     </div>
 
                     <div class="io-grid">
                         <div class="io-subcard highlight">
                             <span class="subcard-label">Construido</span>
-                            <span class="subcard-val" id="val-construido">2.583</span>
+                            <span class="subcard-val" id="val-construido">-</span>
                             <span class="subcard-sub">tires</span>
                         </div>
                         <div class="io-subcard highlight">
                             <span class="subcard-label">Vulcanizado</span>
-                            <span class="subcard-val" id="val-vulcanizado">2.753</span>
+                            <span class="subcard-val" id="val-vulcanizado">-</span>
                             <span class="subcard-sub">tires</span>
                         </div>
                     </div>
@@ -1107,26 +1170,26 @@
                     <div class="io-grid">
                         <div class="io-subcard success">
                             <span class="subcard-label">Entrada ASRS</span>
-                            <span class="subcard-val" id="val-entrada">2.011</span>
-                            <span class="subcard-sub">Rate: <b id="val-rate-in">6.7</b> t/m</span>
+                            <span class="subcard-val" id="val-entrada">-</span>
+                            <span class="subcard-sub">Rate: <b id="val-rate-in">-</b> t/m</span>
                         </div>
                         <div class="io-subcard amber">
                             <span class="subcard-label">Total Salida</span>
-                            <span class="subcard-val" id="val-total-salida">2.464</span>
-                            <span class="subcard-sub">Rate: <b id="val-rate-out">8.17</b> t/m</span>
+                            <span class="subcard-val" id="val-total-salida">-</span>
+                            <span class="subcard-sub">Rate: <b id="val-rate-out">-</b> t/m</span>
                         </div>
                     </div>
 
                     <div class="io-output-split">
                         <div>
                             <span class="subcard-label">Manual</span>
-                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-amber);" id="val-manual">1.693 tires</div>
-                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-man">5.60</b></span>
+                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-amber);" id="val-manual">-</div>
+                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-man">-</b></span>
                         </div>
                         <div style="text-align: right;">
                             <span class="subcard-label">Automático</span>
-                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-green);" id="val-auto">771 tires</div>
-                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-auto">2.57</b></span>
+                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-green);" id="val-auto">-</div>
+                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-auto">-</b></span>
                         </div>
                     </div>
                 </div>
@@ -1134,42 +1197,29 @@
                 <!-- Col 2: CRANE & CONVEYOR PERFORMANCE -->
                 <div class="metric-card">
                     <div class="card-header-custom">
-                        <h2><i class="fa-solid fa-dolly" style="color: var(--goodyear-racing-navy);"></i> Crane Performance</h2>
-                        <span class="badge-kpi" id="lbl-crane-disp">Disp: 84.79%</span>
+                        <h2><i class="fa-solid fa-dolly" style="color: var(--goodyear-racing-navy);"></i> 02 / Crane</h2>
+                        <span class="badge-kpi" id="lbl-crane-disp">Disponibilidad: -</span>
                     </div>
 
                     <div class="crane-avail-badge">
                         <div>
                             <span style="font-size:10.5px; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:var(--goodyear-light-gray);">Disponibilidad Global</span>
-                            <div style="font-size: 11px; color: #CBD5E1;">11 Pasillos ASRS</div>
+                            <div style="font-size: 11px; color: #CBD5E1;" id="lbl-pasillos">Pasillos ASRS</div>
                         </div>
-                        <span class="crane-avail-val" id="val-crane-disp">84.79%</span>
+                        <span class="crane-avail-val" id="val-crane-disp">-</span>
                     </div>
 
                     <div class="crane-box">
                         <span class="subcard-label">Top 3 Pasillos con Downtime</span>
-                        <div class="top-crane-list" id="crane-top-list">
-                            <div class="crane-item">
-                                <span class="crane-name">Pasillo 4</span>
-                                <span class="crane-dt">361 min (75.1%)</span>
-                            </div>
-                            <div class="crane-item">
-                                <span class="crane-name">Pasillo 1</span>
-                                <span class="crane-dt">110 min (22.9%)</span>
-                            </div>
-                            <div class="crane-item">
-                                <span class="crane-name">Pasillo 2</span>
-                                <span class="crane-dt">110 min (22.9%)</span>
-                            </div>
-                        </div>
+                        <div class="top-crane-list" id="crane-top-list"></div>
                     </div>
                 </div>
 
                 <!-- Col 3: PRESS DELIVERY -->
                 <div class="metric-card">
                     <div class="card-header-custom">
-                        <h2><i class="fa-solid fa-robot" style="color: var(--goodyear-racing-navy);"></i> Press Delivery</h2>
-                        <span class="badge-kpi" id="lbl-press-global">Cumpl: 28.68%</span>
+                        <h2><i class="fa-solid fa-robot" style="color: var(--goodyear-racing-navy);"></i> 03 / Funcionamiento de prensas</h2>
+                        <span class="badge-kpi" id="lbl-press-global">Disponibilidad: -</span>
                     </div>
 
                     <div class="press-summary-list" id="press-list">
@@ -1271,8 +1321,8 @@
             <!-- Section 4: Orders Table -->
             <div class="orders-section">
                 <div class="card-header-custom">
-                    <h2><i class="fa-solid fa-wrench" style="color: var(--goodyear-racing-navy);"></i> Novedades y Órdenes Correctivas del Turno</h2>
-                    <span class="badge-kpi" id="lbl-total-orders">1 Orden Registrada</span>
+                    <h2><i class="fa-solid fa-wrench" style="color: var(--goodyear-racing-navy);"></i> 04 / Órdenes correctivas registradas en el turno</h2>
+                    <span class="badge-kpi" id="lbl-total-orders">-</span>
                 </div>
 
                 <table class="orders-table">
@@ -1286,16 +1336,7 @@
                             <th>Repuestos utilizados</th>
                         </tr>
                     </thead>
-                    <tbody id="orders-tbody">
-                        <tr>
-                            <td><span class="badge-ot">7596476</span></td>
-                            <td style="font-family: var(--font-mono); font-weight:800;">07:33:10</td>
-                            <td><b>L504-Z13-MOTOPOLIN</b><br><span style="font-size:11px; color:var(--goodyear-black); font-weight:600;">CONVEYOR MOTOPOLIN ZONA 13</span></td>
-                            <td><b>Tarjeta CV bypass</b></td>
-                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">Manuel Rivera</td>
-                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">Sin repuestos registrados.</td>
-                        </tr>
-                    </tbody>
+                    <tbody id="orders-tbody"></tbody>
                 </table>
             </div>
         </div>
@@ -1306,6 +1347,7 @@
 
     <script>
         let currentData = null;
+        document.getElementById('press-list').replaceChildren();
 
         const urlParams = new URLSearchParams(window.location.search);
         const paramFecha = urlParams.get('fecha');
@@ -1462,23 +1504,31 @@
 
             try {
                 const el = document.getElementById('report-card');
-                const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-                if (!blob) throw new Error("No se pudo generar la imagen");
-
-                if (navigator.clipboard && window.ClipboardItem) {
-                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                    showToast("✅ Captura copiada al portapapeles.");
-                } else {
-                    // Fallback: navegador sin soporte de Clipboard API para imágenes
-                    const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
-                    const turno = document.getElementById('turno-select').value || 'T2';
-                    const link = document.createElement('a');
-                    link.download = `entrega-turno-${turno}-${fecha}.png`;
-                    link.href = URL.createObjectURL(blob);
-                    link.click();
-                    showToast("⚠️ Tu navegador no soporta copiar imágenes; se descargó el archivo.");
+                const image = html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+                    .then(canvas => new Promise((resolve, reject) => {
+                        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('No se pudo generar la imagen')), 'image/png');
+                    }));
+                if (window.isSecureContext && navigator.clipboard?.write && window.ClipboardItem) {
+                    try {
+                        await navigator.clipboard.write([new ClipboardItem({ 'image/png': image })]);
+                        showToast("Captura copiada al portapapeles.");
+                        return;
+                    } catch (err) {
+                        console.warn("No se pudo copiar la captura:", err);
+                    }
                 }
+                const blob = await image;
+                const fecha = document.getElementById('fecha-input').value;
+                const turno = document.getElementById('turno-select').value;
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = `entrega-turno-${turno}-${fecha}.png`;
+                link.href = url;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+                showToast(window.isSecureContext
+                    ? "El navegador bloqueó el portapapeles; se descargó la imagen."
+                    : "Para copiar al portapapeles usá HTTPS o localhost; se descargó la imagen.");
             } catch (err) {
                 console.error(err);
                 showToast("Error al generar la captura.");
@@ -1517,11 +1567,22 @@
             document.getElementById('val-rate-man').innerText = io.rate_manual;
             document.getElementById('val-auto').innerText = `${io.salida_auto} tires`;
             document.getElementById('val-rate-auto').innerText = io.rate_auto;
-            document.getElementById('lbl-eficiencia-badge').innerText = `Efic: ${io.eficiencia_entrada}%`;
+            const porcentaje = value => value === '-' || value == null ? '-' : `${value}%`;
+            document.getElementById('lbl-eficiencia-badge').innerText = `Eficiencia: ${porcentaje(io.eficiencia_entrada)}`;
+            document.getElementById('summary-entrada').innerText = io.entrada_asrs;
+            document.getElementById('summary-salida').innerText = io.total_salida;
+            document.getElementById('summary-rate-in').innerText = io.rate_entrada;
+            document.getElementById('summary-rate-out').innerText = io.rate_salida;
+            document.getElementById('summary-eficiencia').innerText = porcentaje(io.eficiencia_entrada);
 
             // Cranes
-            document.getElementById('val-crane-disp').innerText = `${cr.disponibilidad_pct}%`;
-            document.getElementById('lbl-crane-disp').innerText = `Disp: ${cr.disponibilidad_pct}%`;
+            document.getElementById('val-crane-disp').innerText = porcentaje(cr.disponibilidad_pct);
+            document.getElementById('lbl-crane-disp').innerText = `Disponibilidad: ${porcentaje(cr.disponibilidad_pct)}`;
+            document.getElementById('summary-crane').innerText = porcentaje(cr.disponibilidad_pct);
+            const aisleCount = cr.pasillos?.length;
+            const aisleLabel = aisleCount ? `${aisleCount} pasillos ASRS` : 'Pasillos ASRS';
+            document.getElementById('summary-pasillos').innerText = aisleLabel;
+            document.getElementById('lbl-pasillos').innerText = aisleLabel;
 
             const topCraneList = document.getElementById('crane-top-list');
             topCraneList.innerHTML = '';
@@ -1535,7 +1596,7 @@
                     `;
                 });
             } else {
-                topCraneList.innerHTML = '<div style="font-size:12px; color:var(--goodyear-dark-gray); text-align:center; padding:10px;">Sin paradas registradas</div>';
+                topCraneList.innerHTML = `<div style="font-size:12px; color:var(--goodyear-dark-gray); text-align:center; padding:10px;">${aisleCount ? 'Sin paradas registradas' : 'Sin datos de Crane'}</div>`;
             }
 
             // Presses - barras segmentadas con colores del dashboard PRESS DELIVERY
@@ -1545,22 +1606,23 @@
             let globalVulcanized = 0;
             const pressList = document.getElementById('press-list');
             pressList.innerHTML = '';
-            const prensasArr = (pr.resumen_prensas && pr.resumen_prensas.length > 0) ? pr.resumen_prensas : [
-                { press: "400B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
-                { press: "500A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
-                { press: "500B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
-                { press: "600A", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} },
-                { press: "600B", pct: 0, delivered_robot: 0, manual: 0, vulcanized: 0, times: {} }
-            ];
+            const prensasArr = pr.resumen_prensas || [];
             prensasArr.forEach(p => {
-                const t = p.times || { idle: 0, estop: 0, cortinas: 0, prensa: 0, despachando: 0 };
-                const totalTime = (t.idle + t.estop + t.cortinas + t.prensa + t.despachando) || 1;
+                const times = p.times || {};
+                const t = {
+                    idle: Number(times.idle ?? 0),
+                    estop: Number(times.estop ?? 0),
+                    cortinas: Number(times.cortinas ?? 0),
+                    prensa: Number(times.prensa ?? 0),
+                    despachando: Number(times.despachando ?? 0)
+                };
+                const totalTime = t.idle + t.estop + t.cortinas + t.prensa + t.despachando;
 
-                const despPct = (t.despachando / totalTime) * 100;
-                const idlePct = (t.idle / totalTime) * 100;
-                const cortinasPct = (t.cortinas / totalTime) * 100;
-                const prensaPct = (t.prensa / totalTime) * 100;
-                const estopPct = (t.estop / totalTime) * 100;
+                const despPct = totalTime ? (t.despachando / totalTime) * 100 : 0;
+                const idlePct = totalTime ? (t.idle / totalTime) * 100 : 0;
+                const cortinasPct = totalTime ? (t.cortinas / totalTime) * 100 : 0;
+                const prensaPct = totalTime ? (t.prensa / totalTime) * 100 : 0;
+                const estopPct = totalTime ? (t.estop / totalTime) * 100 : 0;
 
                 globalEstopTime += t.estop;
                 globalTotalTime += totalTime;
@@ -1568,17 +1630,17 @@
                 globalVulcanized += (p.vulcanized || 0);
 
                 // % operativo: 100% menos el tiempo real en falla (E-Stop). Si no hubo E-Stop, es 100%.
-                const operativoPct = 100 - estopPct;
-                const operativoColor = operativoPct >= 99.0 ? 'var(--status-green)' : (operativoPct >= 95.0 ? 'var(--status-amber)' : 'var(--status-red)');
+                const operativoPct = totalTime ? 100 - estopPct : null;
+                const operativoColor = operativoPct === null ? 'var(--goodyear-dark-gray)' : operativoPct >= 99.0 ? 'var(--status-green)' : (operativoPct >= 95.0 ? 'var(--status-amber)' : 'var(--status-red)');
 
                 // % de despachos realizados por robot (antiguo "compliance"): métrica secundaria, no de falla.
-                const despachosPorRobot = p.pct || 0;
+                const despachosPorRobot = p.vulcanized > 0 ? `${(p.delivered_robot / p.vulcanized * 100).toFixed(1)}%` : '-';
 
                 pressList.innerHTML += `
                     <div class="press-item">
                         <div class="press-header-row">
                             <span class="press-group-name">${p.press}</span>
-                            <span class="press-pct" style="color: ${operativoColor};">${operativoPct.toFixed(1)}%</span>
+                            <span class="press-percentages"><span class="press-pct" style="color: ${operativoColor};">${operativoPct === null ? '-' : operativoPct.toFixed(1) + '%'} operativo</span><span class="press-robot-share">Despachos por robot: ${despachosPorRobot}</span></span>
                         </div>
                         <div class="progress-bar-bg">
                             <div class="press-segment" data-tooltip="Despacho robots: ${t.despachando.toFixed(0)}m (${despPct.toFixed(1)}%)" style="width: ${despPct}%; background-color: #22c55e;"></div>
@@ -1591,15 +1653,13 @@
                             <span>Robot: <b>${p.delivered_robot}</b></span>
                             <span>Manual: <b>${p.manual}</b></span>
                             <span>Total: <b>${p.vulcanized}</b></span>
-                            <span style="opacity: 0.6; font-size: 0.85em;">% despachos por robot: ${despachosPorRobot.toFixed(1)}%</span>
                         </div>
                     </div>
                 `;
             });
 
-            const globalOperativoPct = globalTotalTime > 0 ? (100 - (globalEstopTime / globalTotalTime * 100)) : 100.0;
-            const globalDespachosPorRobot = globalVulcanized > 0 ? (globalDelivered / globalVulcanized * 100) : 100.0;
-            document.getElementById('lbl-press-global').innerText = `Operativo: ${globalOperativoPct.toFixed(1)}%`;
+            const globalOperativoPct = globalTotalTime > 0 ? (100 - (globalEstopTime / globalTotalTime * 100)).toFixed(1) + '%' : '-';
+            document.getElementById('lbl-press-global').innerText = `Disponibilidad: ${globalOperativoPct}`;
 
 
             // Orders Table
@@ -1626,7 +1686,7 @@
             } else {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align:center; padding:20px; color:var(--goodyear-dark-gray);">
+                        <td colspan="6" style="text-align:center; padding:20px; color:var(--goodyear-dark-gray);">
                             <i class="fa-solid fa-circle-check" style="color:var(--status-green); font-size:18px;"></i><br>
                             Sin eventos correctivos reportados en este turno.
                         </td>

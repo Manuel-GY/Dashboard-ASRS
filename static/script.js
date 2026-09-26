@@ -148,36 +148,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return formatDateForApi(currentEndDt);
     }
 
-    /**
-     * Función principal de control de turnos.
-     * Recibe un 'offset' (0 = Actual, 1 = Anterior, 2 = Hace 2 turnos, etc.)
-     * y calcula dinámicamente las fechas de inicio y fin de ese turno basado en 
-     * los horarios estándar de planta (06:00, 14:00, 22:00).
-     */
-    function setShiftInterval(offset) {
-        const now = new Date();
+    function getDisplayShiftStart(now) {
         const hour = now.getHours();
-        let currentShiftStartHour;
+        const startHour = hour >= 7 && hour < 15 ? 6 : hour >= 15 && hour < 23 ? 14 : 22;
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startHour);
+        if (startHour === 22 && hour < 7) start.setDate(start.getDate() - 1);
+        return start;
+    }
 
-        if (hour >= 6 && hour < 14) {
-            currentShiftStartHour = 6;
-        } else if (hour >= 14 && hour < 22) {
-            currentShiftStartHour = 14;
-        } else {
-            currentShiftStartHour = 22;
-        }
-
-        let startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), currentShiftStartHour, 0, 0, 0);
-        
-        // Adjust for night shift (22:00) that started yesterday
-        if (currentShiftStartHour === 22 && hour < 6) {
-            startDt.setDate(startDt.getDate() - 1);
-        }
-
-        // Apply offset (each offset is -8 hours)
-        if (offset > 0) {
-            startDt.setHours(startDt.getHours() - (8 * offset));
-        }
+    function setShiftInterval(offset, now = new Date()) {
+        const startDt = getDisplayShiftStart(now);
+        startDt.setHours(startDt.getHours() - 8 * offset);
 
         let endDt = new Date(startDt);
         endDt.setHours(endDt.getHours() + 8);
@@ -568,14 +549,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     order.forEach(p => {
                         const stats = data.presses[p] || { delivered: 0, cancelled: 0, total: 0, vulcanized: 0 };
-                        const t = stats.times || {idle: 0, estop: 0, cortinas: 0, prensa: 0, despachando: 0};
-                        const totalTime = (t.idle + t.estop + t.cortinas + t.prensa + t.despachando) || 1;
+                        const times = stats.times || {};
+                        const t = {
+                            idle: Number(times.idle ?? 0),
+                            estop: Number(times.estop ?? 0),
+                            cortinas: Number(times.cortinas ?? 0),
+                            prensa: Number(times.prensa ?? 0),
+                            despachando: Number(times.despachando ?? 0)
+                        };
+                        const totalTime = t.idle + t.estop + t.cortinas + t.prensa + t.despachando;
                         
-                        const idlePct = (t.idle / totalTime) * 100;
-                        const estopPct = (t.estop / totalTime) * 100;
-                        const cortinasPct = (t.cortinas / totalTime) * 100;
-                        const prensaPct = (t.prensa / totalTime) * 100;
-                        const despPct = (t.despachando / totalTime) * 100;
+                        const idlePct = totalTime > 0 ? (t.idle / totalTime) * 100 : 0;
+                        const estopPct = totalTime > 0 ? (t.estop / totalTime) * 100 : 0;
+                        const cortinasPct = totalTime > 0 ? (t.cortinas / totalTime) * 100 : 0;
+                        const prensaPct = totalTime > 0 ? (t.prensa / totalTime) * 100 : 0;
+                        const despPct = totalTime > 0 ? (t.despachando / totalTime) * 100 : 0;
 
                         allWidths.push(despPct.toFixed(1), idlePct.toFixed(1), cortinasPct.toFixed(1), prensaPct.toFixed(1), estopPct.toFixed(1));
 
@@ -589,17 +577,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         globalTotalTime += totalTime;
 
                         // % operativo: 100% menos el tiempo real en falla (E-Stop). Si no hubo E-Stop, es 100%.
-                        const operativoPct = 100 - estopPct;
-                        const operativoColor = operativoPct >= 99.0 ? 'var(--success-color)' : (operativoPct >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
+                        const operativoPct = totalTime > 0 ? 100 - estopPct : null;
+                        const operativoColor = operativoPct === null ? 'var(--text-muted)' : operativoPct >= 99.0 ? 'var(--success-color)' : (operativoPct >= 95.0 ? 'var(--warning-color)' : 'var(--danger-color)');
 
                         // % de despachos realizados por robot (antiguo "compliance"): métrica secundaria, no de falla.
-                        const despachosPorRobot = vulcanized > 0 ? (delivered / vulcanized * 100) : 100.0;
+                        const despachosPorRobot = vulcanized > 0 ? (delivered / vulcanized * 100).toFixed(1) + '%' : '-';
 
                         pressesHtml += `
                             <div class="press-row-item">
                                 <div class="press-row-header">
                                     <span class="press-row-id">${p}</span>
-                                    <span class="press-row-pct" style="color: ${operativoColor}; font-size: 0.85rem; font-weight: 800;">${operativoPct.toFixed(1)}%</span>
+                                    <span class="press-row-percentages">
+                                        <span class="press-row-pct" style="color: ${operativoColor}; font-size: 0.85rem; font-weight: 800;">${operativoPct === null ? '-' : operativoPct.toFixed(1) + '%'} operativo</span>
+                                        <span class="press-robot-share">Despachos por robot: ${despachosPorRobot}</span>
+                                    </span>
                                 </div>
                                 <div class="press-progress-bar-bg press-bar-animated">
                                     <div class="press-segment" data-tooltip="Despacho robots: ${t.despachando.toFixed(0)}m (${despPct.toFixed(1)}%)" style="width: 0%; background-color: #22c55e;"></div>
@@ -612,22 +603,21 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <span>Despacho robots: <strong>${delivered}</strong></span>
                                     <span>Carga manual: <strong>${manual}</strong></span>
                                     <span>Vulcanizados total: <strong>${vulcanized}</strong></span>
-                                    <span style="opacity: 0.65; font-size: 0.75em;">% despachos realizados por robot: ${despachosPorRobot.toFixed(1)}%</span>
                                 </div>
                             </div>
                         `;
                     });
                     
-                    const overallOperativoPct = globalTotalTime > 0 ? (100 - (globalEstopTime / globalTotalTime * 100)) : 100.0;
-                    const overallDespachosPorRobot = globalVulcanized > 0 ? (globalDelivered / globalVulcanized * 100) : 100.0;
+                    const overallOperativoPct = globalTotalTime > 0 ? (100 - (globalEstopTime / globalTotalTime * 100)) : null;
+                    const overallDespachosPorRobot = globalVulcanized > 0 ? (globalDelivered / globalVulcanized * 100).toFixed(1) + '%' : '-';
                     if (overallVal) {
-                        overallVal.textContent = overallOperativoPct.toFixed(2) + '%';
+                        overallVal.textContent = overallOperativoPct === null ? '-' : overallOperativoPct.toFixed(2) + '%';
                     }
                     const overallSecondary = document.getElementById('press-overall-secondary');
                     if (overallSecondary) {
-                        overallSecondary.textContent = `despachos por robot: ${overallDespachosPorRobot.toFixed(1)}%`;
+                        overallSecondary.textContent = `Despachos por robot: ${overallDespachosPorRobot}`;
                     }
-                    setIndicatorColor('ind-press-delivery', overallOperativoPct >= 99.00);
+                    setIndicatorColor('ind-press-delivery', overallOperativoPct === null ? null : overallOperativoPct >= 99.00);
 
                     container.innerHTML = `
                         <div class="press-delivery-right" style="width: 100%;">
@@ -880,12 +870,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     activeOffset = idx;
                 }
             });
-            setShiftInterval(activeOffset);
-            fetchAllData();
+            const now = new Date();
+            // During handover, keep the completed data interval unchanged.
+            if (![6, 14, 22].includes(now.getHours()) || activeOffset !== 0) {
+                setShiftInterval(activeOffset, now);
+                fetchAllData();
+            }
             
             // Programar el siguiente ciclo recursivamente
             scheduleNextCronUpdate();
         }, timeUntilUpdate);
+    }
+
+    function scheduleShiftBoundaryUpdate() {
+        const now = new Date();
+        const next = new Date(now);
+        next.setSeconds(0, 0);
+        next.setMinutes(0);
+        next.setHours(now.getHours() + 1);
+        while (![6, 7, 14, 15, 22, 23].includes(next.getHours())) {
+            next.setHours(next.getHours() + 1);
+        }
+        setTimeout(() => {
+            const activeOffset = [0, 1, 2, 3].find(i =>
+                document.getElementById(`btn-shift-${i}`).classList.contains('active')) || 0;
+            setShiftInterval(activeOffset);
+            fetchAllData();
+            scheduleShiftBoundaryUpdate();
+        }, next - now);
     }
 
     // Initial triggers
@@ -894,6 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Iniciar el programador sincronizado con el cron del backend
     scheduleNextCronUpdate();
+    scheduleShiftBoundaryUpdate();
 
 });
 
