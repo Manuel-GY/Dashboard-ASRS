@@ -234,6 +234,9 @@ captura se descarga en PNG, con un aviso visible.
 
 ## Funcionalidades del Frontend
 
+- La entrega de turno abre con la fecha y el turno actuales (T1 usa la fecha de fin).
+  Para consultar otro período, elegir fecha y turno y pulsar **Buscar**; cambiar los
+  selectores no inicia consultas automáticamente.
 - Selector de turno (Actual, Anterior, Hace 2/3 Turnos)
 - Auto-actualización sincronizada con cron del worker (cada 2 horas)
 - Tooltips de ayuda explicativos

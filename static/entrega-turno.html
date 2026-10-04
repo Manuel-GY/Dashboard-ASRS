@@ -230,6 +230,7 @@
             align-items: center;
             justify-content: space-between;
             gap: 16px;
+            flex-wrap: wrap;
             border-bottom: 4px solid var(--goodyear-trophy-gold);
         }
 
@@ -237,7 +238,8 @@
             display: flex;
             align-items: center;
             gap: 16px;
-            flex-shrink: 0;
+            min-width: 0;
+            flex-wrap: wrap;
         }
 
         .header-brand img {
@@ -261,7 +263,7 @@
             letter-spacing: var(--tracking-headline-long);
             line-height: 1.1;
             text-transform: uppercase;
-            white-space: nowrap;
+            overflow-wrap: anywhere;
             margin: 0;
         }
 
@@ -278,7 +280,9 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            flex-shrink: 0;
+            flex-wrap: wrap;
+            min-width: 0;
+            max-width: 100%;
         }
 
         .badge-shift {
@@ -331,8 +335,10 @@
             font-family: var(--font-mono);
             display: flex;
             align-items: center;
-            height: 38px;
-            white-space: nowrap;
+            min-height: 38px;
+            max-width: 100%;
+            white-space: normal;
+            overflow-wrap: anywhere;
         }
 
         /* Inner Content Body */
@@ -447,14 +453,87 @@
             font-weight: 600;
         }
 
+        .io-rate {
+            color: var(--goodyear-racing-navy);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .io-rate b {
+            font-size: 17px;
+            font-weight: 800;
+            font-family: var(--font-mono);
+        }
+
         .io-output-split {
-            background: #F8FAFC;
-            padding: 8px 12px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .output-mode {
+            --mode-color: var(--status-amber);
+            --mode-bg: var(--status-amber-bg);
+            background: var(--mode-bg);
+            padding: 6px 10px;
             border: 1px solid var(--card-border);
-            border-radius: 4px;
+            border-left: 4px solid var(--mode-color);
+            border-radius: 6px;
+            min-width: 0;
+        }
+
+        .output-mode.automatic {
+            --mode-color: var(--status-green);
+            --mode-bg: var(--status-green-bg);
+        }
+
+        .output-mode-header {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 4px 8px;
+            margin-bottom: 2px;
+        }
+
+        .output-mode-label {
+            color: var(--mode-color);
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .output-mode-label i { margin-right: 5px; }
+
+        .output-mode-rate {
+            background: var(--goodyear-white);
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-size: 13px;
+            color: var(--goodyear-dark-gray);
+        }
+
+        .output-mode-rate b { color: var(--goodyear-racing-navy); }
+
+        .output-mode-value {
+            display: inline-block;
+            margin-right: 6px;
+            line-height: 1.2;
+            color: var(--mode-color);
+            font-size: 22px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            overflow-wrap: anywhere;
+        }
+
+        .output-mode-unit {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--goodyear-dark-gray);
+        }
+
+        @media (max-width: 480px) {
+            .io-output-split { grid-template-columns: 1fr; }
         }
 
         /* Section 2: Cranes */
@@ -976,23 +1055,30 @@
         #report-card { width: min(1180px, 100%); }
         .action-toolbar { width: 1180px; }
         .card-body-content { padding: 12px 16px; gap: 10px; background: var(--section-bg); }
-        .report-header-banner { padding: 14px 22px; }
-        .report-summary {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 10px;
+        .report-header-banner { padding: 10px 16px; gap: 10px; }
+        .header-brand { gap: 12px; flex: 1 1 auto; }
+        .header-brand img { height: 28px; max-width: 100%; }
+        .brand-text { min-width: 0; }
+        .main-headline { font-size: 19px; }
+        .header-meta { gap: 7px; }
+        .badge-ticket, .badge-shift, .badge-time {
+            padding: 0 10px;
+            font-size: 11px;
+            min-height: 30px;
+            height: auto;
         }
-        .summary-tile {
-            background: var(--goodyear-white);
-            border: 1px solid var(--card-border);
-            border-top: 3px solid var(--goodyear-racing-navy);
-            border-radius: 6px;
-            padding: 9px 12px;
-            min-width: 0;
+        .badge-ticket b { font-size: 11px; }
+        .badge-ticket, .badge-shift { white-space: normal; max-width: 100%; }
+        .badge-shift { letter-spacing: 0; }
+        @media (min-width: 760px) and (max-width: 1000px) {
+            .report-header-banner { padding: 8px 12px; gap: 8px; }
+            .header-brand { gap: 8px; }
+            .header-brand img { height: 24px; }
+            .main-headline { font-size: 16px; }
+            .header-meta { gap: 6px; }
+            .badge-ticket, .badge-shift, .badge-time { padding: 0 8px; font-size: 9px; }
+            .badge-ticket b { font-size: 9px; }
         }
-        .summary-tile span { display: block; font-size: 11px; font-weight: 700; color: var(--goodyear-dark-gray); text-transform: uppercase; }
-        .summary-tile strong { display: block; font-size: 23px; color: var(--goodyear-racing-navy); line-height: 1.2; font-family: var(--font-mono); }
-        .summary-tile small { font-size: 11px; color: var(--goodyear-dark-gray); }
         .metrics-row { grid-template-columns: 1.45fr 1fr; gap: 10px; }
         .metrics-row > .metric-card:last-child { grid-column: 1 / -1; }
         .metric-card, .orders-section { border-top-color: var(--goodyear-racing-navy); padding: 10px 12px; gap: 7px; }
@@ -1003,14 +1089,17 @@
         .subcard-val { font-size: 20px; }
         .crane-avail-badge { padding: 6px 12px; }
         .crane-avail-val { font-size: 22px; }
+        .press-availability { width: min(300px, 100%); gap: 20px; padding: 4px 10px; }
         .crane-item { padding: 4px 9px; }
         .top-crane-list { gap: 4px; }
         .press-summary-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-        .press-item { padding: 7px; min-width: 0; }
-        .press-header-row { align-items: flex-start; }
-        .press-percentages { display: flex; flex-direction: column; align-items: flex-end; }
-        .press-robot-share { font-size: 10px; color: var(--goodyear-dark-gray); font-weight: 600; }
-        .press-meta-counts { flex-wrap: wrap; gap: 2px 8px; font-size: 10px; }
+        .press-item { padding: 6px 8px; min-width: 0; }
+        .press-header-row { align-items: flex-start; flex-wrap: wrap; gap: 2px; }
+        .press-percentages { display: flex; flex-direction: column; align-items: flex-start; width: 100%; gap: 1px; }
+        .press-robot-share { font-size: 12px; color: #475569; font-weight: 600; }
+        .press-meta-counts { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 6px; font-size: 11px; }
+        .press-meta-counts span { display: flex; align-items: baseline; gap: 3px; }
+        .press-meta-counts b { font-size: 14px; color: var(--goodyear-racing-navy); font-family: var(--font-mono); }
         .orders-section { gap: 0; }
         .orders-section .card-header-custom { margin-bottom: 6px; }
         .orders-table { font-size: 11px; }
@@ -1019,7 +1108,6 @@
             body { padding: 12px; }
             .metrics-row { grid-template-columns: 1fr; }
             .metrics-row > .metric-card:last-child { grid-column: auto; }
-            .report-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .press-summary-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .report-header-banner { flex-wrap: wrap; }
             .header-meta { flex-wrap: wrap; }
@@ -1099,7 +1187,7 @@
             </div>
 
             <button class="btn btn-outline" id="btn-refresh" onclick="cargarDatos()">
-                <i class="fa-solid fa-rotate"></i> Actualizar
+                <i class="fa-solid fa-magnifying-glass"></i> Buscar
             </button>
 
             <button class="btn btn-gold" id="btn-capturar" onclick="capturarReporte()"
@@ -1139,31 +1227,28 @@
 
         <!-- Inner Content Body -->
         <div class="card-body-content">
-            <div class="report-summary" aria-label="Indicadores del turno">
-                <div class="summary-tile"><span>Entrada ASRS</span><strong id="summary-entrada">-</strong><small>neumáticos · <span id="summary-rate-in" style="display:inline; text-transform:none;">-</span> t/m</small></div>
-                <div class="summary-tile"><span>Salida ASRS</span><strong id="summary-salida">-</strong><small>neumáticos · <span id="summary-rate-out" style="display:inline; text-transform:none;">-</span> t/m</small></div>
-                <div class="summary-tile"><span>Disp. Crane</span><strong id="summary-crane">-</strong><small id="summary-pasillos">Pasillos ASRS</small></div>
-                <div class="summary-tile"><span>Eficiencia ASRS</span><strong id="summary-eficiencia">-</strong><small>Entrada / Construido</small></div>
-            </div>
             <!-- Metrics Row -->
             <div class="metrics-row">
                 <!-- Col 1: INPUT / OUTPUT -->
                 <div class="metric-card flow-card">
                     <div class="card-header-custom">
                         <h2><i class="fa-solid fa-arrow-right-arrow-left" style="color: var(--goodyear-racing-navy);"></i> 01 / Flujo de producción</h2>
-                        <span class="badge-kpi" id="lbl-eficiencia-badge">Eficiencia: -</span>
+                        <div class="crane-avail-badge" style="gap: 10px;">
+                            <span style="font-size:10.5px; text-transform:uppercase; font-weight:700; color:var(--goodyear-light-gray);">Entrada/construido</span>
+                            <span class="crane-avail-val" id="lbl-eficiencia-badge">-</span>
+                        </div>
                     </div>
 
                     <div class="io-grid">
                         <div class="io-subcard highlight">
                             <span class="subcard-label">Construido</span>
                             <span class="subcard-val" id="val-construido">-</span>
-                            <span class="subcard-sub">tires</span>
+                            <span class="subcard-sub">neumáticos</span>
                         </div>
                         <div class="io-subcard highlight">
                             <span class="subcard-label">Vulcanizado</span>
                             <span class="subcard-val" id="val-vulcanizado">-</span>
-                            <span class="subcard-sub">tires</span>
+                            <span class="subcard-sub">neumáticos</span>
                         </div>
                     </div>
 
@@ -1171,25 +1256,31 @@
                         <div class="io-subcard success">
                             <span class="subcard-label">Entrada ASRS</span>
                             <span class="subcard-val" id="val-entrada">-</span>
-                            <span class="subcard-sub">Rate: <b id="val-rate-in">-</b> t/m</span>
+                            <span class="io-rate"><b id="val-rate-in">-</b> neumáticos/min</span>
                         </div>
                         <div class="io-subcard amber">
                             <span class="subcard-label">Total Salida</span>
                             <span class="subcard-val" id="val-total-salida">-</span>
-                            <span class="subcard-sub">Rate: <b id="val-rate-out">-</b> t/m</span>
+                            <span class="io-rate"><b id="val-rate-out">-</b> neumáticos/min</span>
                         </div>
                     </div>
 
                     <div class="io-output-split">
-                        <div>
-                            <span class="subcard-label">Manual</span>
-                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-amber);" id="val-manual">-</div>
-                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-man">-</b></span>
+                        <div class="output-mode">
+                            <div class="output-mode-header">
+                                <span class="output-mode-label"><i class="fa-solid fa-hand" aria-hidden="true"></i>Despacho Manual</span>
+                                <span class="output-mode-rate"><b id="val-rate-man">-</b> neumáticos/min</span>
+                            </div>
+                            <div class="output-mode-value" id="val-manual">-</div>
+                            <span class="output-mode-unit">Neumáticos despachados</span>
                         </div>
-                        <div style="text-align: right;">
-                            <span class="subcard-label">Automático</span>
-                            <div style="font-weight: 700; font-size: 15px; font-family: var(--font-mono); color: var(--status-green);" id="val-auto">-</div>
-                            <span style="font-size: 10.5px; color: var(--goodyear-dark-gray);">Rate: <b id="val-rate-auto">-</b></span>
+                        <div class="output-mode automatic">
+                            <div class="output-mode-header">
+                                <span class="output-mode-label"><i class="fa-solid fa-robot" aria-hidden="true"></i>Despacho Automático</span>
+                                <span class="output-mode-rate"><b id="val-rate-auto">-</b> neumáticos/min</span>
+                            </div>
+                            <div class="output-mode-value" id="val-auto">-</div>
+                            <span class="output-mode-unit">Neumáticos despachados</span>
                         </div>
                     </div>
                 </div>
@@ -1198,7 +1289,6 @@
                 <div class="metric-card">
                     <div class="card-header-custom">
                         <h2><i class="fa-solid fa-dolly" style="color: var(--goodyear-racing-navy);"></i> 02 / Crane</h2>
-                        <span class="badge-kpi" id="lbl-crane-disp">Disponibilidad: -</span>
                     </div>
 
                     <div class="crane-avail-badge">
@@ -1219,7 +1309,13 @@
                 <div class="metric-card">
                     <div class="card-header-custom">
                         <h2><i class="fa-solid fa-robot" style="color: var(--goodyear-racing-navy);"></i> 03 / Funcionamiento de prensas</h2>
-                        <span class="badge-kpi" id="lbl-press-global">Disponibilidad: -</span>
+                        <div class="crane-avail-badge press-availability">
+                            <div>
+                                <span style="font-size:10.5px; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; color:var(--goodyear-light-gray);">Disponibilidad Global</span>
+                                <div style="font-size: 11px; color: #CBD5E1;" id="lbl-prensas">Grupos de prensas</div>
+                            </div>
+                            <span class="crane-avail-val" id="val-press-disp">-</span>
+                        </div>
                     </div>
 
                     <div class="press-summary-list" id="press-list">
@@ -1330,10 +1426,10 @@
                         <tr>
                             <th style="width: 100px;">N° OT</th>
                             <th style="width: 90px;">Hora</th>
+                            <th style="width: 140px;">Reportado por</th>
                             <th style="width: 170px;">Equipo / Máquina</th>
                             <th>Título / Problema</th>
-                            <th style="width: 140px;">Reportado por</th>
-                            <th>Repuestos utilizados</th>
+                            <th>Detalle de la intervención</th>
                         </tr>
                     </thead>
                     <tbody id="orders-tbody"></tbody>
@@ -1349,25 +1445,21 @@
         let currentData = null;
         document.getElementById('press-list').replaceChildren();
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const paramFecha = urlParams.get('fecha');
-        const paramTurno = urlParams.get('turno');
+        const ahora = new Date();
+        const horaActual = ahora.getHours();
+        const turnoActual = horaActual >= 6 && horaActual < 14 ? 'T2'
+            : horaActual >= 14 && horaActual < 22 ? 'T3' : 'T1';
+        const fechaActual = new Date(ahora);
+        // En entrega de turno, T1 se identifica por la fecha en que termina.
+        if (horaActual >= 22) fechaActual.setDate(fechaActual.getDate() + 1);
 
         // Init Flatpickr
         const fp = flatpickr("#fecha-input", {
             dateFormat: "Y-m-d",
-            defaultDate: paramFecha || new Date(),
-            onChange: function() {
-                cargarDatos();
-            }
+            defaultDate: fechaActual
         });
 
-        if (paramTurno) {
-            const tSel = document.getElementById('turno-select');
-            if (tSel) tSel.value = paramTurno;
-        }
-
-        document.getElementById('turno-select').addEventListener('change', cargarDatos);
+        document.getElementById('turno-select').value = turnoActual;
 
         function showToast(msg) {
             const t = document.getElementById('toast');
@@ -1518,8 +1610,8 @@
                     }
                 }
                 const blob = await image;
-                const fecha = document.getElementById('fecha-input').value;
-                const turno = document.getElementById('turno-select').value;
+                const fecha = currentData.consulta.fecha;
+                const turno = currentData.consulta.turno;
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.download = `entrega-turno-${turno}-${fecha}.png`;
@@ -1551,7 +1643,7 @@
             document.getElementById('lbl-turno-nombre').innerText = c.turno_nombre;
             document.getElementById('lbl-rango-horas').innerText = `${c.fecha} (${c.rango_horas})`;
             if (c.ticket) {
-                const val = c.ticket.includes('tires') ? c.ticket : `${c.ticket} tires`;
+                const val = `${String(c.ticket).replace(/\s*(?:tires|neumáticos)\s*$/i, '').trim()} neumáticos`;
                 const el = document.getElementById('lbl-ticket-banner');
                 if (el) el.innerText = val;
             }
@@ -1563,25 +1655,17 @@
             document.getElementById('val-rate-in').innerText = io.rate_entrada;
             document.getElementById('val-total-salida').innerText = io.total_salida;
             document.getElementById('val-rate-out').innerText = io.rate_salida;
-            document.getElementById('val-manual').innerText = `${io.salida_manual} tires`;
+            document.getElementById('val-manual').innerText = io.salida_manual;
             document.getElementById('val-rate-man').innerText = io.rate_manual;
-            document.getElementById('val-auto').innerText = `${io.salida_auto} tires`;
+            document.getElementById('val-auto').innerText = io.salida_auto;
             document.getElementById('val-rate-auto').innerText = io.rate_auto;
             const porcentaje = value => value === '-' || value == null ? '-' : `${value}%`;
-            document.getElementById('lbl-eficiencia-badge').innerText = `Eficiencia: ${porcentaje(io.eficiencia_entrada)}`;
-            document.getElementById('summary-entrada').innerText = io.entrada_asrs;
-            document.getElementById('summary-salida').innerText = io.total_salida;
-            document.getElementById('summary-rate-in').innerText = io.rate_entrada;
-            document.getElementById('summary-rate-out').innerText = io.rate_salida;
-            document.getElementById('summary-eficiencia').innerText = porcentaje(io.eficiencia_entrada);
+            document.getElementById('lbl-eficiencia-badge').innerText = porcentaje(io.eficiencia_entrada);
 
             // Cranes
             document.getElementById('val-crane-disp').innerText = porcentaje(cr.disponibilidad_pct);
-            document.getElementById('lbl-crane-disp').innerText = `Disponibilidad: ${porcentaje(cr.disponibilidad_pct)}`;
-            document.getElementById('summary-crane').innerText = porcentaje(cr.disponibilidad_pct);
             const aisleCount = cr.pasillos?.length;
             const aisleLabel = aisleCount ? `${aisleCount} pasillos ASRS` : 'Pasillos ASRS';
-            document.getElementById('summary-pasillos').innerText = aisleLabel;
             document.getElementById('lbl-pasillos').innerText = aisleLabel;
 
             const topCraneList = document.getElementById('crane-top-list');
@@ -1640,7 +1724,7 @@
                     <div class="press-item">
                         <div class="press-header-row">
                             <span class="press-group-name">${p.press}</span>
-                            <span class="press-percentages"><span class="press-pct" style="color: ${operativoColor};">${operativoPct === null ? '-' : operativoPct.toFixed(1) + '%'} operativo</span><span class="press-robot-share">Despachos por robot: ${despachosPorRobot}</span></span>
+                            <span class="press-percentages"><span class="press-pct" style="color: ${operativoColor};">Disponibilidad: ${operativoPct === null ? '-' : operativoPct.toFixed(1) + '%'}</span><span class="press-robot-share">Despacho robot: ${despachosPorRobot}</span></span>
                         </div>
                         <div class="progress-bar-bg">
                             <div class="press-segment" data-tooltip="Despacho robots: ${t.despachando.toFixed(0)}m (${despPct.toFixed(1)}%)" style="width: ${despPct}%; background-color: #22c55e;"></div>
@@ -1659,7 +1743,10 @@
             });
 
             const globalOperativoPct = globalTotalTime > 0 ? (100 - (globalEstopTime / globalTotalTime * 100)).toFixed(1) + '%' : '-';
-            document.getElementById('lbl-press-global').innerText = `Disponibilidad: ${globalOperativoPct}`;
+            document.getElementById('val-press-disp').innerText = globalOperativoPct;
+            document.getElementById('lbl-prensas').innerText = pr.resumen_prensas?.length
+                ? `${pr.resumen_prensas.length} grupos de prensas`
+                : 'Grupos de prensas';
 
 
             // Orders Table
@@ -1669,19 +1756,21 @@
             tbody.innerHTML = '';
             if (ord.length > 0) {
                 ord.forEach(o => {
-                    const repuestos = (o.repuestos && o.repuestos.length > 0)
-                        ? o.repuestos.map(r => `<div style="font-weight:800;">• ${r}</div>`).join('')
-                        : 'Sin repuestos registrados.';
-                    tbody.innerHTML += `
-                        <tr>
-                            <td><span class="badge-ot">${o.ot}</span></td>
-                            <td style="font-family: var(--font-mono); font-weight:800; font-size:14px;">${o.hora}</td>
-                            <td><b style="font-size:14px;">${o.maquina || o.equipo}</b><br><span style="font-size:12px; color:#475569; font-weight:700;">${o.equipo}</span></td>
-                            <td><b style="font-size:14px;">${o.titulo}</b></td>
-                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">${o.reportado_por || '-'}</td>
-                            <td style="font-size:13px; color:var(--goodyear-black); font-weight:800; line-height:1.4;">${repuestos}</td>
-                        </tr>
+                    const row = document.createElement('tr');
+                    const detalleIntervencion = (o.detalle || 'Sin detalle de intervención registrado.')
+                        .replace(/^\s*\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2}\s+\S+\s+\([^)]*\)\s*(?:\r?\n|$)/, '')
+                        .trim();
+                    row.innerHTML = `
+                        <td><span class="badge-ot">${o.ot}</span></td>
+                        <td style="font-family: var(--font-mono); font-weight:800; font-size:14px;">${o.hora}</td>
+                        <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">${o.reportado_por || '-'}</td>
+                        <td><b style="font-size:14px;">${o.maquina || o.equipo}</b><br><span style="font-size:12px; color:#475569; font-weight:700;">${o.equipo}</span></td>
+                        <td><b style="font-size:14px;">${o.titulo}</b></td>
+                        <td class="intervention-detail" style="font-size:13px; font-weight:800; line-height:1.4; white-space:pre-wrap;"></td>
                     `;
+                    row.querySelector('.intervention-detail').textContent =
+                        detalleIntervencion || 'Sin detalle de intervención registrado.';
+                    tbody.appendChild(row);
                 });
             } else {
                 tbody.innerHTML = `
@@ -1703,7 +1792,7 @@
                     const d = await res.json();
                     const val = d.formatted || d.total || '0';
                     const el = document.getElementById('lbl-ticket-banner');
-                    if (el) el.innerText = `${val} tires`;
+                    if (el) el.innerText = `${String(val).replace(/\s*(?:tires|neumáticos)\s*$/i, '').trim()} neumáticos`;
                 }
             } catch (e) {
                 console.error("Error loading daily ticket:", e);
