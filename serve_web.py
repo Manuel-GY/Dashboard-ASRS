@@ -24,7 +24,6 @@ from bs4 import BeautifulSoup
 
 DB_PATH = 'shift_history.db'
 INDICADORES_BASE = os.environ.get("INDICADORES_BASE", "http://cl01sv34a:8050/reporte")
-INSPECCIONES_BASE = os.environ.get("INSPECCIONES_BASE", "http://10.107.194.70/ASRS/inspecciones")
 SAP_USERNAME = os.environ.get("SAP_USERNAME")
 SAP_PASSWORD = os.environ.get("SAP_PASSWORD")
 
@@ -1143,32 +1142,6 @@ def api_consolidado_turno():
         })
     global_press_pct = round((total_robot_delivered / total_vulcanized * 100.0), 2) if total_vulcanized > 0 else 0.0
 
-    def _extraer_titulo_limpio(titulo_raw, detalle_raw):
-        t = str(titulo_raw or "").strip()
-        d = str(detalle_raw or "").strip()
-        # Si el título ya es corto y diferente del detalle (ej. "Ajuste sensor en estructura"), usarlo
-        if t and t != d and len(t) <= 65:
-            return t
-        base = t or d
-        if not base:
-            return "Aviso correctivo"
-        s = base.strip()
-        for sep in [". ", "; ", "\n"]:
-            if sep in s:
-                part = s.split(sep)[0].strip()
-                if len(part) >= 8:
-                    s = part
-                    break
-        if len(s) > 50 and ", " in s:
-            comma_part = s.split(", ")[0].strip()
-            if len(comma_part) >= 15:
-                s = comma_part
-        if len(s) > 50:
-            s = s[:48].rsplit(" ", 1)[0].strip() + "..."
-        if s:
-            s = s[0].upper() + s[1:]
-        return s
-
     def fetch_orders_indicadores_planta():
         """
         Fuente de órdenes del turno: portal SAP PM interno, usando la sesión LDAP del usuario
@@ -1288,90 +1261,6 @@ def api_consolidado_turno():
         filtered_orders, orders_auth_required = fetch_orders_indicadores_planta()
     except Exception as e:
         print(f"[WARN] Error en fetch_orders_indicadores_planta: {e}")
-
-    # Fallback a Inspecciones ASRS (10.107.194.70) si no se obtuvieron datos de Indicadores Planta
-    if not filtered_orders:
-        n1_orders = fetch_json(f"{INSPECCIONES_BASE}/avisos_correctivos_ASRS_table.php", timeout=4) or {}
-        n1_recent = fetch_json(f"{INSPECCIONES_BASE}/index_n1asrs_table.php", timeout=4) or {}
-        
-        n1_map = {}
-        for row in n1_recent.get("data", []):
-            if isinstance(row, (list, tuple)) and len(row) >= 5:
-                ot_k = str(row[2] or "").strip()
-                if ot_k:
-                    n1_map[ot_k] = {
-                        "tag": str(row[0] or "").strip(),
-                        "titulo": str(row[1] or "").strip(),
-                        "fecha": str(row[3] or "").strip(),
-                        "hora": str(row[4] or "").strip(),
-                        "tp_min": str(row[5] or "0").strip(),
-                        "detalle": str(row[6] or "").strip() if len(row) > 6 else "",
-                        "maquina": str(row[7] or "").strip() if len(row) > 7 else ""
-                    }
-        
-        all_raw_rows = list(n1_orders.get("data", []))
-        for row in n1_recent.get("data", []):
-            all_raw_rows.append(row)
-
-        seen_ots = set()
-        for row in all_raw_rows:
-            if not isinstance(row, (list, tuple)) or len(row) < 7:
-                continue
-
-            if len(row) >= 9 and str(row[0] or "").isdigit() and len(str(row[0] or "")) >= 6:
-                ot = str(row[0] or "").strip()
-                titulo_raw = str(row[1] or "").strip()
-                fecha_str = str(row[2] or "").strip()
-                maquina = str(row[4] or "").strip()
-                tag_equipo = str(row[5] or "").strip()
-                tp_min = str(row[7] or "0").strip()
-                detalle_raw = str(row[8] or "").strip()
-                if len(row) >= 10 and row[9]:
-                    maquina = str(row[9]).strip() or maquina
-                hora_str = "00:00:00"
-                if " " in fecha_str:
-                    parts = fecha_str.split(" ")
-                    fecha_str, hora_str = parts[0], parts[1]
-                elif ot in n1_map and n1_map[ot].get("hora"):
-                    hora_str = n1_map[ot]["hora"]
-                    if not tag_equipo and n1_map[ot].get("tag"):
-                        tag_equipo = n1_map[ot]["tag"]
-            elif len(row) >= 8:
-                tag_equipo = str(row[0] or "").strip()
-                titulo_raw = str(row[1] or "").strip()
-                ot = str(row[2] or "").strip()
-                fecha_str = str(row[3] or "").strip()
-                hora_str = str(row[4] or "").strip()
-                tp_min = str(row[5] or "0").strip()
-                detalle_raw = str(row[6] or "").strip()
-                maquina = str(row[7] or "").strip() or tag_equipo
-            else:
-                continue
-
-            if not ot or not fecha_str or not hora_str or ot in seen_ots:
-                continue
-
-            try:
-                if len(hora_str.split(":")) == 2:
-                    order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
-                else:
-                    order_dt = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M:%S")
-            except Exception:
-                continue
-
-            if dt_start <= order_dt < dt_end:
-                seen_ots.add(ot)
-                titulo_final = _extraer_titulo_limpio(titulo_raw, detalle_raw)
-                detalle_final = detalle_raw or titulo_raw or "Sin observaciones adicionales registradas."
-                filtered_orders.append({
-                    "ot": ot,
-                    "hora": hora_str,
-                    "equipo": tag_equipo or maquina,
-                    "maquina": maquina or tag_equipo,
-                    "titulo": titulo_final,
-                    "tp_min": tp_min,
-                    "detalle": detalle_final
-                })
 
     turno_info = TURNOS_ENTREGA.get(turno_req, TURNOS_ENTREGA["T2"])
     

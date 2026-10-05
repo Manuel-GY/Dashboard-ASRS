@@ -237,6 +237,9 @@ captura se descarga en PNG, con un aviso visible.
 - La entrega de turno abre con la fecha y el turno actuales (T1 usa la fecha de fin).
   Para consultar otro período, elegir fecha y turno y pulsar **Buscar**; cambiar los
   selectores no inicia consultas automáticamente.
+- Las órdenes correctivas de entrega de turno se consultan exclusivamente en el
+  portal SAP con la sesión del usuario. No se usa Inspecciones ASRS como respaldo,
+  aunque SAP no devuelva órdenes; una sesión expirada solicita iniciar sesión.
 - Selector de turno (Actual, Anterior, Hace 2/3 Turnos)
 - Auto-actualización sincronizada con cron del worker (cada 2 horas)
 - Tooltips de ayuda explicativos
