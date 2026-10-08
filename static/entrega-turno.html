@@ -1630,6 +1630,15 @@
             }
         }
 
+        function formatReportedBy(value) {
+            return String(value || '')
+                .trim()
+                .toLocaleLowerCase('es-CL')
+                .replace(/(^|[\s'\u2019-])(\p{L})/gu, (_, separator, initial) =>
+                    separator + initial.toLocaleUpperCase('es-CL')
+                );
+        }
+
         function renderReport(data) {
             if (!data) return;
             const c = data.consulta;
@@ -1763,11 +1772,12 @@
                     row.innerHTML = `
                         <td><span class="badge-ot">${o.ot}</span></td>
                         <td style="font-family: var(--font-mono); font-weight:800; font-size:14px;">${o.hora}</td>
-                        <td style="font-size:13px; color:var(--goodyear-black); font-weight:800;">${o.reportado_por || '-'}</td>
+                        <td class="reported-by" style="font-size:13px; color:var(--goodyear-black); font-weight:800;"></td>
                         <td><b style="font-size:14px;">${o.maquina || o.equipo}</b><br><span style="font-size:12px; color:#475569; font-weight:700;">${o.equipo}</span></td>
                         <td><b style="font-size:14px;">${o.titulo}</b></td>
                         <td class="intervention-detail" style="font-size:13px; font-weight:800; line-height:1.4; white-space:pre-wrap;"></td>
                     `;
+                    row.querySelector('.reported-by').textContent = formatReportedBy(o.reportado_por) || '-';
                     row.querySelector('.intervention-detail').textContent =
                         detalleIntervencion || 'Sin detalle de intervención registrado.';
                     tbody.appendChild(row);
