@@ -994,11 +994,13 @@ def _is_asrs_location(value, ids_set):
 
 def _fetch_order_time_and_detail(get_json_fn, base_url, order_id, notification_id):
     """
-    Trae hora real (malf_start_time), autor y repuestos usados desde /api/orders/{id}, y el
+    Trae la hora del AVISO (notification date+time) como referencia principal del turno,
+    el malf_start como respaldo, el autor y repuestos usados desde /api/orders/{id}, y el
     texto largo del trabajo realizado desde /api/notifications/{id}.
-    Retorna (order_dt|None, detalle|None, reportado_por|None, repuestos: list[str]).
+    Retorna (aviso_dt|None, malf_dt|None, detalle|None, reportado_por|None, repuestos: list[str]).
     """
-    order_dt = None
+    aviso_dt = None
+    malf_dt = None
     detail_text = None
     reported_by = None
     components = []
@@ -1009,11 +1011,13 @@ def _fetch_order_time_and_detail(get_json_fn, base_url, order_id, notification_i
         malf_date = str(d.get("malf_start_date") or d.get("start_date") or "").strip()
         malf_time = str(d.get("malf_start_time") or "").strip()
         if malf_date:
-            for fmt in (("%d/%m/%Y %H:%M" if malf_time else "%d/%m/%Y"),):
-                try:
-                    order_dt = datetime.strptime(f"{malf_date} {malf_time}".strip() if malf_time else malf_date, fmt)
-                except ValueError:
-                    order_dt = None
+            try:
+                malf_dt = datetime.strptime(
+                    f"{malf_date} {malf_time}".strip() if malf_time else malf_date,
+                    "%d/%m/%Y %H:%M" if malf_time else "%d/%m/%Y",
+                )
+            except ValueError:
+                malf_dt = None
 
         reported_by = str(d.get("created_by_name") or d.get("created_by") or "").strip() or None
         for comp in d.get("components", []) or []:
@@ -1026,9 +1030,20 @@ def _fetch_order_time_and_detail(get_json_fn, base_url, order_id, notification_i
     if notification_id:
         notif_payload = get_json_fn(f"{base_url}/api/notifications/{notification_id}")
         if notif_payload and notif_payload.get("success"):
-            detail_text = str(notif_payload.get("data", {}).get("long_text") or "").strip() or None
+            nd = notif_payload.get("data", {}) or {}
+            detail_text = str(nd.get("long_text") or "").strip() or None
+            aviso_date = str(nd.get("date") or "").strip()
+            aviso_time = str(nd.get("time") or "").strip()
+            if aviso_date:
+                try:
+                    aviso_dt = datetime.strptime(
+                        f"{aviso_date} {aviso_time}".strip() if aviso_time else aviso_date,
+                        "%d/%m/%Y %H:%M" if aviso_time else "%d/%m/%Y",
+                    )
+                except ValueError:
+                    aviso_dt = None
 
-    return order_dt, detail_text, reported_by, components
+    return aviso_dt, malf_dt, detail_text, reported_by, components
 
 
 @app.route("/api/consolidado-turno")
@@ -1222,13 +1237,15 @@ def api_consolidado_turno():
                     continue
 
                 order_number_digits = order_number.lstrip("0") or order_number
-                real_dt, detail_text, reported_by, repuestos = _fetch_order_time_and_detail(
+                aviso_dt, malf_dt, detail_text, reported_by, repuestos = _fetch_order_time_and_detail(
                     _get_json_portal, portal_base, order.get("id") or order_number_digits, order.get("notification")
                 )
+                real_dt = aviso_dt or malf_dt
                 if real_dt is not None:
-                    # Ventana de conteo de órdenes corrida +margen: una orden cargada poco después
-                    # del cierre nominal cuenta para el turno que termina, sin duplicarse en el siguiente.
-                    order_win_start = dt_start + timedelta(minutes=SHIFT_GRACE_MINUTES)
+                    # El turno se asigna por la hora del AVISO (fallback: malf_start). Margen solo al
+                    # cierre: una orden cargada poco después del cierre nominal cuenta para el turno
+                    # que termina, sin recortar la primera hora del turno ni duplicarse en el siguiente.
+                    order_win_start = dt_start
                     order_win_end = dt_end + timedelta(minutes=SHIFT_GRACE_MINUTES)
                     if not (order_win_start <= real_dt <= order_win_end):
                         continue
