@@ -177,6 +177,17 @@ Por defecto escucha en `0.0.0.0:8006`. Para cambiar el puerto, editar la línea 
 
 ## APIs del Backend
 
+### Fecha y turno en Entrega de Turno
+
+Al abrir la página se seleccionan la fecha y el turno actuales según la zona horaria
+configurada (por defecto, `America/Santiago`), sin depender del último dato del dashboard.
+El turno sigue vigente durante los 59 minutos posteriores al cierre: el cambio de
+selección ocurre a las 06:59, 14:59 y 22:59.
+
+El calendario y la API rechazan fechas futuras, excepto T1 (noche), que se identifica
+por la fecha de cierre: desde las 22:59 puede seleccionarse el día siguiente para T1.
+Al cambiar a mañana o tarde, el límite vuelve al día actual.
+
 | Endpoint | Método | Descripción | Fuente |
 |---|---|---|---|
 | `/api/conveyor-full` | GET | Tiempo total downtime conveyor | `conveyor_full_downtime` |

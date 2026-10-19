@@ -1445,21 +1445,33 @@
         let currentData = null;
         document.getElementById('press-list').replaceChildren();
 
-        const ahora = new Date();
-        const horaActual = ahora.getHours();
-        const turnoActual = horaActual >= 6 && horaActual < 14 ? 'T2'
-            : horaActual >= 14 && horaActual < 22 ? 'T3' : 'T1';
-        const fechaActual = new Date(ahora);
-        // En entrega de turno, T1 se identifica por la fecha en que termina.
-        if (horaActual >= 22) fechaActual.setDate(fechaActual.getDate() + 1);
-
-        // Init Flatpickr
+        let contextoTurno = null;
         const fp = flatpickr("#fecha-input", {
             dateFormat: "Y-m-d",
-            defaultDate: fechaActual
         });
 
-        document.getElementById('turno-select').value = turnoActual;
+        function limitarFecha() {
+            if (!contextoTurno) return;
+            const turno = document.getElementById('turno-select').value;
+            const maxFecha = contextoTurno.max_fechas[turno];
+            fp.set('maxDate', maxFecha);
+            const fecha = document.getElementById('fecha-input').value;
+            if (!fecha || fecha > maxFecha) fp.setDate(maxFecha);
+        }
+
+        document.getElementById('turno-select').addEventListener('change', limitarFecha);
+
+        async function actualizarContextoTurno(inicial = false) {
+            const res = await fetch('/api/entrega-turno/actual', { cache: 'no-store' });
+            if (!res.ok) throw new Error("No se pudo obtener el turno actual.");
+            contextoTurno = await res.json();
+            if (inicial) {
+                document.getElementById('turno-select').value = contextoTurno.turno;
+                fp.set('maxDate', contextoTurno.max_fechas[contextoTurno.turno]);
+                fp.setDate(contextoTurno.fecha);
+            }
+            limitarFecha();
+        }
 
         function showToast(msg) {
             const t = document.getElementById('toast');
@@ -1469,14 +1481,17 @@
         }
 
         async function cargarDatos() {
-            const fecha = document.getElementById('fecha-input').value || new Date().toISOString().split('T')[0];
-            const turno = document.getElementById('turno-select').value || 'T2';
-
             document.getElementById('loading-overlay').classList.remove('hidden');
 
             try {
+                await actualizarContextoTurno();
+                const fecha = document.getElementById('fecha-input').value;
+                const turno = document.getElementById('turno-select').value;
                 const res = await fetch(`/api/consolidado-turno?fecha=${fecha}&turno=${turno}`);
-                if (!res.ok) throw new Error("Error en respuesta del servidor");
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.error || "Error en respuesta del servidor");
+                }
                 currentData = await res.json();
                 if (currentData.ordenes_auth_required) {
                     mostrarModalLogin("Tu sesión SAP expiró. Iniciá sesión de nuevo para ver las órdenes.");
@@ -1485,7 +1500,7 @@
                 showToast("Datos actualizados correctamente.");
             } catch (err) {
                 console.error(err);
-                showToast("Error al cargar datos desde el backend.");
+                showToast(err.message);
             } finally {
                 document.getElementById('loading-overlay').classList.add('hidden');
             }
@@ -1811,6 +1826,14 @@
 
         // Auto load on startup: primero verifica sesión, recién ahí carga datos
         window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await actualizarContextoTurno(true);
+            } catch (err) {
+                console.error(err);
+                showToast(err.message);
+                document.getElementById('loading-overlay').classList.add('hidden');
+                return;
+            }
             const logueado = await verificarSesion();
             cargarTicketToolbar();
             if (logueado) {

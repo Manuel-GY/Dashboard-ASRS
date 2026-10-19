@@ -819,6 +819,30 @@ def get_shift_range_entrega(fecha_str, turno_key):
     return dt_start, dt_end
 
 
+def get_entrega_turno_context(dt=None):
+    from scheduler_service import get_target_now
+
+    now = dt if dt is not None else get_target_now()
+    effective_now = now - timedelta(minutes=SHIFT_GRACE_MINUTES)
+    fecha, turno = get_current_shift_info(effective_now)
+    # El dashboard guarda T1 por su inicio; Entrega de Turno lo identifica por su cierre.
+    if turno == "T1":
+        fecha = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+    return {
+        "fecha": fecha,
+        "turno": turno,
+        "max_fechas": {"T1": max(today, fecha), "T2": today, "T3": today},
+    }
+
+
+@app.route("/api/entrega-turno/actual")
+def api_entrega_turno_actual():
+    response = jsonify(get_entrega_turno_context())
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def _portal_login_session():
     """Crea una sesión autenticada (LDAP) contra el portal SAP configurado en SAP_LOGIN_URL."""
     portal_url = (SAP_LOGIN_URL or "").strip()
@@ -1048,9 +1072,18 @@ def _fetch_order_time_and_detail(get_json_fn, base_url, order_id, notification_i
 
 @app.route("/api/consolidado-turno")
 def api_consolidado_turno():
-    now_date, now_shift = get_current_shift_info()
-    fecha_req = request.args.get("fecha", now_date)
-    turno_req = request.args.get("turno", now_shift)
+    context = get_entrega_turno_context()
+    fecha_req = request.args.get("fecha", context["fecha"])
+    turno_req = request.args.get("turno", context["turno"])
+    if turno_req not in TURNOS_ENTREGA:
+        return jsonify({"error": "Turno no válido."}), 400
+    try:
+        fecha = datetime.strptime(fecha_req, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "Fecha no válida. Usá YYYY-MM-DD."}), 400
+    if fecha > context["max_fechas"][turno_req]:
+        return jsonify({"error": "No se pueden consultar fechas futuras para este turno."}), 400
+    fecha_req = fecha
     
     dt_start, dt_end = get_shift_range_entrega(fecha_req, turno_req)
     start_param = dt_start.strftime("%Y-%m-%dT%H:%M")
