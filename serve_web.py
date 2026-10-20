@@ -54,7 +54,7 @@ ASRS_TREE_TTL_SECONDS = 24 * 3600
 ASRS_KEYWORDS_FALLBACK = ("L504-ASRS", "L504-PLMT", "PLMT")
 _asrs_tree_cache = {"ids": None, "loaded_at": 0}
 
-# Login por usuario (LDAP) para Entrega de Turno: cada persona usa su propia cuenta,
+# Login por usuario (Go Pass) para Entrega de Turno: cada persona usa su propia cuenta,
 # la sesión autenticada contra el portal SAP se guarda en memoria del servidor (nunca la contraseña).
 AUTH_SESSION_TTL_SECONDS = 9 * 3600
 _user_portal_sessions = {}
@@ -248,7 +248,7 @@ def add_cors_headers(response):
 
 def _get_authenticated_portal_session():
     """
-    Retorna (requests.Session, portal_base, username) de la sesión LDAP del usuario logueado
+    Retorna (requests.Session, portal_base, username) de la sesión Go Pass del usuario logueado
     en el navegador actual, o (None, None, None) si no hay sesión válida/vigente.
     """
     entry = _get_auth_entry()
@@ -274,7 +274,7 @@ def _get_auth_entry():
 
 @app.route("/api/auth/login", methods=["POST"])
 def api_auth_login():
-    """Login LDAP contra el portal SAP; cada usuario usa su propia cuenta."""
+    """Login Go Pass contra el portal SAP; cada usuario usa su propia cuenta."""
     data = request.get_json(silent=True) or {}
     username = str(data.get("username") or "").strip()
     password = str(data.get("password") or "")
@@ -720,7 +720,7 @@ _http_session.trust_env = False
 
 
 def build_sap_session():
-    """Crea una sesión autenticada para el sitio de Indicadores Planta que exige LDAP/SSO."""
+    """Crea una sesión autenticada para el sitio de Indicadores Planta que exige Go Pass/SSO."""
     session = requests.Session()
     session.trust_env = False
     session.verify = False
@@ -788,7 +788,7 @@ def build_sap_session():
         if login_resp.status_code in (200, 302) and "login" not in login_resp.url.lower() and "auth" not in login_resp.url.lower():
             return session, True
     except Exception as e:
-        print(f"[WARN] Error autenticando sesión SAP/LDAP: {e}")
+        print(f"[WARN] Error autenticando sesión SAP/Go Pass: {e}")
 
     return session, False
 
@@ -844,7 +844,7 @@ def api_entrega_turno_actual():
 
 
 def _portal_login_session():
-    """Crea una sesión autenticada (LDAP) contra el portal SAP configurado en SAP_LOGIN_URL."""
+    """Crea una sesión autenticada (Go Pass) contra el portal SAP configurado en SAP_LOGIN_URL."""
     portal_url = (SAP_LOGIN_URL or "").strip()
     if not portal_url or not SAP_USERNAME or not SAP_PASSWORD:
         return None, None
@@ -1192,7 +1192,7 @@ def api_consolidado_turno():
 
     def fetch_orders_indicadores_planta():
         """
-        Fuente de órdenes del turno: portal SAP PM interno, usando la sesión LDAP del usuario
+        Fuente de órdenes del turno: portal SAP PM interno, usando la sesión Go Pass del usuario
         logueado en el navegador. Retorna (orders_list, auth_required).
         """
         def parse_order_date(value):
