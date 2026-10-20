@@ -1320,3 +1320,53 @@ body.dark .card-header, body.dark .io-premium-header {
 @media (max-width: 1024px) {
     .press-delivery-card { grid-column: span 1; }
 }
+
+/* ================= Mobile responsive overrides ================= */
+html { -webkit-text-size-adjust: 100%; }
+img { max-width: 100%; }
+.grid-layout > * { min-width: 0; }
+.card-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 1024px) {
+    .grid-layout { grid-template-columns: minmax(0, 1fr); }
+    .grid-layout > .io-premium-card,
+    .grid-layout > .press-delivery-card,
+    .grid-layout > .crane-performance-card { grid-column: 1 / -1; }
+}
+
+@media (max-width: 768px) {
+    body { padding: 8px; }
+    .dashboard-container { gap: 12px; }
+    .top-bar { padding: 14px 12px; align-items: stretch; }
+    .title-section { flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .title-section .ticket-section { margin-left: 0 !important; padding-left: 0 !important; border-left: none !important; width: 100%; justify-content: center; }
+    .time-section { flex-wrap: wrap; justify-content: center; gap: 10px !important; }
+    .logo { width: 90px; }
+    .card { padding: 12px; }
+    .card-header { flex-wrap: wrap; gap: 8px; }
+    .card-title { flex-wrap: wrap; }
+    .io-premium-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .io-premium-header { flex-wrap: wrap; gap: 10px; }
+    .crane-tabs-header { overflow-x: auto; flex-wrap: nowrap; }
+    .crane-tab-btn { white-space: nowrap; padding: 10px 14px; }
+    .press-item { max-width: none; }
+    .preset-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    .preset-buttons .btn-preset { flex: 1 1 calc(50% - 8px); min-height: 44px; }
+    .update-badge { white-space: normal; text-align: center; justify-content: center; }
+    .help-tooltip::after { white-space: normal; width: max-content; max-width: 70vw; }
+    .press-segment[data-tooltip]:hover::after { white-space: normal; max-width: 60vw; }
+    button, .btn-preset, a[href] { touch-action: manipulation; }
+}
+
+@media (max-width: 480px) {
+    h1 { font-size: 1.6rem; }
+    .data-table th, .data-table td { font-size: 0.78rem; padding: 6px 4px; }
+    .crane-list-item { flex-wrap: wrap; }
+    .crane-list-id { min-width: 60px; }
+    .preset-buttons .btn-preset { flex: 1 1 100%; }
+}
+
+@media (max-width: 480px) {
+    .datetime { font-size: 0.85rem; text-align: center; }
+    .datetime .highlight-text { display: inline-block; white-space: nowrap; font-size: 0.8rem; }
+}
